@@ -48,16 +48,18 @@ const write = (body: string): string => {
 };
 const load = (doc: unknown): Content => loadContent(write(JSON.stringify(doc)));
 
-/** The message loadContent rejects with; fails the test if it accepts the document instead. */
-function rejection(doc: unknown, why: string, loader: typeof loadContent = loadContent): string {
+/** The message loadContent rejects a file body with; fails the test if it accepts the file instead. */
+function fileRejection(body: string, why: string, loader: typeof loadContent = loadContent): string {
   try {
-    loader(write(JSON.stringify(doc)));
+    loader(write(body));
   } catch (e) {
     assert.ok(e instanceof Error, `${why}: threw a non-Error`);
     return e.message;
   }
   return assert.fail(`${why}: the document loaded without error`);
 }
+const rejection = (doc: unknown, why: string, loader: typeof loadContent = loadContent): string =>
+  fileRejection(JSON.stringify(doc), why, loader);
 
 // Paths are written the way the loader reports them: `lanes[0].repos[1].blurb`.
 const parse = (path: string): (string | number)[] =>
@@ -143,6 +145,17 @@ test("Vietnamese and the middle dot are drawable, so content may use them", () =
   assert.equal(c.role, "kỹ sư bảo mật · ăâđêôơư ạắằẵặ");
 });
 
+test("the smallest valid document loads: one of everything", () => {
+  const smallest: Content = {
+    handle: "H", cwd: "c", role: "r", whoami: ["w"],
+    lanes: [{ label: "l/", repos: [{ name: "n", blurb: "b" }] }],
+    stackRows: [{ label: "", items: ["i"] }],
+    verbs: { sleep: ["a"], yawn: ["b"], stretch: ["c"], settle: ["d"], startle: ["e"] },
+    statusline: { effortLabels: ["only"], effortSelected: "only", modeBadge: "m", note: "n" },
+  };
+  assert.deepEqual(load(smallest), smallest);
+});
+
 test("whoami accepts exactly one and exactly three lines", () => {
   assert.equal(load(edited("whoami", ["only"])).whoami.length, 1);
   assert.equal(load(edited("whoami", ["a", "b", "c"])).whoami.length, 3);
@@ -211,6 +224,11 @@ const STRUCTURE: [string, unknown, RegExp][] = [
   ["statusline.effortLabels[0]", " ", /statusline\.effortLabels\[0\] must not be blank/],
   ["statusline.effortSelected", "turbo", /statusline\.effortSelected must be one of effortLabels/],
   ["statusline.effortSelected", undefined, /statusline\.effortSelected must be one of effortLabels/],
+  // membership, not substring: a part of a label, or a label plus more, is not a label
+  ["statusline.effortSelected", "laz", /statusline\.effortSelected must be one of effortLabels/],
+  ["statusline.effortSelected", "lazy extra", /statusline\.effortSelected must be one of effortLabels/],
+  ["statusline.effortSelected", "", /statusline\.effortSelected must be one of effortLabels/],
+  ["statusline.effortSelected", "LAZY", /statusline\.effortSelected must be one of effortLabels/],
   ["statusline.modeBadge", " ", /statusline\.modeBadge must not be blank/],
   ["statusline.modeBadge", undefined, /statusline\.modeBadge must be a string/],
   ["statusline.note", "", /statusline\.note must not be blank/],
@@ -318,7 +336,7 @@ test("a name written as a JSON escape is caught after parsing", () => {
 
 test("a name used as an object key is caught, though no string value carries it", () => {
   const msg = rejection({ ...VALID, "Firstname Lastname": 1 }, "name as a key");
-  assert.match(msg, /forbidden name appears in content\.json \(/);
+  assert.match(msg, /forbidden name appears in content\.json, in a key under the top level/);
   assert.ok(!/firstname/i.test(msg), `message echoes the name: ${msg}`);
 });
 
@@ -334,6 +352,101 @@ test("assertNoForbiddenNames is case-insensitive, matches the whole name only, a
   assert.doesNotThrow(() => assertNoForbiddenNames("", "x"));
   assert.doesNotThrow(() => assertNoForbiddenNames("nothing to see here", "x"));
 });
+
+// ---- a message must never quote a name -----------------------------------------------
+// Build logs can be public. Any error that quotes a value from the file (a repo name, a lane
+// label, the source near a syntax error, a key in a path) must run only after the name scan,
+// or the guard prints exactly what it protects. These pin the order, not just the outcome.
+
+const NAME_ERROR = /forbidden name appears in /;
+const quotesNoName = (msg: string, ...names: string[]): void => {
+  for (const name of names) assert.ok(!msg.toLowerCase().includes(name.toLowerCase()), `message quotes "${name}": ${msg}`);
+};
+
+test("a forbidden repo name with a blank blurb reports the name error, not the blurb error that would quote it", async () => {
+  const mod = await contentWith("Jane Placeholder");
+  const doc = edited("lanes[1].repos[0].name", "Jane Placeholder");
+  doc.lanes[1].repos[0].blurb = "   ";
+  const msg = rejection(doc, "name plus blank blurb", mod.loadContent);
+  assert.match(msg, /forbidden name appears in content\.json field lanes\[1\]\.repos\[0\]\.name/);
+  quotesNoName(msg, "Jane Placeholder");
+  // the same document without the name is rejected for the blurb, so the ordering is what hid it
+  doc.lanes[1].repos[0].name = "repo-b1";
+  assert.match(rejection(doc, "blank blurb alone", mod.loadContent), /repo repo-b1 needs a non-blank blurb/);
+});
+
+test("a forbidden lane label with no repos reports the name error, not the lane error that would quote it", async () => {
+  const mod = await contentWith("Jane Placeholder");
+  const doc = edited("lanes[1].label", "Jane Placeholder");
+  doc.lanes[1].repos = [];
+  const msg = rejection(doc, "name plus empty lane", mod.loadContent);
+  assert.match(msg, /forbidden name appears in content\.json field lanes\[1\]\.label/);
+  quotesNoName(msg, "Jane Placeholder");
+});
+
+test("the committed name is held to the same order", () => {
+  const doc = edited("lanes[1].repos[0].name", "Firstname Lastname");
+  doc.lanes[1].repos[0].blurb = "";
+  const msg = rejection(doc, "committed name plus blank blurb");
+  assert.match(msg, NAME_ERROR);
+  quotesNoName(msg, "Firstname Lastname");
+});
+
+test("a name inside a syntax error's quoted source is not repeated", async () => {
+  const mod = await contentWith("Jane Placeholder");
+  // V8 quotes the text around an unexpected token, so these would otherwise echo the name.
+  assert.match(JSON.stringify(readSyntaxError('{"role": Firstname Lastname}')), /Firstname/, "premise: V8 quotes the source");
+  for (const body of ["Firstname Lastname", '{"role": Firstname Lastname}']) {
+    const msg = fileRejection(body, body);
+    assert.match(msg, NAME_ERROR);
+    quotesNoName(msg, "Firstname Lastname");
+  }
+  const viaEnv = fileRejection('{"role": Jane Placeholder}', "name from the variable", mod.loadContent);
+  assert.match(viaEnv, NAME_ERROR);
+  quotesNoName(viaEnv, "Jane Placeholder");
+});
+
+test("a name used as a key never reaches a path in a later message", () => {
+  // The key is spelled with a JSON escape, so the raw text holds no literal name and only the
+  // parsed key carries it. The value would otherwise fail the font check and quote the path.
+  const raw = JSON.stringify({ ...VALID, aside: { "@@KEY@@": "🙂" } }).replace("@@KEY@@", "Firstname\\u0020Lastname");
+  assert.ok(!raw.includes("Firstname Lastname"), "premise: the raw text has no literal name");
+  const msg = fileRejection(raw, "escaped name as a key");
+  assert.match(msg, /forbidden name appears in content\.json, in a key under aside/);
+  quotesNoName(msg, "Firstname Lastname");
+});
+
+test("a name used as a literal key is not quoted by a later message either", () => {
+  const msg = rejection({ ...VALID, aside: { "Firstname Lastname": "🙂" } }, "literal name as a key");
+  assert.match(msg, NAME_ERROR);
+  quotesNoName(msg, "Firstname Lastname");
+});
+
+test("a key and its value that are both names do not make the key appear in the message", () => {
+  const msg = rejection({ ...VALID, aside: { "Firstname Lastname": "Firstname Lastname" } }, "name as key and value");
+  assert.match(msg, NAME_ERROR);
+  quotesNoName(msg, "Firstname Lastname");
+});
+
+test("a name in an earlier duplicate key is caught, though JSON.parse keeps only the last", () => {
+  const raw = JSON.stringify(VALID).replace("{", '{"handle":"Firstname Lastname",');
+  assert.equal(JSON.parse(raw).handle, "TESTER", "premise: the parsed document no longer holds the name");
+  const msg = fileRejection(raw, "duplicate key");
+  assert.match(msg, /forbidden name appears in content\.json \(/);
+  quotesNoName(msg, "Firstname Lastname");
+  // with a shape error as well, the name still wins: every name scan precedes the shape check
+  const alsoBroken = JSON.stringify({ ...VALID, role: "  " }).replace("{", '{"handle":"Firstname Lastname",');
+  assert.match(fileRejection(alsoBroken, "duplicate key plus blank role"), /forbidden name appears in content\.json \(/);
+});
+
+function readSyntaxError(body: string): string {
+  try {
+    JSON.parse(body);
+  } catch (e) {
+    return (e as Error).message;
+  }
+  return assert.fail("expected a syntax error");
+}
 
 // ---- PROFILE_FORBIDDEN_NAMES ---------------------------------------------------------
 // The module reads the variable once, at import. Each case imports a fresh instance of it

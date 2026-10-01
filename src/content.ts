@@ -27,7 +27,10 @@ export const FORBIDDEN_NAMES: string[] = [
   ...(process.env.PROFILE_FORBIDDEN_NAMES ?? "").split(",").map((s) => s.trim()).filter(Boolean),
 ];
 
-/** Throws without echoing the name, so a build log never repeats what it is protecting. */
+/**
+ * Throws without echoing the name, so a build log never repeats what it is protecting.
+ * `where` is quoted in the message, so it must not itself carry unchecked content.
+ */
 export function assertNoForbiddenNames(text: string, where: string): void {
   const hay = text.toLowerCase();
   for (const name of FORBIDDEN_NAMES) {
@@ -101,6 +104,21 @@ function assertShape(c: unknown): asserts c is Content {
   text(note, "statusline.note");
 }
 
+/**
+ * Throws on a forbidden name in any string value or object key. A key is checked before it
+ * is used to build a path, so the path in a message never carries a name it has not cleared.
+ */
+function assertNoNames(v: unknown, path = ""): void {
+  if (typeof v === "string") assertNoForbiddenNames(v, `content.json field ${path || "(top level)"}`);
+  else if (Array.isArray(v)) v.forEach((x, i) => assertNoNames(x, `${path}[${i}]`));
+  else if (isObj(v)) {
+    for (const [k, x] of Object.entries(v)) {
+      assertNoForbiddenNames(k, `content.json, in a key under ${path || "the top level"}`);
+      assertNoNames(x, path ? `${path}.${k}` : k);
+    }
+  }
+}
+
 /** Every string value in the document with the path that leads to it, e.g. `lanes[0].repos[1].blurb`. */
 function* strings(v: unknown, path = ""): Generator<[string, string]> {
   if (typeof v === "string") yield [path, v];
@@ -114,15 +132,23 @@ export function loadContent(path?: string): Content {
   try {
     parsed = JSON.parse(raw);
   } catch (e) {
+    // V8 quotes the source text near a syntax error, so rule out a name before repeating it.
+    assertNoForbiddenNames(raw, "content.json");
     return fail(`not valid JSON (${(e as Error).message})`);
   }
+
+  // Names are scanned first. Every message below can quote a value from the file (a repo
+  // name, a lane label), and a build log may be public, so nothing is quoted until it is
+  // known to carry no forbidden name. The raw text is scanned as well because JSON.parse
+  // keeps only the last of two duplicate keys, and the file itself is what gets committed.
+  assertNoNames(parsed);
+  assertNoForbiddenNames(raw, "content.json");
   assertShape(parsed);
 
-  // Everything visible must be drawable and must carry no forbidden name. Checked
-  // string by string so the failure names the field; unknown extra fields are covered too.
+  // Everything visible must be drawable. Checked string by string so the failure names the
+  // field; unknown extra fields are covered too.
   const ttf = readFileSync(FONT_PATH);
   for (const [field, value] of strings(parsed)) {
-    assertNoForbiddenNames(value, `content.json field ${field}`);
     for (const ch of FORBIDDEN_GLYPHS) {
       if (value.includes(ch)) {
         const hex = ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0");
@@ -135,7 +161,5 @@ export function loadContent(path?: string): Content {
       fail(`${field}: ${(e as Error).message}`);
     }
   }
-  // Object keys are not drawn, but a name used as one would still be published with the file.
-  assertNoForbiddenNames(raw, "content.json");
   return parsed;
 }
