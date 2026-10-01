@@ -5,13 +5,14 @@ import { subsetToBase64 } from "../src/font.ts";
 import { buildSvg } from "../src/svg.ts";
 import { CELL_H, CELL_W, PAD } from "../src/grid.ts";
 import { PALETTES } from "../src/tokens.ts";
-import type { ThemeName } from "../src/tokens.ts";
+import type { Palette, ThemeName } from "../src/tokens.ts";
 import { MASCOT_TIMELINE, MASTER_SECONDS } from "../src/timeline.ts";
 import { MASCOT_COLS, MASCOT_ROWS, mascotCss, mascotDefs } from "../src/mascot.ts";
 
 // ---------------------------------------------------------------------------------------------
-// Helpers. Everything below reads the GENERATED output (the real svg, css and path data), never
-// the module's source, so a wrong implementation cannot satisfy a test by looking right in code.
+// Helpers. Everything below reads the GENERATED output (the real svg, css and path data) and the
+// grid files directly, never the module's own tables, so a wrong implementation cannot satisfy a
+// test by agreeing with itself.
 // ---------------------------------------------------------------------------------------------
 
 const regularB64 = await subsetToBase64(readFileSync(new URL("../vendor/JetBrainsMono-Regular.ttf", import.meta.url)), "x");
@@ -136,20 +137,24 @@ function parseXml(src: string): Node {
 const classesOf = (n: Node): string[] => (n.attrs.class ?? "").split(/\s+/).filter(Boolean);
 const walk = (n: Node): Node[] => [n, ...n.children.flatMap(walk)];
 
-// ---- Geometry: a path is rectangles on the half-cell lattice -----------------------------------
+// ---- Geometry: a path is rectangles on the art-pixel lattice -----------------------------------
 
-const SUB_W = CELL_W / 2;   // one quadrant wide
-const SUB_H = CELL_H / 2;   // one half-row tall
+const PX = CELL_W / 2;   // one art pixel, in units
+const GRID_W = 64;
+const GRID_H = 28;
+const RACK_FROM = 11;
+const ART = new URL("../art/", import.meta.url);
 
-/** "x,y" keys of the lattice pixels (quadrant wide, half-row tall) a compiled path covers. */
+/** "x,y" keys of the art pixels a compiled path covers, with pixel (0, 0) at (PAD, PAD). */
 function pixels(d: string): Set<string> {
   assert.match(d, /^(M[\d.]+ [\d.]+h[\d.]+v[\d.]+h-[\d.]+z)*$/, "path data is not compiler rectangles");
   const out = new Set<string>();
   for (const m of d.matchAll(/M([\d.]+) ([\d.]+)h([\d.]+)v([\d.]+)/g)) {
     const [x, y, w, h] = m.slice(1).map(Number);
-    const [px, py, pw, ph] = [(x - PAD) / SUB_W, (y - PAD) / SUB_H, w / SUB_W, h / SUB_H];
-    for (const v of [px, py, pw, ph]) assert.ok(Number.isInteger(v), `rect ${m[0]} is off the half-cell lattice`);
-    for (let i = 0; i < pw; i++) for (let j = 0; j < ph; j++) out.add(`${px + i},${py + j}`);
+    assert.equal(h, PX, `rect ${m[0]} is not one art pixel tall`);
+    const [px, py, pw] = [(x - PAD) / PX, (y - PAD) / PX, w / PX];
+    for (const v of [px, py, pw]) assert.ok(Number.isInteger(v), `rect ${m[0]} is off the pixel lattice`);
+    for (let i = 0; i < pw; i++) out.add(`${px + i},${py}`);
   }
   return out;
 }
@@ -159,99 +164,246 @@ const xy = (p: string): [number, number] => {
   return [x, y];
 };
 
-type Layer = { fill: string; d: string; px: Set<string> };
+type Ink = Map<string, string>;   // pixel -> fill
 
-/**
- * Every path in the defs, keyed by what it is: `pose-NAME/body|ear|tail`, `rack`, `led-N`.
- * Duplicate keys are an error, so one layer cannot silently shadow another.
- */
-function layersOf(defs: string): Record<string, Layer> {
-  const layers: Record<string, Layer> = {};
-  const add = (key: string, n: Node): void => {
-    assert.equal(n.tag, "path", `${key} is not a path`);
-    assert.ok(!(key in layers), `duplicate layer ${key}`);
-    layers[key] = { fill: n.attrs.fill, d: n.attrs.d, px: pixels(n.attrs.d) };
-  };
-  for (const n of walk(parseXml(defs))) {
-    const cls = classesOf(n);
-    if (cls.includes("pose")) {
-      const pose = cls.find((c) => c.startsWith("pose-"));
-      assert.ok(pose, "a pose group without a pose-NAME class");
-      for (const child of n.children) add(`${pose}/${child.attrs.class}`, child);
-    } else if (cls.includes("rack")) {
-      add("rack", n);
-    } else if (cls.includes("led")) {
-      const led = cls.find((c) => c.startsWith("led-"));
-      assert.ok(led, "an led without an led-N class");
-      add(led, n);
-    }
-  }
-  return layers;
+const pathsUnder = (n: Node, skip: string[] = []): Node[] =>
+  n.tag === "path" ? [n] : n.children.filter((c) => !skip.some((s) => classesOf(c).includes(s))).flatMap((c) => pathsUnder(c, skip));
+
+/** Paints the paths under these nodes in document order, later paths over earlier ones. */
+function inkOf(nodes: Node[], skip: string[] = []): Ink {
+  const ink: Ink = new Map();
+  for (const n of nodes) for (const path of pathsUnder(n, skip)) for (const p of pixels(path.attrs.d)) ink.set(p, path.attrs.fill);
+  return ink;
 }
 
+const find = (root: Node, cls: string): Node => {
+  const hit = walk(root).find((n) => classesOf(n).includes(cls));
+  assert.ok(hit, `no element has class ${cls}`);
+  return hit;
+};
+
 const states = (): string[] => [...new Set(MASCOT_TIMELINE.map((w) => w.state))];
-const poseKeys = (layers: Record<string, Layer>, part: string): string[] =>
-  Object.keys(layers).filter((k) => k.endsWith(`/${part}`));
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+
+// ---- The artwork, read independently of the module ----------------------------------------------
+
+const readGrid = (name: string): string[] => readFileSync(new URL(`${name}.grid.txt`, ART), "utf8").replace(/\n$/, "").split("\n");
+const OLD_COLOURS: string[] = Object.values(JSON.parse(readFileSync(new URL("palette.json", ART), "utf8")));
+
+/** The recolour table, copied from the art direction, not from the module. */
+const TOKEN: Record<string, keyof Palette> = {
+  "1": "muted", "2": "text", "3": "bg", "4": "accent", "5": "surface", "6": "accent", "7": "muted", "8": "border", "9": "border",
+};
+const colourOf = (ch: string, p: Palette): string => (ch === " " ? p.bg : p[TOKEN[ch]]);
+
+// ---- Contrast (WCAG 2.x relative luminance), computed here, not by the module -------------------
+
+function luminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+const contrast = (a: string, b: string): number => {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
 
 // ---------------------------------------------------------------------------------------------
 // The footprint
 // ---------------------------------------------------------------------------------------------
 
-test("the mascot fits the header budget, and the art really spans the box it claims", () => {
-  assert.ok(MASCOT_COLS <= 28, "wider than 28 columns blurs on a phone");
-  assert.ok(MASCOT_ROWS <= 12);
-  const layers = layersOf(mascotDefs(0, 0, "dark"));
-  // Breaks caught: art wider or taller than the constants Task 7 reserves room by, and constants
-  // that no longer describe the art.
-  for (const [key, layer] of Object.entries(layers)) {
-    for (const p of layer.px) {
-      const [x, y] = xy(p);
-      assert.ok(x >= 0 && x < MASCOT_COLS * 2 && y >= 0 && y < MASCOT_ROWS * 2, `${key} has ink outside the box at ${p}`);
+test("the scene is 32 columns by 7 rows, because one art pixel is exactly 6 units square", () => {
+  assert.equal(PX, 6);
+  assert.equal(CELL_H / 4, PX, "an art pixel is half a column wide and a quarter of a row tall, so it is square");
+  assert.equal(MASCOT_COLS, 32);
+  assert.equal(MASCOT_ROWS, 7);
+  assert.equal(MASCOT_COLS * CELL_W, GRID_W * PX, "384 units across");
+  assert.equal(MASCOT_ROWS * CELL_H, GRID_H * PX, "168 units down");
+  // Every rectangle in the output is one art pixel tall and on the lattice (pixels() asserts both).
+  for (const theme of ["dark", "light"] as const) {
+    const root = parseXml(mascotDefs(0, 0, theme));
+    for (const path of walk(root).filter((n) => n.tag === "path")) {
+      for (const p of pixels(path.attrs.d)) {
+        const [x, y] = xy(p);
+        assert.ok(x >= 0 && x < GRID_W && y >= 0 && y < GRID_H, `${path.attrs.class} has ink outside the 64 x 28 scene at ${p}`);
+      }
     }
   }
-  const rack = [...layers.rack.px].map(xy);
-  assert.equal(Math.min(...rack.map(([x]) => x)), 0, "rack starts at the left edge");
-  assert.equal(Math.max(...rack.map(([x]) => x)) + 1, MASCOT_COLS * 2, "rack ends at the right edge");
-  assert.equal(Math.max(...rack.map(([, y]) => y)) + 1, MASCOT_ROWS * 2, "rack ends at the bottom edge");
 });
 
-test("the sleeping pose leaves the upper right clear for the zZz and the nose bubble", () => {
-  const sleep = layersOf(mascotDefs(0, 0, "dark"));
-  for (const part of ["body", "ear", "tail"]) {
-    for (const p of sleep[`pose-sleep/${part}`].px) {
-      const [x, y] = xy(p);
-      assert.ok(!(x >= MASCOT_COLS && y < 4), `sleep ${part} has ink in the reserved corner at ${p}`);
-    }
-  }
+test("the plinth reaches the bottom of the scene, so the constants describe real art", () => {
+  const rows = [...inkOf([find(parseXml(mascotDefs(0, 0, "dark")), "rack")]).keys()].map((p) => xy(p)[1]);
+  assert.equal(Math.max(...rows) + 1, GRID_H);
+  assert.equal(Math.min(...rows), RACK_FROM + 1, "the rack's first painted row is the one under its dark top line");
 });
 
 // ---------------------------------------------------------------------------------------------
-// Poses and the timeline
+// Poses, and the recolour
 // ---------------------------------------------------------------------------------------------
 
-test("every pose the timeline names has art, and no art is a pose the timeline never shows", () => {
-  const layers = layersOf(mascotDefs(0, 0, "dark"));
-  const drawn = new Set(Object.keys(layers).filter((k) => k.startsWith("pose-")).map((k) => k.split("/")[0]));
-  assert.deepEqual([...drawn].sort(), states().map((s) => `pose-${s}`).sort());
-  for (const state of states()) {
-    assert.ok(layers[`pose-${state}/body`].px.size > 0, `pose-${state} has an empty body: a gap in the loop`);
+test("every pose the timeline names has a drawn group, and no group is a pose the timeline never shows", () => {
+  const root = parseXml(mascotDefs(0, 0, "dark"));
+  const drawn = walk(root).flatMap(classesOf).filter((c) => /^pose-/.test(c)).sort();
+  assert.deepEqual(drawn, states().map((s) => `pose-${s}`).sort());
+  for (const state of states()) assert.ok(inkOf([find(root, `pose-${state}`)]).size > 0, `pose-${state} draws nothing: a gap in the loop`);
+});
+
+test("each pose is its grid file recoloured by the art direction's table, pixel for pixel, in both themes", () => {
+  // Break caught: a wrong token for a character, a pixel dropped or moved by merging, a character painted under
+  // another colour, a pose drawn from the wrong file, or the rack missing. Every one of the 64 x 28 pixels is checked.
+  for (const theme of ["dark", "light"] as const) {
+    const p = PALETTES[theme];
+    const root = parseXml(mascotDefs(0, 0, theme));
+    for (const state of states()) {
+      const rows = readGrid(state);
+      const ink = inkOf([find(root, "rack"), find(root, `pose-${state}`)]);
+      for (let y = 0; y < GRID_H; y++) for (let x = 0; x < GRID_W; x++) {
+        assert.equal(ink.get(`${x},${y}`) ?? p.bg, colourOf(rows[y][x], p), `${theme} ${state} x${x} row ${y} (grid character ${JSON.stringify(rows[y][x])})`);
+      }
+    }
   }
 });
 
-test("no two poses share a silhouette, so none is a lazy copy of another", () => {
-  const layers = layersOf(mascotDefs(0, 0, "dark"));
-  const bodies = poseKeys(layers, "body").map((k) => layers[k].d);
-  assert.equal(new Set(bodies).size, states().length);
+test("no colour from the old phosphor palette survives, and every fill is a token of the theme asked for", () => {
+  for (const theme of ["dark", "light"] as const) {
+    const out = (mascotDefs(0, 0, theme) + mascotCss()).toLowerCase();
+    for (const old of OLD_COLOURS) assert.ok(!out.includes(old.toLowerCase()), `${theme}: old colour ${old} is still in the output`);
+    const fills = new Set(walk(parseXml(mascotDefs(0, 0, theme))).flatMap((n) => (n.attrs.fill ? [n.attrs.fill] : [])));
+    for (const f of fills) assert.ok(Object.values(PALETTES[theme]).includes(f), `${theme}: fill ${f} is not a palette token`);
+  }
+  assert.notEqual(mascotDefs(0, 0, "dark"), mascotDefs(0, 0, "light"), "the two themes must differ");
 });
 
-test("every pose has an ear and a tail layer that actually draws something", () => {
-  // An empty overlay would leave the ear/tail micro-layer animating nothing in that pose.
-  const layers = layersOf(mascotDefs(0, 0, "dark"));
-  for (const state of states()) {
-    for (const part of ["ear", "tail"]) {
-      assert.ok(layers[`pose-${state}/${part}`].px.size > 0, `pose-${state} has no ${part} ink`);
+test("the rack is emitted once and shared: no pose carries a rack row, and the rack carries no cat row", () => {
+  for (const theme of ["dark", "light"] as const) {
+    const root = parseXml(mascotDefs(0, 0, theme));
+    assert.equal(walk(root).filter((n) => classesOf(n).includes("rack")).length, 1, "exactly one rack group");
+    for (const state of states()) {
+      for (const p of inkOf([find(root, `pose-${state}`)]).keys()) assert.ok(xy(p)[1] < RACK_FROM, `pose-${state} paints rack row ${xy(p)[1]}`);
     }
+    for (const p of inkOf([find(root, "rack")]).keys()) assert.ok(xy(p)[1] >= RACK_FROM, `the rack paints cat row ${xy(p)[1]}`);
+  }
+});
+
+test("poses are distinct drawings, so none is a copy of another", () => {
+  const root = parseXml(mascotDefs(0, 0, "dark"));
+  const drawings = states().map((s) => JSON.stringify([...inkOf([find(root, `pose-${s}`)])].sort()));
+  assert.equal(new Set(drawings).size, states().length);
+});
+
+test("the cat reads against the rack: text on surface, measured from the generated drawing, in both themes", () => {
+  // Measured on the pair that is actually drawn next to each other (the cat's body path and the rack's panel path), not on
+  // the tokens in the abstract. The previous art failed this at 1.13:1 in light mode.
+  for (const theme of ["dark", "light"] as const) {
+    const root = parseXml(mascotDefs(0, 0, theme));
+    const body = pathsUnder(find(root, "pose-sleep")).find((n) => n.attrs.class === "body");
+    const panel = pathsUnder(find(root, "rack")).find((n) => n.attrs.class === "panel");
+    assert.ok(body && panel, "the sleeping body and the rack panel are both drawn");
+    const ratio = contrast(body.attrs.fill, panel.attrs.fill);
+    assert.ok(ratio >= 4.5, `${theme}: cat on rack is only ${ratio.toFixed(2)}:1`);
+    // And each is read against the window it sits on, not only against the other.
+    assert.ok(contrast(body.attrs.fill, PALETTES[theme].bg) >= 4.5, `${theme}: cat on window`);
+  }
+});
+
+test("a clear row of background separates the cat from the rack panel in every pose", () => {
+  const root = parseXml(mascotDefs(0, 0, "dark"));
+  const panel = pathsUnder(find(root, "rack")).find((n) => n.attrs.class === "panel");
+  assert.ok(panel, "the rack has a panel");
+  const top = Math.min(...[...pixels(panel.attrs.d)].map((p) => xy(p)[1]));
+  for (const state of states()) {
+    const bottom = Math.max(...[...inkOf([find(root, `pose-${state}`)]).keys()].map((p) => xy(p)[1]));
+    assert.ok(top - bottom - 1 >= 1, `pose-${state}: cat ends on row ${bottom}, the panel starts on row ${top}`);
+  }
+});
+
+test("the ear and tail layers are copies of their own pose, in the same colours, so moving them exposes nothing", () => {
+  for (const theme of ["dark", "light"] as const) {
+    const root = parseXml(mascotDefs(0, 0, theme));
+    for (const state of states()) {
+      const pose = find(root, `pose-${state}`);
+      const base = inkOf([pose], ["ear", "tail"]);
+      for (const part of ["ear", "tail"]) {
+        const overlay = inkOf(walk(pose).filter((n) => classesOf(n).includes(part)));
+        assert.ok(overlay.size > 0, `pose-${state} has no ${part} ink to move`);
+        for (const [p, fill] of overlay) assert.equal(base.get(p), fill, `pose-${state} ${part} pixel ${p} is not on a pixel of the same colour`);
+      }
+    }
+  }
+});
+
+test("a colour drawn over another sits on a shape that already covers it, so no two paths meet on a bare edge", () => {
+  // Separate paths that merely touch can show a hairline at a fractional scale. Speckles are drawn over the whole body,
+  // and vents and LEDs over the whole rack panel, so there is always something under them.
+  const root = parseXml(mascotDefs(0, 0, "dark"));
+  const cls = (n: Node, c: string): Node[] => pathsUnder(n).filter((q) => q.attrs.class === c);
+  const covered = (over: Node[], under: Node[], what: string): void => {
+    const base = new Set(under.flatMap((q) => [...pixels(q.attrs.d)]));
+    for (const q of over) for (const p of pixels(q.attrs.d)) assert.ok(base.has(p), `${what}: ${p} has nothing under it`);
+  };
+  for (const state of states()) {
+    const pose = find(root, `pose-${state}`);
+    covered(cls(pose, "detail"), cls(pose, "body"), `pose-${state} speckles on body`);
+  }
+  const rack = find(root, "rack");
+  const panel = cls(rack, "panel");
+  assert.equal(panel.length, 1);
+  covered([...cls(rack, "vent"), ...cls(rack, "led-dim"), ...walk(rack).filter((n) => classesOf(n).includes("led"))], panel, "rack details on panel");
+});
+
+test("the ear and tail are small, cat-coloured parts: neither carries the zZz or a catchlight", () => {
+  for (const theme of ["dark", "light"] as const) {
+    const p = PALETTES[theme];
+    const root = parseXml(mascotDefs(0, 0, theme));
+    for (const state of states()) {
+      for (const part of ["ear", "tail"]) {
+        const overlay = inkOf(walk(find(root, `pose-${state}`)).filter((n) => classesOf(n).includes(part)));
+        assert.ok(overlay.size >= 1 && overlay.size <= 10, `pose-${state} ${part} has ${overlay.size} pixels`);
+        for (const f of overlay.values()) assert.ok(f === p.text || f === p.accent, `pose-${state} ${part} carries a ${f} pixel`);
+      }
+    }
+  }
+});
+
+test("the ear layer holds the right ear's tip, and the tail layer is exactly the ink at the far end of the body", () => {
+  const root = parseXml(mascotDefs(0, 0, "dark"));
+  for (const state of states()) {
+    const rows = readGrid(state).slice(0, RACK_FROM);
+    const pose = find(root, `pose-${state}`);
+    const part = (cls: string): Ink => inkOf(walk(pose).filter((n) => classesOf(n).includes(cls)));
+    const tipRow = rows.findIndex((r) => "24".includes(r[30]));
+    assert.ok(tipRow >= 0, `${state}: no ear tip at x30`);
+    assert.ok(part("ear").has(`30,${tipRow}`), `pose-${state}: the ear layer is missing the tip at x30 row ${tipRow}`);
+    const farEnd = new Set<string>();
+    rows.forEach((r, y) => [...r].forEach((c, x) => { if (x >= 45 && y >= 5 && "24".includes(c)) farEnd.add(`${x},${y}`); }));
+    assert.ok(farEnd.size > 0);
+    assert.deepEqual([...part("tail").keys()].sort(), [...farEnd].sort(), `pose-${state} tail layer`);
+  }
+});
+
+test("each LED group is the lit pixels of one rack unit, and only those", () => {
+  const rows = readGrid("sleep");
+  const dividers = rows.map((r, y) => ({ r, y })).filter(({ r, y }) => y >= RACK_FROM && /3/.test(r) && /^ *3+ *$/.test(r)).map(({ y }) => y);
+  assert.equal(dividers.length, 4, "four dark lines make three units");
+  const root = parseXml(mascotDefs(0, 0, "dark"));
+  const lit = new Set<string>();
+  for (let k = 0; k < dividers.length - 1; k++) {
+    const expected = new Set<string>();
+    for (let y = dividers[k] + 1; y < dividers[k + 1]; y++) [...rows[y]].forEach((c, x) => { if (c === "6") expected.add(`${x},${y}`); });
+    assert.ok(expected.size > 0, `unit ${k} has lit LEDs`);
+    assert.deepEqual([...inkOf([find(root, `led-${k}`)]).keys()].sort(), [...expected].sort(), `led-${k}`);
+    for (const p of expected) lit.add(p);
+  }
+  assert.equal(lit.size, rows.join("").split("6").length - 1, "every lit pixel belongs to one unit");
+});
+
+test("the mascot is drawn at the column and row it is given", () => {
+  const at = parseXml(mascotDefs(0, 0, "dark"));
+  const moved = parseXml(mascotDefs(3, 2, "dark"));
+  const dx = (3 * CELL_W) / PX;
+  const dy = (2 * CELL_H) / PX;
+  for (const cls of ["rack", ...states().map((s) => `pose-${s}`), "bubble-0", "bubble-3", "burst"]) {
+    const expected = new Map([...inkOf([find(at, cls)])].map(([p, f]) => [`${xy(p)[0] + dx},${xy(p)[1] + dy}`, f]));
+    assert.deepEqual([...inkOf([find(moved, cls)])].sort(), [...expected].sort(), cls);
   }
 });
 
@@ -265,10 +417,13 @@ test("the base stylesheet shows the sleeping pose and hides every other, in the 
   // it ahead of the `.pose` reset (the cascade then hides the sleeper).
   for (const theme of ["dark", "light"] as const) {
     const css = styleOf(await fullSvg(theme));
-    const visible = states().filter((s) => Number(baseValue(css, ["pose", `pose-${s}`], "opacity")) === 1);
+    // The classes come from the generated elements themselves: a group that lost its `pose` class would escape the reset rule.
+    const root = parseXml(mascotDefs(0, 0, theme));
+    const classesFor = (s: string): string[] => classesOf(find(root, `pose-${s}`));
+    const visible = states().filter((s) => Number(baseValue(css, classesFor(s), "opacity")) === 1);
     assert.deepEqual(visible, ["sleep"], `${theme}: only the sleeping pose may be visible`);
     for (const s of states()) {
-      assert.ok(baseValue(css, ["pose", `pose-${s}`], "opacity") !== undefined, `${s} must declare its opacity`);
+      assert.ok(baseValue(css, classesFor(s), "opacity") !== undefined, `${s} must declare its opacity`);
     }
     // The rest pose is where the loop begins and ends, so animation drives away from it and back.
     assert.equal(visible[0], MASCOT_TIMELINE[0].state);
@@ -276,12 +431,19 @@ test("the base stylesheet shows the sleeping pose and hides every other, in the 
   }
 });
 
+test("the base stylesheet hides every bubble step and the burst, so the still frame is the plain sleeping pose", async () => {
+  const defs = parseXml(mascotDefs(0, 0, "dark"));
+  const css = styleOf(await fullSvg("dark"));
+  const bubbles = walk(defs).filter((n) => classesOf(n).includes("bubble"));
+  assert.equal(bubbles.length, 5, "four steps and the burst");
+  for (const n of bubbles) assert.equal(Number(baseValue(css, classesOf(n), "opacity")), 0, `${classesOf(n).join(" ")} must be hidden in the base stylesheet`);
+});
+
 test("the base stylesheet leaves every layer untransformed and the LEDs lit", async () => {
   // Reduced motion must land on un-lifted, un-shifted art; a stray base transform would freeze
   // the cat mid-breath, and a stray base opacity would freeze an LED mid-flicker.
   const css = styleOf(await fullSvg("dark"));
-  const rules = styleRules(css);
-  assert.deepEqual(rules.filter((r) => "transform" in r.decls), []);
+  assert.deepEqual(styleRules(css).filter((r) => "transform" in r.decls), []);
   for (const cls of ["breath", "ear", "tail", "led", "led-0", "led-1", "led-2", "rack"]) {
     const opacity = baseValue(css, [cls], "opacity");
     assert.ok(opacity === undefined || Number(opacity) === 1, `.${cls} base opacity ${opacity}`);
@@ -294,12 +456,12 @@ test("the base stylesheet leaves every layer untransformed and the LEDs lit", as
 
 type Window = { state: string; from: number; to: number };
 
-/** Opacity of a pose at time t, read from its keyframes with step-end semantics. */
-function opacityAt(css: string, pose: string, t: number): number {
-  const anim = animationsOf(css).find((a) => a.cls === `pose-${pose}`);
-  assert.ok(anim, `no animation rule for pose-${pose}`);
+/** Opacity of a master-clock layer (a pose, a bubble step, the burst) at time t, read from its keyframes with step-end semantics. */
+function opacityAt(css: string, cls: string, t: number): number {
+  const anim = animationsOf(css).find((a) => a.cls === cls);
+  assert.ok(anim, `no animation rule for .${cls}`);
   assert.equal(anim.timing, "step-end", "the sampler below assumes frames cut, not blend");
-  assert.equal(anim.seconds, MASTER_SECONDS);
+  assert.equal(anim.seconds, MASTER_SECONDS, `.${cls} must run on the master clock`);
   const kf = keyframesOf(css).find((k) => k.name === anim.name);
   assert.ok(kf, `no @keyframes ${anim.name}`);
   const stops = kf.stops.map((s) => {
@@ -325,7 +487,7 @@ function assertLoopShowsTimeline(timeline: Window[]): void {
   const css = mascotCss();
   const poses = [...new Set(timeline.map((w) => w.state))];
   const check = (t: number): void => {
-    const visible = poses.filter((p) => opacityAt(css, p, t) === 1);
+    const visible = poses.filter((p) => opacityAt(css, `pose-${p}`, t) === 1);
     assert.deepEqual(visible, [poseAt(timeline, t)], `at ${t}s`);
   };
   for (let k = 0; k < MASTER_SECONDS * 10; k++) check(k * 0.1 + 0.03);
@@ -338,33 +500,153 @@ function assertLoopShowsTimeline(timeline: Window[]): void {
   check(MASTER_SECONDS - 0.001);
 }
 
+/** Runs fn with MASCOT_TIMELINE temporarily replaced, restoring it afterwards even if fn throws. */
+function withTimeline(replacement: Window[], fn: () => void): void {
+  const original = MASCOT_TIMELINE.map((w) => ({ ...w }));
+  try {
+    MASCOT_TIMELINE.splice(0, MASCOT_TIMELINE.length, ...replacement);
+    fn();
+  } finally {
+    MASCOT_TIMELINE.splice(0, MASCOT_TIMELINE.length, ...original);
+  }
+  assert.deepEqual(MASCOT_TIMELINE, original, "the timeline was restored");
+}
+
+// Hand-derived alternative: 20 s is 33.333% of 60 s and 50 s is 83.333%; neither is in the committed table.
+const MOVED: Window[] = [
+  { state: "sleep", from: 0, to: 12 },
+  { state: "yawn", from: 12, to: 20 },
+  { state: "stretch", from: 20, to: 30 },
+  { state: "settle", from: 30, to: 36 },
+  { state: "sleep", from: 36, to: 50 },
+  { state: "startle", from: 50, to: 52 },
+  { state: "sleep", from: 52, to: MASTER_SECONDS },
+];
+
 test("the committed timeline is what the keyframes show, instant by instant", () => {
   assertLoopShowsTimeline(MASCOT_TIMELINE);
 });
 
 test("the keyframes follow the timeline when it changes, so they are derived and not a typed table", () => {
-  const original = MASCOT_TIMELINE.map((w) => ({ ...w }));
-  const moved: Window[] = [
-    { state: "sleep", from: 0, to: 12 },
-    { state: "yawn", from: 12, to: 20 },
-    { state: "stretch", from: 20, to: 30 },
-    { state: "settle", from: 30, to: 36 },
-    { state: "sleep", from: 36, to: 50 },
-    { state: "startle", from: 50, to: 52 },
-    { state: "sleep", from: 52, to: MASTER_SECONDS },
-  ];
-  try {
-    MASCOT_TIMELINE.splice(0, MASCOT_TIMELINE.length, ...moved);
-    assertLoopShowsTimeline(moved);
-    // Hand-derived: 20 s is 33.333% of 60 s, 50 s is 83.333%. Neither appears in the committed table.
+  withTimeline(MOVED, () => {
+    assertLoopShowsTimeline(MOVED);
     const css = mascotCss();
     assert.match(css, /33\.333%/);
     assert.match(css, /83\.333%/);
     assert.ok(!css.includes("30.667%"), "the committed 18.4 s hand-off must not survive");
-  } finally {
-    MASCOT_TIMELINE.splice(0, MASCOT_TIMELINE.length, ...original);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The nose bubble
+// ---------------------------------------------------------------------------------------------
+
+const bubbleSteps = (root: Node): string[] => walk(root).flatMap(classesOf).filter((c) => /^bubble-\d+$/.test(c)).sort();
+
+/**
+ * The bubble inflates in equal steps across the window before startle, bursts at the very instant
+ * startle begins, and is gone for the rest of the loop. Everything is read from the real keyframes.
+ */
+function assertBubbleFollowsTimeline(timeline: Window[]): void {
+  const css = mascotCss();
+  const i = timeline.findIndex((w) => w.state === "startle");
+  assert.ok(i > 0, "the timeline needs a window before startle to inflate in");
+  const grow = timeline[i - 1];
+  const pop = timeline[i];
+  const steps = bubbleSteps(parseXml(mascotDefs(0, 0, "dark")));
+  const all = [...steps, "burst"];
+  const stepLength = (grow.to - grow.from) / steps.length;
+  const visible = (t: number): string[] => all.filter((c) => opacityAt(css, c, t) === 1);
+
+  assert.equal(grow.to, pop.from, "the long window must run right up to startle");
+  assert.deepEqual(visible(grow.from - 0.001), [], "no bubble before the long window begins");
+  steps.forEach((step, k) => {
+    assert.deepEqual(visible(grow.from + k * stepLength + 0.001), [step], `${step} starts on its step`);
+    assert.deepEqual(visible(grow.from + (k + 1) * stepLength - 0.001), [step], `${step} lasts its whole step`);
+  });
+  // The pop: the last step is on screen a millisecond before startle, and only the burst a millisecond after.
+  assert.deepEqual(visible(pop.from - 0.001), [steps[steps.length - 1]]);
+  assert.deepEqual(visible(pop.from + 0.001), ["burst"]);
+  assert.deepEqual(visible(pop.to - 0.001), [], "a burst ring, then nothing");
+
+  for (let k = 0; k < MASTER_SECONDS * 10; k++) {
+    const t = k * 0.1 + 0.03;
+    if (t >= grow.from && t < grow.to) {
+      assert.deepEqual(visible(t), [steps[Math.floor((t - grow.from) / stepLength)]], `at ${t}s`);
+    } else if (t >= pop.from && t < pop.to) {
+      assert.ok(visible(t).every((c) => c === "burst"), `a bubble step survives the pop at ${t}s`);
+    } else {
+      assert.deepEqual(visible(t), [], `at ${t}s`);
+    }
   }
-  assert.deepEqual(MASCOT_TIMELINE, original, "the timeline was restored");
+}
+
+test("the bubble inflates in four steps across the long sleep and pops exactly when startle begins", () => {
+  assert.equal(bubbleSteps(parseXml(mascotDefs(0, 0, "dark"))).length, 4);
+  assertBubbleFollowsTimeline(MASCOT_TIMELINE);
+  // The instant itself, read straight off the committed timeline rather than through the sampler's own arithmetic.
+  const startle = MASCOT_TIMELINE.find((w) => w.state === "startle");
+  assert.ok(startle);
+  assert.equal(startle.from, 48.75);
+  const css = mascotCss();
+  assert.equal(opacityAt(css, "bubble-3", startle.from - 0.001), 1);
+  assert.equal(opacityAt(css, "bubble-3", startle.from + 0.001), 0);
+  assert.equal(opacityAt(css, "burst", startle.from - 0.001), 0);
+  assert.equal(opacityAt(css, "burst", startle.from + 0.001), 1);
+});
+
+test("the bubble's steps and pop follow the timeline when it changes", () => {
+  withTimeline(MOVED, () => assertBubbleFollowsTimeline(MOVED));
+});
+
+test("the bubble starts as one pixel at x21 row 7, grows up and to the left to about 3 x 3, and keeps its corner", () => {
+  const root = parseXml(mascotDefs(0, 0, "dark"));
+  const steps = bubbleSteps(root).map((c) => {
+    const px = [...inkOf([find(root, c)]).keys()].map(xy);
+    const [x0, x1] = [Math.min(...px.map(([x]) => x)), Math.max(...px.map(([x]) => x))];
+    const [y0, y1] = [Math.min(...px.map(([, y]) => y)), Math.max(...px.map(([, y]) => y))];
+    return { c, ink: px.length, w: x1 - x0 + 1, h: y1 - y0 + 1, right: x1, bottom: y1, px };
+  });
+  assert.deepEqual(steps[0].px, [[21, 7]], "one pixel at x21 row 7");
+  for (let i = 1; i < steps.length; i++) {
+    assert.ok(steps[i].ink > steps[i - 1].ink, `${steps[i].c} has no more ink than ${steps[i - 1].c}`);
+    assert.ok(steps[i].w * steps[i].h >= steps[i - 1].w * steps[i - 1].h, `${steps[i].c} is smaller than ${steps[i - 1].c}`);
+    assert.equal(steps[i].right, 21, `${steps[i].c} moved off the corner`);
+    assert.equal(steps[i].bottom, 7, `${steps[i].c} moved off the corner`);
+  }
+  assert.deepEqual([steps[3].w, steps[3].h], [3, 3], "about 3 x 3 by the last step");
+});
+
+test("the bubble sits in free space: no step overlaps the sleeping cat, and the burst clears the startled one", () => {
+  // A step is on screen only with the sleeping pose and the burst only with the startled one, so those are the pairs that meet.
+  const root = parseXml(mascotDefs(0, 0, "dark"));
+  const sleeping = inkOf([find(root, "pose-sleep")]);
+  const startled = inkOf([find(root, "pose-startle")]);
+  const rack = inkOf([find(root, "rack")]);
+  for (const c of bubbleSteps(root)) {
+    for (const p of inkOf([find(root, c)]).keys()) assert.ok(!sleeping.has(p) && !rack.has(p), `${c} overlaps the sleeping cat or the rack at ${p}`);
+  }
+  for (const p of inkOf([find(root, "burst")]).keys()) assert.ok(!startled.has(p) && !rack.has(p), `the burst overlaps the startled cat or the rack at ${p}`);
+});
+
+test("the burst is a ring around where the bubble was", () => {
+  const root = parseXml(mascotDefs(0, 0, "dark"));
+  const burst = [...inkOf([find(root, "burst")]).keys()].map(xy);
+  const last = [...inkOf([find(root, "bubble-3")]).keys()].map(xy);
+  const mid = (a: [number, number][], i: 0 | 1): number => (Math.min(...a.map((q) => q[i])) + Math.max(...a.map((q) => q[i]))) / 2;
+  assert.ok(Math.abs(mid(burst, 0) - mid(last, 0)) <= 2 && Math.abs(mid(burst, 1) - mid(last, 1)) <= 2, "centred near the last bubble");
+  assert.ok(burst.length >= 6, "a ring of several sparks, not a dot");
+  const wider = Math.max(...burst.map(([x]) => x)) - Math.min(...burst.map(([x]) => x));
+  assert.ok(wider >= 4, "bigger than the bubble it replaces");
+});
+
+test("the bubble is drawn in the lightest tint's token, muted, in both themes", () => {
+  for (const theme of ["dark", "light"] as const) {
+    const root = parseXml(mascotDefs(0, 0, theme));
+    for (const c of [...bubbleSteps(root), "burst"]) {
+      for (const f of inkOf([find(root, c)]).values()) assert.equal(f, PALETTES[theme].muted, `${theme} ${c}`);
+    }
+  }
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -376,7 +658,7 @@ test("every animation rule has keyframes, cuts frames, loops forever and targets
   const anims = animationsOf(css);
   const kfNames = keyframesOf(css).map((k) => k.name);
   const classes = new Set(walk(parseXml(mascotDefs(0, 0, "dark"))).flatMap(classesOf));
-  assert.ok(anims.length >= states().length + 6, "poses, breath, ear, tail and three LEDs");
+  assert.ok(anims.length >= states().length + 10, "poses, four bubble steps, the burst, breath, ear, tail and three LEDs");
   for (const a of anims) {
     assert.ok(kfNames.includes(a.name), `.${a.cls} runs @keyframes ${a.name}, which does not exist`);
     assert.equal(a.timing, "step-end", `.${a.cls} must cut between frames`);
@@ -387,13 +669,14 @@ test("every animation rule has keyframes, cuts frames, loops forever and targets
   for (const name of kfNames) assert.ok(anims.some((a) => a.name === name), `@keyframes ${name} is never used`);
 });
 
-test("every pose swaps on the 60 second master clock", () => {
-  const poseAnims = animationsOf(mascotCss()).filter((a) => a.cls.startsWith("pose-"));
-  assert.deepEqual(poseAnims.map((a) => a.cls).sort(), states().map((s) => `pose-${s}`).sort());
-  for (const a of poseAnims) assert.equal(a.seconds, MASTER_SECONDS, a.cls);
+test("every pose, bubble step and the burst swap on the 60 second master clock", () => {
+  const anims = animationsOf(mascotCss());
+  const master = anims.filter((a) => a.seconds === MASTER_SECONDS).map((a) => a.cls).sort();
+  const expected = [...states().map((s) => `pose-${s}`), ...bubbleSteps(parseXml(mascotDefs(0, 0, "dark"))), "burst"].sort();
+  assert.deepEqual(master, expected);
 });
 
-test("the breath divides the loop exactly, lifts the cat in every pose, and never the rack", () => {
+test("the breath divides the loop exactly, lifts the cat and its bubble in every pose, and never the rack", () => {
   const anim = animationsOf(mascotCss()).find((a) => a.name === "breathe");
   assert.ok(anim, "no breathe animation");
   const breaths = MASTER_SECONDS / anim.seconds;
@@ -401,25 +684,32 @@ test("the breath divides the loop exactly, lifts the cat in every pose, and neve
   assert.equal(anim.seconds, 3.75);
 
   const root = parseXml(mascotDefs(0, 0, "dark"));
-  const breath = walk(root).find((n) => classesOf(n).includes(anim.cls));
-  assert.ok(breath, "no element carries the breath class");
-  const inside = walk(breath).flatMap(classesOf);
+  const inside = walk(find(root, anim.cls)).flatMap(classesOf);
   for (const s of states()) assert.ok(inside.includes(`pose-${s}`), `pose-${s} does not breathe`);
+  assert.ok(inside.includes("burst") && bubbleSteps(root).every((c) => inside.includes(c)), "the bubble belongs to the cat, so it must rise and fall with it");
   assert.ok(!inside.includes("rack"), "the rack must stay still");
-  assert.ok(!inside.some((c) => c.startsWith("led")), "the LEDs must stay still");
+  assert.ok(!inside.some((c) => /^led/.test(c)), "the LEDs are on the rack and must stay still");
 });
 
-test("no transform can open a gap wider than the art overlaps by", () => {
-  // The cat's hidden row tucks one half-row under the rack plate, so any lift up to a half-row is
-  // still backed. A bigger translation would show background between cat and rack.
-  for (const kf of keyframesOf(mascotCss())) {
+test("nothing that moves the cat downward can reach the rack across the clear row", () => {
+  // The cat only ever rises, but the bound is what matters: a downward translate as long as the
+  // clear row under the cat would close it.
+  const css = mascotCss();
+  const moves = animationsOf(css).filter((a) => ["breath", "ear", "tail"].includes(a.cls)).map((a) => a.name);
+  assert.equal(moves.length, 3);
+  let down = 0;
+  for (const kf of keyframesOf(css).filter((k) => moves.includes(k.name))) {
     for (const stop of kf.stops) {
-      const t = stop.decls.transform;
-      if (t === undefined) continue;
-      for (const m of t.matchAll(/translate[XY]?\((-?[\d.]+)px\)/g)) {
-        assert.ok(Math.abs(Number(m[1])) < SUB_H, `${kf.name} translates ${m[1]}px`);
-      }
+      for (const m of (stop.decls.transform ?? "").matchAll(/translateY\((-?[\d.]+)px\)/g)) down = Math.max(down, Number(m[1]));
     }
+  }
+  const root = parseXml(mascotDefs(0, 0, "dark"));
+  const panel = pathsUnder(find(root, "rack")).find((n) => n.attrs.class === "panel");
+  assert.ok(panel);
+  const top = Math.min(...[...pixels(panel.attrs.d)].map((p) => xy(p)[1]));
+  for (const state of states()) {
+    const bottom = Math.max(...[...inkOf([find(root, `pose-${state}`)]).keys()].map((p) => xy(p)[1]));
+    assert.ok((top - bottom - 1) * PX > down, `pose-${state}: a downward move of ${down}px reaches the rack`);
   }
 });
 
@@ -445,7 +735,7 @@ test("it animates only opacity and transform, and never uses SMIL, in the real d
   for (const theme of ["dark", "light"] as const) {
     const svg = await fullSvg(theme);
     const keyframes = keyframesOf(styleOf(svg));
-    assert.equal(keyframes.length, states().length + 4, "pose swaps, breathe, ear, tail, led");
+    assert.ok(keyframes.length >= states().length + 4 + 5, "pose swaps, bubble steps, burst, breathe, ear, tail and led");
     for (const kf of keyframes) {
       for (const stop of kf.stops) {
         for (const prop of Object.keys(stop.decls)) {
@@ -459,119 +749,5 @@ test("it animates only opacity and transform, and never uses SMIL, in the real d
     assert.ok(!/attributeName/.test(markup), "no animated geometry attributes");
     assert.ok(!/\b(filter|mask|backdrop-filter)\b|blur\(|feGaussianBlur/.test(markup), "no filter, mask or blur");
     assert.ok(!/\sstyle="/.test(markup), "no inline styles that could animate anything");
-  }
-});
-
-// ---------------------------------------------------------------------------------------------
-// Colour
-// ---------------------------------------------------------------------------------------------
-
-test("each part is drawn in its own role colour for the theme it was asked for", () => {
-  // Breaks caught: the dark palette used for both themes, roles swapped (cat in muted, rack in text),
-  // the LEDs in anything but the accent, or a stray fourth colour.
-  for (const theme of ["dark", "light"] as const) {
-    const p = PALETTES[theme];
-    const layers = layersOf(mascotDefs(0, 0, theme));
-    for (const [key, layer] of Object.entries(layers)) {
-      const expected = key === "rack" ? p.muted : key.startsWith("led-") ? p.accent : p.text;
-      assert.equal(layer.fill, expected, `${theme} ${key}`);
-    }
-    assert.deepEqual(Object.keys(layers).filter((k) => k.startsWith("led-")).sort(), ["led-0", "led-1", "led-2"]);
-  }
-  assert.match(mascotDefs(0, 0, "dark"), /#83c092/);
-  assert.match(mascotDefs(0, 0, "light"), /#3f7d4e/);
-  assert.ok(!mascotDefs(0, 0, "light").includes(PALETTES.dark.accent), "dark accent leaked into light");
-});
-
-// ---------------------------------------------------------------------------------------------
-// Seams: separate <path> elements can show a hairline where they merely touch
-// ---------------------------------------------------------------------------------------------
-
-/**
- * Pairs (p in a, q in b) that touch along an edge although neither shape has ink under the other's
- * pixel. Such a join is two edges that must line up exactly; at a fractional scale they do not,
- * and the page background shows through as a hairline. A join where one shape runs underneath
- * the other has backing, so no hairline can open.
- */
-function bareJoins(a: Set<string>, b: Set<string>): string[] {
-  const out: string[] = [];
-  for (const p of a) {
-    if (b.has(p)) continue;
-    const [x, y] = xy(p);
-    for (const q of [`${x + 1},${y}`, `${x - 1},${y}`, `${x},${y + 1}`, `${x},${y - 1}`]) {
-      if (b.has(q) && !a.has(q)) out.push(`${p} touches ${q}`);
-    }
-  }
-  return out;
-}
-
-test("no two layers visible together meet on a bare edge", () => {
-  // The ear and tail overlays are left out on purpose: each lies wholly on its own body (next test),
-  // so a hairline at an overlay's edge would show body ink, never the page. The body stands for them.
-  const layers = layersOf(mascotDefs(0, 0, "dark"));
-  const fixed = ["rack", "led-0", "led-1", "led-2"];
-  for (const state of states()) {
-    const shown = [`pose-${state}/body`, ...fixed];
-    for (let i = 0; i < shown.length; i++) {
-      for (let j = i + 1; j < shown.length; j++) {
-        assert.deepEqual(bareJoins(layers[shown[i]].px, layers[shown[j]].px), [], `${shown[i]} meets ${shown[j]} on a bare edge`);
-      }
-    }
-  }
-});
-
-test("the cat stands on the rack: its last visible row has ink under it, hidden by the plate", () => {
-  // Breaks caught: no hidden row (the breath lift would show a slit between cat and rack), and a
-  // hidden row that pokes out into an open bay instead of staying behind the plate.
-  const layers = layersOf(mascotDefs(0, 0, "dark"));
-  const rackTop = Math.min(...[...layers.rack.px].map((p) => xy(p)[1]));
-  for (const state of states()) {
-    const body = layers[`pose-${state}/body`].px;
-    const sitting = [...body].filter((p) => xy(p)[1] === rackTop - 1);
-    assert.ok(sitting.length > 0, `pose-${state} does not reach the rack`);
-    for (const p of sitting) {
-      const [x, y] = xy(p);
-      assert.ok(body.has(`${x},${y + 1}`), `pose-${state}: nothing under ${p}, so a lift would open a slit`);
-    }
-    for (const p of body) {
-      if (xy(p)[1] >= rackTop) assert.ok(layers.rack.px.has(p), `pose-${state}: ${p} is cat ink showing inside the rack`);
-    }
-  }
-});
-
-test("the rack is painted after every cat layer, so its plate hides the row that runs under it", () => {
-  // Pixel sets say nothing about paint order. If the cat were painted last, its hidden row would
-  // sit on top of the plate as a visible stripe.
-  const order = walk(parseXml(mascotDefs(0, 0, "dark")));
-  const rack = order.findIndex((n) => classesOf(n).includes("rack"));
-  const lastCat = order.map((n, i) => (["body", "ear", "tail"].some((c) => classesOf(n).includes(c)) ? i : -1)).reduce((a, b) => Math.max(a, b));
-  assert.ok(rack > lastCat, "the rack must come after every body, ear and tail in document order");
-});
-
-test("the ear and tail overlays sit wholly on their own body, so moving them exposes nothing", () => {
-  const layers = layersOf(mascotDefs(0, 0, "dark"));
-  for (const state of states()) {
-    for (const part of ["ear", "tail"]) {
-      for (const p of layers[`pose-${state}/${part}`].px) {
-        assert.ok(layers[`pose-${state}/body`].px.has(p), `pose-${state} ${part} ink ${p} is not on the body`);
-      }
-    }
-  }
-});
-
-// ---------------------------------------------------------------------------------------------
-// Placement
-// ---------------------------------------------------------------------------------------------
-
-test("the mascot is drawn at the column and row it is given", () => {
-  const at = layersOf(mascotDefs(0, 0, "dark"));
-  const moved = layersOf(mascotDefs(3, 2, "dark"));
-  assert.deepEqual(Object.keys(moved).sort(), Object.keys(at).sort());
-  for (const key of Object.keys(at)) {
-    const shifted = new Set([...at[key].px].map((p) => {
-      const [x, y] = xy(p);
-      return `${x + 3 * 2},${y + 2 * 2}`;
-    }));
-    assert.deepEqual([...moved[key].px].sort(), [...shifted].sort(), key);
   }
 });
