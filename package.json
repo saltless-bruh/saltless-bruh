@@ -1,0 +1,15 @@
+{
+  "name": "custom_gh_profile",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "node --test",
+    "build": "node src/build.ts"
+  },
+  "keywords": [],
+  "type": "module"
+}
