@@ -1,0 +1,10 @@
+node_modules/
+
+# Never publish: contains the real name (ADR 0001)
+saltless-bruh-profile-3a.html
+
+# Local research notes: third-party content, screenshots with the real name
+docs/research/
+
+# SDD scratch
+.superpowers/
