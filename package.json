@@ -11,5 +11,8 @@
     "build": "node src/build.ts"
   },
   "keywords": [],
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "subset-font": "^2.9.0"
+  }
 }
