@@ -92,7 +92,7 @@ test("each weight carries its own font file, not one subset declared twice", asy
 
   const svg = await mk(oneRow);
   const face = (weight: number) =>
-    new RegExp(`@font-face\\{[^}]*font-weight:${weight};src:url\\(data:font/woff2;base64,([A-Za-z0-9+/=]+)\\)`).exec(svg)?.[1];
+    new RegExp(`@font-face\\{[^}]*font-weight:${weight};src:url\\(data:font/woff2;base64,([A-Za-z0-9+/=]+)\\) format\\("woff2"\\)\\}`).exec(svg)?.[1];
   assert.equal(face(400), regularB64);
   assert.equal(face(700), boldB64);
 });
@@ -105,6 +105,20 @@ test("the faces and the text rule agree on one family and the grid font size", a
   const textRule = /(?:^|[\s}])text\s*\{([^}]*)\}/.exec(svg)?.[1] ?? "";
   assert.match(textRule, new RegExp(`font-size:\\s*${FONT_SIZE}px`));
   assert.match(textRule, /white-space:\s*pre\b/);
+});
+
+test("ligatures are switched off, so the characters drawn are the characters in the transcript", async () => {
+  // JetBrains Mono ships calt ligatures: "->" would draw one arrow glyph while the transcript keeps two characters.
+  const textRule = /(?:^|[\s}])text\s*\{([^}]*)\}/.exec(await mk(oneRow))?.[1] ?? "";
+  assert.match(textRule, /font-variant-ligatures:\s*none\b/);
+  assert.match(textRule, /font-feature-settings:\s*"liga" 0,\s*"calt" 0\s*[;}]/);
+});
+
+test("the root asks for crisp edges, which the block-art banner and mascot depend on", async () => {
+  for (const theme of ["dark", "light"] as const) {
+    const root = attrsOf((await mk(oneRow, theme)).match(/^<svg\b[^>]*>/)![0]);
+    assert.equal(root["shape-rendering"], "crispEdges");
+  }
 });
 
 test("every style paints with its palette token, in both themes, and bold is weight 700", async () => {

@@ -5,7 +5,11 @@ export const CELL_W = 12;
 export const CELL_H = 24;
 export const COLS = 72;
 export const PAD = 16;
-// Centres the x-height (550/1000 em = 11 units) in the 24-unit row. Task 3 verifies it against a real render and tunes it if it sits wrong.
+// Centres the x-height (550/1000 em = 11 units) in the 24-unit row, and stays 17.5 after the
+// Task 3 render check. Centring the cap height (730/1000 em = 14.6 units) would need 19.3 and
+// leave a descender (3.6 units) only 1.1 units clear of the row's bottom edge instead of 2.9.
+// The gap from a descender to the next row's tallest printable ink ('$', 17.4 units) is 3.0
+// units at any baseline, because it depends only on the 24-unit row pitch.
 export const BASELINE_IN_ROW = 17.5;
 export const CANVAS_W = PAD + COLS * CELL_W + PAD;
 

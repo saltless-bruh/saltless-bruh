@@ -21,7 +21,8 @@ export async function buildSvg(o: BuildSvgOptions): Promise<string> {
   // Base styles are the FINAL STILL FRAME. Animations in o.css drive away from this,
   // so `animation: none` under reduced motion lands exactly here.
   const base = `
-    text { font-family: "JBMono"; font-size: ${FONT_SIZE}px; white-space: pre; }
+    text { font-family: "JBMono"; font-size: ${FONT_SIZE}px; white-space: pre;
+      font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
     .text { fill: ${p.text} } .muted { fill: ${p.muted} } .accent { fill: ${p.accent} }
     .warning { fill: ${p.warning} } .error { fill: ${p.error} }
     .bold { fill: ${p.text}; font-weight: 700 }
