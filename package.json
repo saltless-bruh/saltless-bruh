@@ -14,5 +14,8 @@
   "type": "module",
   "dependencies": {
     "subset-font": "^2.9.0"
+  },
+  "devDependencies": {
+    "fontverter": "^2.0.0"
   }
 }
