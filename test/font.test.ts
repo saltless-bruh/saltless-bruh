@@ -41,15 +41,27 @@ test("tabs and newlines are skipped without error", () => {
   assert.doesNotThrow(() => assertCovered(ttfRegular, "a\tb\nc"));
 });
 
-test("format 4 cmap alone returns correct coverage", () => {
-  const cov = fontCoverage(ttfRegular);
-  assert.ok(cov.has(0x0041), "format 4 includes A");
-  assert.ok(cov.has(0x0061), "format 4 includes a");
+test("format 4 subtable alone is parsed correctly", () => {
+  const buf = buildFormat4CMAPBuffer();
+  const cov = fontCoverage(buf);
+  assert.equal(cov.size, 3, "format 4 should have exactly 3 codepoints");
+  assert.equal(cov.has(0x0041), true, "0x41 (A) should be present");
+  assert.equal(cov.has(0x0042), true, "0x42 (B) should be present");
+  assert.equal(cov.has(0x0043), true, "0x43 (C) should be present, killing end-exclusive mutant");
+  assert.equal(cov.has(0x0040), false, "0x40 (before A) should be absent");
+  assert.equal(cov.has(0x0044), false, "0x44 (after C) should be absent");
+  assert.equal(cov.has(0xffff), false, "terminal segment 0xFFFF should be skipped");
 });
 
-test("format 12 alone returns correct coverage", () => {
-  const cov = fontCoverage(ttfRegular);
-  assert.ok(cov.has(0x1d538), "format 12 includes non-BMP");
+test("format 12 subtable alone is parsed correctly", () => {
+  const buf = buildFormat12CMAPBuffer();
+  const cov = fontCoverage(buf);
+  assert.equal(cov.size, 3, "format 12 should have exactly 3 codepoints");
+  assert.equal(cov.has(0x1d538), true, "0x1D538 should be present");
+  assert.equal(cov.has(0x1d539), true, "0x1D539 should be present");
+  assert.equal(cov.has(0x1d53a), true, "0x1D53A should be present, killing end-exclusive mutant");
+  assert.equal(cov.has(0x1d537), false, "0x1D537 (before range) should be absent");
+  assert.equal(cov.has(0x1d53b), false, "0x1D53B (after range) should be absent");
 });
 
 test("fontCoverage returns different results for different subsets", async () => {
@@ -113,8 +125,6 @@ function buildFormat4CMAPBuffer(): Buffer {
   u32(28);
   u32(0);
 
-  const cmapStart = 28;
-
   u16(0);
   u16(1);
 
@@ -123,22 +133,24 @@ function buildFormat4CMAPBuffer(): Buffer {
   u32(12);
 
   u16(4);
+  u16(20);
   u16(0);
-  u16(6);
-  u16(8);
+  u16(4);
+  u16(0);
   u16(0);
   u16(0);
 
-  u16(0x007f);
-  u16(0x01ff);
-  u16(0xffff);
-
-  u16(0xffff);
-  u16(0x0020);
-  u16(0x0100);
+  u16(0x0043);
   u16(0xffff);
 
   u16(0);
+
+  u16(0x0041);
+  u16(0xffff);
+
+  u16(0);
+  u16(0);
+
   u16(0);
   u16(0);
 
@@ -163,26 +175,21 @@ function buildFormat12CMAPBuffer(): Buffer {
   u32(28);
   u32(0);
 
-  const cmapStart = 28;
-
   u16(0);
   u16(1);
 
-  u16(3);
-  u16(10);
+  u16(0);
+  u16(0);
   u32(12);
 
   u16(12);
   u16(0);
-  u32(20);
-  u32(2);
-
-  u32(0x0041);
-  u32(0x005a);
+  u32(32);
   u32(0);
+  u32(1);
 
-  u32(0x0061);
-  u32(0x007a);
+  u32(0x1d538);
+  u32(0x1d53a);
   u32(0);
 
   return buf.slice(0, p);
