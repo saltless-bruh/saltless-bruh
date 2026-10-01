@@ -1,0 +1,407 @@
+import test, { after } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { loadContent, assertNoForbiddenNames } from "../src/content.ts";
+import type { Content } from "../src/content.ts";
+import { FORBIDDEN_GLYPHS, fontCoverage } from "../src/font.ts";
+import { MASCOT_TIMELINE } from "../src/timeline.ts";
+
+// Every rejection test starts from this known-good document and changes exactly one
+// thing, so a rejection can only come from that change. It is deliberately independent
+// of the owner's content.json, which the owner is free to edit.
+const VALID: Content = {
+  handle: "TESTER",
+  cwd: "~/tester",
+  role: "Fixture role · with a middle dot",
+  whoami: ["line one", "line two", "line three"],
+  lanes: [
+    { label: "alpha/", repos: [{ name: "repo-a1", blurb: "does a thing" }, { name: "repo-a2", blurb: "does another" }] },
+    { label: "beta/", repos: [{ name: "repo-b1", blurb: "does b" }] },
+  ],
+  stackRows: [
+    { label: "first", items: ["one", "two"] },
+    { label: "", items: ["three"] },
+  ],
+  verbs: {
+    sleep: ["Loafing", "Dozing"],
+    yawn: ["Yawning"],
+    stretch: ["Stretching"],
+    settle: ["Resettling"],
+    startle: ["Startled"],
+  },
+  statusline: { effortLabels: ["low", "mid", "lazy", "max"], effortSelected: "lazy", modeBadge: "autopilot on", note: "fixture note" },
+};
+
+const STATES = [...new Set(MASCOT_TIMELINE.map((w) => w.state))];
+const SHIPPED = new URL("../content.json", import.meta.url);
+
+const dir = mkdtempSync(join(tmpdir(), "content-test-"));
+after(() => rmSync(dir, { recursive: true, force: true }));
+
+let written = 0;
+const write = (body: string): string => {
+  const p = join(dir, `fixture-${written++}.json`);
+  writeFileSync(p, body);
+  return p;
+};
+const load = (doc: unknown): Content => loadContent(write(JSON.stringify(doc)));
+
+/** The message loadContent rejects with; fails the test if it accepts the document instead. */
+function rejection(doc: unknown, why: string, loader: typeof loadContent = loadContent): string {
+  try {
+    loader(write(JSON.stringify(doc)));
+  } catch (e) {
+    assert.ok(e instanceof Error, `${why}: threw a non-Error`);
+    return e.message;
+  }
+  return assert.fail(`${why}: the document loaded without error`);
+}
+
+// Paths are written the way the loader reports them: `lanes[0].repos[1].blurb`.
+const parse = (path: string): (string | number)[] =>
+  path.match(/[^.[\]]+/g)!.map((s) => (/^\d+$/.test(s) ? Number(s) : s));
+
+/** A copy of VALID with one value replaced, or removed when `value` is undefined. */
+function edited(path: string, value: unknown): Record<string, any> {
+  const doc: Record<string, any> = structuredClone(VALID);
+  const segs = parse(path);
+  const last = segs.pop()!;
+  let node: any = doc;
+  for (const s of segs) node = node[s];
+  if (value === undefined) delete node[last];
+  else node[last] = value;
+  return doc;
+}
+
+/** Every string value in a document, as a path. */
+function leaves(v: unknown, path = ""): string[] {
+  if (typeof v === "string") return [path];
+  if (Array.isArray(v)) return v.flatMap((x, i) => leaves(x, `${path}[${i}]`));
+  if (v && typeof v === "object") {
+    return Object.entries(v).flatMap(([k, x]) => leaves(x, path ? `${path}.${k}` : k));
+  }
+  return [];
+}
+
+/** VALID with `text` at one leaf. The selected effort label is a duplicate of a label, so they move together. */
+function withText(path: string, text: string): Record<string, any> {
+  const doc = edited(path, text);
+  if (path === `statusline.effortLabels[${VALID.statusline.effortLabels.indexOf(VALID.statusline.effortSelected)}]`) {
+    doc.statusline.effortSelected = text;
+  }
+  return doc;
+}
+
+// ---- the shipped file ----------------------------------------------------------------
+
+test("the shipped content file validates unchanged and is returned exactly as written", () => {
+  const c = loadContent();
+  assert.deepEqual(c, JSON.parse(readFileSync(SHIPPED, "utf8")));
+  assert.ok(c.lanes.length > 0);
+  assert.ok(c.stackRows.length > 0);
+  assert.ok(c.whoami.length > 0 && c.whoami.length <= 3);
+  for (const lane of c.lanes) for (const r of lane.repos) assert.ok(r.blurb.trim().length > 0, `${r.name} has no blurb`);
+});
+
+test("every mascot state has at least one spinner word in the shipped file", () => {
+  const c = loadContent();
+  assert.deepEqual([...STATES].sort(), ["settle", "sleep", "startle", "stretch", "yawn"]);
+  for (const state of STATES) assert.ok(c.verbs[state].length > 0, `verbs.${state} is empty`);
+});
+
+test("Regular and Bold cover the same codepoints, so checking Regular also covers Bold text", () => {
+  const regular = fontCoverage(readFileSync(new URL("../vendor/JetBrainsMono-Regular.ttf", import.meta.url)));
+  const bold = fontCoverage(readFileSync(new URL("../vendor/JetBrainsMono-Bold.ttf", import.meta.url)));
+  assert.ok(regular.size > 1000);
+  assert.deepEqual([...bold].sort((a, b) => a - b), [...regular].sort((a, b) => a - b));
+});
+
+test("the default path is the repo-root content.json whatever the working directory", () => {
+  const here = process.cwd();
+  process.chdir(dir);
+  try {
+    assert.deepEqual(loadContent(), JSON.parse(readFileSync(SHIPPED, "utf8")));
+  } finally {
+    process.chdir(here);
+  }
+});
+
+// ---- what is accepted ----------------------------------------------------------------
+
+test("a well-formed document loads and comes back unchanged", () => {
+  assert.deepEqual(load(VALID), VALID);
+});
+
+test("a stack row may have an empty label, because a row can continue the one above", () => {
+  assert.equal(load(VALID).stackRows[1].label, "");
+});
+
+test("Vietnamese and the middle dot are drawable, so content may use them", () => {
+  const c = load(edited("role", "kỹ sư bảo mật · ăâđêôơư ạắằẵặ"));
+  assert.equal(c.role, "kỹ sư bảo mật · ăâđêôơư ạắằẵặ");
+});
+
+test("whoami accepts exactly one and exactly three lines", () => {
+  assert.equal(load(edited("whoami", ["only"])).whoami.length, 1);
+  assert.equal(load(edited("whoami", ["a", "b", "c"])).whoami.length, 3);
+});
+
+// ---- structure: each rule rejects, and names what is wrong --------------------------
+
+const STRUCTURE: [string, unknown, RegExp][] = [
+  // verbs: every state the mascot can reach, one at a time
+  ...STATES.flatMap((s): [string, unknown, RegExp][] => [
+    [`verbs.${s}`, undefined, new RegExp(`verbs\\.${s} must list at least one word`)],
+    [`verbs.${s}`, [], new RegExp(`verbs\\.${s} must list at least one word`)],
+    [`verbs.${s}`, "Yawning", new RegExp(`verbs\\.${s} must list at least one word`)],
+    [`verbs.${s}[0]`, "   ", new RegExp(`verbs\\.${s}\\[0\\] must not be blank`)],
+    [`verbs.${s}[0]`, 7, new RegExp(`verbs\\.${s}\\[0\\] must be a string`)],
+  ]),
+  ["verbs", ["Loafing", "Dozing"], /verbs must be an object keyed by mascot state/],
+  ["verbs", undefined, /verbs must be an object keyed by mascot state/],
+
+  // whoami
+  ["whoami", ["a", "b", "c", "d"], /whoami must have 1 to 3 lines/],
+  ["whoami", [], /whoami must have 1 to 3 lines/],
+  ["whoami", "hi", /whoami must have 1 to 3 lines/],
+  ["whoami", undefined, /whoami must have 1 to 3 lines/],
+  ["whoami[1]", "  ", /whoami\[1\] must not be blank/],
+  ["whoami[2]", 3, /whoami\[2\] must be a string/],
+
+  // lanes and repos
+  ["lanes", [], /lanes must be a non-empty list/],
+  ["lanes", undefined, /lanes must be a non-empty list/],
+  ["lanes", "alpha/", /lanes must be a non-empty list/],
+  ["lanes[1]", "beta/", /lanes\[1\] must be an object/],
+  ["lanes[1].label", "  ", /lanes\[1\]\.label must not be blank/],
+  ["lanes[1].repos", [], /lane beta\/ has no repos/],
+  ["lanes[1].repos", undefined, /lane beta\/ has no repos/],
+  ["lanes[0].repos[1]", "repo-a2", /lanes\[0\]\.repos\[1\] must be an object/],
+  ["lanes[0].repos[1].name", "", /lanes\[0\]\.repos\[1\]\.name must not be blank/],
+  ["lanes[0].repos[1].name", undefined, /lanes\[0\]\.repos\[1\]\.name must be a string/],
+  ["lanes[1].repos[0].blurb", "   ", /repo repo-b1 needs a non-blank blurb/],
+  ["lanes[1].repos[0].blurb", "", /repo repo-b1 needs a non-blank blurb/],
+  ["lanes[1].repos[0].blurb", undefined, /repo repo-b1 needs a non-blank blurb/],
+  ["lanes[1].repos[0].blurb", 12, /repo repo-b1 needs a non-blank blurb/],
+
+  // stack rows
+  ["stackRows", [], /stackRows must be a non-empty list/],
+  ["stackRows", undefined, /stackRows must be a non-empty list/],
+  ["stackRows[1]", "three", /stackRows\[1\] must be an object/],
+  ["stackRows[1].label", undefined, /stackRows\[1\]\.label must be a string/],
+  ["stackRows[1].label", 4, /stackRows\[1\]\.label must be a string/],
+  ["stackRows[1].items", [], /stackRows\[1\]\.items must be a non-empty list/],
+  ["stackRows[1].items", undefined, /stackRows\[1\]\.items must be a non-empty list/],
+  ["stackRows[0].items[1]", "  ", /stackRows\[0\]\.items\[1\] must not be blank/],
+  ["stackRows[0].items[1]", 5, /stackRows\[0\]\.items\[1\] must be a string/],
+
+  // identity lines
+  ...["handle", "cwd", "role"].flatMap((f): [string, unknown, RegExp][] => [
+    [f, undefined, new RegExp(`${f} must be a string`)],
+    [f, "   ", new RegExp(`${f} must not be blank`)],
+    [f, 9, new RegExp(`${f} must be a string`)],
+  ]),
+
+  // statusline
+  ["statusline", undefined, /statusline must be an object/],
+  ["statusline.effortLabels", [], /statusline\.effortLabels must not be empty/],
+  ["statusline.effortLabels", undefined, /statusline\.effortLabels must not be empty/],
+  ["statusline.effortLabels[0]", " ", /statusline\.effortLabels\[0\] must not be blank/],
+  ["statusline.effortSelected", "turbo", /statusline\.effortSelected must be one of effortLabels/],
+  ["statusline.effortSelected", undefined, /statusline\.effortSelected must be one of effortLabels/],
+  ["statusline.modeBadge", " ", /statusline\.modeBadge must not be blank/],
+  ["statusline.modeBadge", undefined, /statusline\.modeBadge must be a string/],
+  ["statusline.note", "", /statusline\.note must not be blank/],
+  ["statusline.note", undefined, /statusline\.note must be a string/],
+];
+
+test("the structure table covers every mascot state, and the baseline it edits loads", () => {
+  for (const s of STATES) assert.ok(STRUCTURE.some(([path]) => path === `verbs.${s}`), `no row for verbs.${s}`);
+  assert.ok(STRUCTURE.length > 60);
+  assert.doesNotThrow(() => load(VALID));
+});
+
+for (const [path, value, expected] of STRUCTURE) {
+  const shown = value === undefined ? "removed" : JSON.stringify(value);
+  test(`rejects ${path} = ${shown}`, () => {
+    assert.match(rejection(edited(path, value), `${path} = ${shown}`), expected);
+  });
+}
+
+test("a blank blurb names the repo that has it, not a sibling", () => {
+  const msg = rejection(edited("lanes[1].repos[0].blurb", "   "), "blank blurb");
+  assert.match(msg, /repo-b1/);
+  assert.doesNotMatch(msg, /repo-a1|repo-a2/);
+});
+
+test("a lane without repos names that lane, not another", () => {
+  const msg = rejection(edited("lanes[1].repos", []), "empty lane");
+  assert.match(msg, /beta\//);
+  assert.doesNotMatch(msg, /alpha\//);
+});
+
+test("a top level that is not an object is rejected", () => {
+  for (const top of [[], null, "text", 7]) {
+    assert.match(rejection(top, `top level ${JSON.stringify(top)}`), /the top level must be an object/);
+  }
+});
+
+test("a file that is not JSON is rejected, and the message says so", () => {
+  for (const body of ["{ not json", "", '{"handle": "x",}']) {
+    assert.throws(() => loadContent(write(body)), /content\.json: not valid JSON/);
+  }
+});
+
+// ---- content: every string must be drawable and must carry no forbidden name --------
+
+const EDITABLE = leaves(VALID).filter((p) => p !== "statusline.effortSelected");
+
+test("the sweep covers every string in the document, so it cannot pass vacuously", () => {
+  assert.equal(leaves(VALID).length, 32);
+  for (const expected of ["handle", "whoami[2]", "lanes[1].repos[0].blurb", "stackRows[1].items[0]", "verbs.sleep[1]", "statusline.note"]) {
+    assert.ok(EDITABLE.includes(expected), `${expected} is not swept`);
+  }
+});
+
+test("a character outside the font is rejected wherever it appears, naming the field and the codepoint", () => {
+  for (const path of EDITABLE) {
+    const msg = rejection(withText(path, "ok 🙂 ok"), `emoji in ${path}`);
+    assert.ok(msg.includes(path), `message does not name ${path}: ${msg}`);
+    assert.match(msg, /U\+1F642/, `message does not name the codepoint for ${path}`);
+  }
+});
+
+test("a character outside the font is found at the start and the end of a string too", () => {
+  for (const text of ["🙂 start", "end 🙂"]) {
+    assert.match(rejection(edited("role", text), text), /role.*U\+1F642/);
+  }
+});
+
+test("a forbidden glyph is rejected wherever it appears, naming the field", () => {
+  for (const path of EDITABLE) {
+    const msg = rejection(withText(path, "ok ⎿ ok"), `glyph in ${path}`);
+    assert.ok(msg.includes(path), `message does not name ${path}: ${msg}`);
+    assert.match(msg, /⎿ \(U\+23BF\), which the font cannot draw/, `wrong message for ${path}: ${msg}`);
+  }
+});
+
+test("each forbidden glyph is rejected on its own", () => {
+  assert.equal([...FORBIDDEN_GLYPHS].length, 10);
+  for (const ch of FORBIDDEN_GLYPHS) {
+    const msg = rejection(edited("role", `a${ch}b`), `glyph ${ch}`);
+    assert.ok(msg.includes(ch), `message does not show ${ch}: ${msg}`);
+    assert.match(msg, /which the font cannot draw/);
+  }
+});
+
+test("a forbidden name is rejected wherever it appears, in any case, without echoing it", () => {
+  for (const path of EDITABLE) {
+    const msg = rejection(withText(path, "see fIrStNaMe LaStNaMe now"), `name in ${path}`);
+    assert.ok(msg.includes(path), `message does not name ${path}: ${msg}`);
+    assert.match(msg, /forbidden name appears/);
+    assert.ok(!/firstname|lastname/i.test(msg), `message echoes the name for ${path}: ${msg}`);
+  }
+});
+
+test("strings outside the known fields are checked too", () => {
+  assert.match(rejection({ ...VALID, aside: "🙂" }, "emoji in an unknown field"), /aside.*U\+1F642/);
+  assert.match(rejection({ ...VALID, aside: ["Firstname Lastname"] }, "name in an unknown field"), /aside\[0\]/);
+});
+
+test("a name written as a JSON escape is caught after parsing", () => {
+  const raw = JSON.stringify(VALID).replace("TESTER", "Firstname\\u0020Lastname");
+  assert.ok(raw.includes("\\u0020"));
+  assert.throws(() => loadContent(write(raw)), /forbidden name appears in content\.json field handle/);
+});
+
+test("a name used as an object key is caught, though no string value carries it", () => {
+  const msg = rejection({ ...VALID, "Firstname Lastname": 1 }, "name as a key");
+  assert.match(msg, /forbidden name appears in content\.json \(/);
+  assert.ok(!/firstname/i.test(msg), `message echoes the name: ${msg}`);
+});
+
+test("a forbidden name is caught wherever it appears", () => {
+  assert.throws(() => assertNoForbiddenNames("contact Firstname Lastname", "test input"), /test input/);
+});
+
+test("assertNoForbiddenNames is case-insensitive, matches the whole name only, and passes clean text", () => {
+  assert.throws(() => assertNoForbiddenNames("FIRSTNAME LASTNAME", "x"), /forbidden name/);
+  assert.throws(() => assertNoForbiddenNames("a firstname lastname b", "x"), /forbidden name/);
+  assert.doesNotThrow(() => assertNoForbiddenNames("Firstname", "x"));
+  assert.doesNotThrow(() => assertNoForbiddenNames("Lastname Firstname", "x"));
+  assert.doesNotThrow(() => assertNoForbiddenNames("", "x"));
+  assert.doesNotThrow(() => assertNoForbiddenNames("nothing to see here", "x"));
+});
+
+// ---- PROFILE_FORBIDDEN_NAMES ---------------------------------------------------------
+// The module reads the variable once, at import. Each case imports a fresh instance of it
+// under a distinct URL so the variable can be set per case; the real code is what runs.
+
+type ContentModule = typeof import("../src/content.ts");
+let instances = 0;
+async function contentWith(value: string | undefined): Promise<ContentModule> {
+  const key = "PROFILE_FORBIDDEN_NAMES";
+  const saved = process.env[key];
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+  try {
+    return await import(`../src/content.ts?env-case=${instances++}`);
+  } finally {
+    if (saved === undefined) delete process.env[key];
+    else process.env[key] = saved;
+  }
+}
+
+const COMMITTED = ["Firstname Lastname"];
+
+test("with the variable unset, the list is exactly the committed one", async () => {
+  assert.deepEqual((await contentWith(undefined)).FORBIDDEN_NAMES, COMMITTED);
+});
+
+test("with the variable empty, blank or only separators, the list is exactly the committed one", async () => {
+  for (const value of ["", "   ", ",", " , ,, "]) {
+    assert.deepEqual((await contentWith(value)).FORBIDDEN_NAMES, COMMITTED, JSON.stringify(value));
+  }
+});
+
+test("a two-name comma list is merged after the committed list and trimmed", async () => {
+  const mod = await contentWith("Jane Placeholder, Alex Example");
+  assert.deepEqual(mod.FORBIDDEN_NAMES, [...COMMITTED, "Jane Placeholder", "Alex Example"]);
+});
+
+test("a name from the variable is rejected by the loader, in any case, without being echoed", async () => {
+  const mod = await contentWith("Jane Placeholder, Alex Example");
+  for (const name of ["Jane Placeholder", "ALEX EXAMPLE"]) {
+    const msg = rejection(edited("lanes[1].repos[0].blurb", `by ${name} today`), name, mod.loadContent);
+    assert.match(msg, /forbidden name appears in content\.json field lanes\[1\]\.repos\[0\]\.blurb/);
+    assert.ok(!/jane|placeholder|alex|example/i.test(msg), `message echoes a name: ${msg}`);
+  }
+});
+
+test("the variable adds to the committed list rather than replacing it", async () => {
+  const mod = await contentWith("Jane Placeholder");
+  assert.match(rejection(edited("role", "Firstname Lastname"), "committed name"), /forbidden name/);
+  assert.match(rejection(edited("role", "Firstname Lastname"), "committed name", mod.loadContent), /forbidden name/);
+  assert.throws(() => mod.assertNoForbiddenNames("Firstname Lastname", "x"), /forbidden name/);
+  assert.throws(() => mod.assertNoForbiddenNames("Jane Placeholder", "x"), /forbidden name/);
+});
+
+test("a clean document still loads when the variable is set", async () => {
+  const mod = await contentWith("Jane Placeholder, Alex Example");
+  assert.deepEqual(mod.loadContent(write(JSON.stringify(VALID))), VALID);
+});
+
+test("with the variable unset, the same names are not special", async () => {
+  const mod = await contentWith(undefined);
+  const doc = edited("role", "Jane Placeholder and Alex Example");
+  assert.equal(mod.loadContent(write(JSON.stringify(doc))).role, "Jane Placeholder and Alex Example");
+});
+
+test("an empty entry in the list is ignored, not treated as matching everything", async () => {
+  const mod = await contentWith(undefined);
+  mod.FORBIDDEN_NAMES.push("");
+  assert.deepEqual(mod.loadContent(write(JSON.stringify(VALID))), VALID);
+  assert.throws(() => mod.assertNoForbiddenNames("Firstname Lastname", "x"), /forbidden name/);
+});
