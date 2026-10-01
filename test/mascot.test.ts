@@ -194,7 +194,12 @@ const OLD_COLOURS: string[] = Object.values(JSON.parse(readFileSync(new URL("pal
 const TOKEN: Record<string, keyof Palette> = {
   "1": "muted", "2": "text", "3": "bg", "4": "accent", "5": "surface", "6": "accent", "7": "muted", "8": "border", "9": "border",
 };
-const colourOf = (ch: string, p: Palette): string => (ch === " " ? p.bg : p[TOKEN[ch]]);
+/**
+ * Amended after review. The art direction sends `3` to `bg`, which is right for the eyes (a hole in the cat) but
+ * dissolved the rack: its panel is `surface`, which sits at 1.06:1 to 1.15:1 from the window, so nothing was left to draw
+ * its outline. In the rack rows the `3` lines are the frame (the outer edge and the lines between units) and are drawn in `border`.
+ */
+const colourOf = (ch: string, p: Palette, y: number): string => (ch === " " ? p.bg : ch === "3" && y >= RACK_FROM ? p.border : p[TOKEN[ch]]);
 
 // ---- Contrast (WCAG 2.x relative luminance), computed here, not by the module -------------------
 
@@ -233,7 +238,7 @@ test("the scene is 32 columns by 7 rows, because one art pixel is exactly 6 unit
 test("the plinth reaches the bottom of the scene, so the constants describe real art", () => {
   const rows = [...inkOf([find(parseXml(mascotDefs(0, 0, "dark")), "rack")]).keys()].map((p) => xy(p)[1]);
   assert.equal(Math.max(...rows) + 1, GRID_H);
-  assert.equal(Math.min(...rows), RACK_FROM + 1, "the rack's first painted row is the one under its dark top line");
+  assert.equal(Math.min(...rows), RACK_FROM, "the rack's first painted row is its frame's top line");
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -255,9 +260,9 @@ test("each pose is its grid file recoloured by the art direction's table, pixel 
     const root = parseXml(mascotDefs(0, 0, theme));
     for (const state of states()) {
       const rows = readGrid(state);
-      const ink = inkOf([find(root, "rack"), find(root, `pose-${state}`)]);
+      const ink = inkOf([find(root, `pose-${state}`), find(root, "rack")]);   // document order: the rack is painted last
       for (let y = 0; y < GRID_H; y++) for (let x = 0; x < GRID_W; x++) {
-        assert.equal(ink.get(`${x},${y}`) ?? p.bg, colourOf(rows[y][x], p), `${theme} ${state} x${x} row ${y} (grid character ${JSON.stringify(rows[y][x])})`);
+        assert.equal(ink.get(`${x},${y}`) ?? p.bg, colourOf(rows[y][x], p, y), `${theme} ${state} x${x} row ${y} (grid character ${JSON.stringify(rows[y][x])})`);
       }
     }
   }
@@ -278,7 +283,7 @@ test("the rack is emitted once and shared: no pose carries a rack row, and the r
     const root = parseXml(mascotDefs(0, 0, theme));
     assert.equal(walk(root).filter((n) => classesOf(n).includes("rack")).length, 1, "exactly one rack group");
     for (const state of states()) {
-      for (const p of inkOf([find(root, `pose-${state}`)]).keys()) assert.ok(xy(p)[1] < RACK_FROM, `pose-${state} paints rack row ${xy(p)[1]}`);
+      for (const p of inkOf([find(root, `pose-${state}`)], ["foot"]).keys()) assert.ok(xy(p)[1] < RACK_FROM, `pose-${state} paints rack row ${xy(p)[1]}`);
     }
     for (const p of inkOf([find(root, "rack")]).keys()) assert.ok(xy(p)[1] >= RACK_FROM, `the rack paints cat row ${xy(p)[1]}`);
   }
@@ -305,15 +310,117 @@ test("the cat reads against the rack: text on surface, measured from the generat
   }
 });
 
-test("a clear row of background separates the cat from the rack panel in every pose", () => {
-  const root = parseXml(mascotDefs(0, 0, "dark"));
-  const panel = pathsUnder(find(root, "rack")).find((n) => n.attrs.class === "panel");
-  assert.ok(panel, "the rack has a panel");
-  const top = Math.min(...[...pixels(panel.attrs.d)].map((p) => xy(p)[1]));
-  for (const state of states()) {
-    const bottom = Math.max(...[...inkOf([find(root, `pose-${state}`)]).keys()].map((p) => xy(p)[1]));
-    assert.ok(top - bottom - 1 >= 1, `pose-${state}: cat ends on row ${bottom}, the panel starts on row ${top}`);
+test("the cat touches only the rack's frame line, never its panel, in every pose", () => {
+  // The first thing under any part of the cat is the frame (border), or the cat floats clear above it.
+  for (const theme of ["dark", "light"] as const) {
+    const root = parseXml(mascotDefs(0, 0, theme));
+    const rack = inkOf([find(root, "rack")]);
+    const rackPixels = [...rack.keys()].map(xy);
+    for (const state of states()) {
+      for (const p of inkOf([find(root, `pose-${state}`)], ["foot"]).keys()) {
+        const [x, y] = xy(p);
+        const below = rackPixels.filter(([rx, ry]) => rx === x && ry > y).map(([, ry]) => ry);
+        if (below.length === 0) continue;
+        const first = `${x},${Math.min(...below)}`;
+        assert.equal(rack.get(first), PALETTES[theme].border, `${theme} pose-${state}: under the cat at ${p} the rack starts with ${rack.get(first)}, not its frame`);
+      }
+    }
   }
+});
+
+test("the rack's outer edge is its border-coloured frame, so a panel close to the window still has a silhouette", () => {
+  // Break caught: the frame dissolving back into holes, which left a panel 1.06:1 from the window and bars floating in space.
+  for (const theme of ["dark", "light"] as const) {
+    const p = PALETTES[theme];
+    const rack = find(parseXml(mascotDefs(0, 0, theme)), "rack");
+    const body = inkOf([rack], ["plinth"]);   // everything but the plinth, which is the base the rack stands on
+    const edge = [...body.keys()].filter((k) => {
+      const [x, y] = xy(k);
+      return [`${x + 1},${y}`, `${x - 1},${y}`, `${x},${y + 1}`, `${x},${y - 1}`].some((n) => !body.has(n));
+    });
+    assert.ok(edge.length > 100, `${theme}: only ${edge.length} edge pixels`);
+    for (const k of edge) assert.equal(body.get(k), p.border, `${theme}: the rack's edge at ${k} is ${body.get(k)}, not the frame`);
+    // The ring is closed: every pixel of the outline's bounding rectangle is frame.
+    const all = [...body.keys()].map(xy);
+    const [x0, x1] = [Math.min(...all.map(([x]) => x)), Math.max(...all.map(([x]) => x))];
+    const [y0, y1] = [Math.min(...all.map(([, y]) => y)), Math.max(...all.map(([, y]) => y))];
+    for (let x = x0; x <= x1; x++) for (const y of [y0, y1]) assert.equal(body.get(`${x},${y}`), p.border, `${theme}: gap in the top or bottom edge at x${x} row ${y}`);
+    for (let y = y0; y <= y1; y++) for (const x of [x0, x1]) assert.equal(body.get(`${x},${y}`), p.border, `${theme}: gap in the side edge at x${x} row ${y}`);
+  }
+});
+
+test("the same frame runs between the stacked units, on the lines the source grid already has", () => {
+  const rows = readGrid("sleep");
+  const dividers = rows.map((r, y) => y).filter((y) => y >= RACK_FROM && /^ *3+ *$/.test(rows[y]));
+  assert.equal(dividers.length, 4, "a top line, two lines between three units, and a bottom line");
+  for (const theme of ["dark", "light"] as const) {
+    const ink = inkOf([find(parseXml(mascotDefs(0, 0, theme)), "rack")]);
+    for (const y of dividers) {
+      const xs = [...rows[y]].map((c, x) => (c === "3" ? x : -1)).filter((x) => x >= 0);
+      for (const x of xs) assert.equal(ink.get(`${x},${y}`), PALETTES[theme].border, `${theme}: divider row ${y} is not frame at x${x}`);
+    }
+    // Between two dividers the unit is panel, so the lines really separate three units and are not the whole rack.
+    for (let k = 0; k < dividers.length - 1; k++) {
+      const y = dividers[k] + 1;
+      const x = rows[y].indexOf("5");
+      assert.ok(x >= 0, `unit ${k} has panel`);
+      assert.equal(ink.get(`${x},${y}`), PALETTES[theme].surface, `${theme}: unit ${k} is not panel at x${x} row ${y}`);
+    }
+  }
+});
+
+test("the frame is clearly visible against the window and against the panel, measured from the drawing", () => {
+  // The panel is 1.06:1 to 1.15:1 from the window, so it cannot carry its own edge; the frame must. Measured: against the
+  // window 2.79:1 dark and 2.92:1 light, against the panel 2.44:1 and 2.75:1.
+  for (const theme of ["dark", "light"] as const) {
+    const rack = find(parseXml(mascotDefs(0, 0, theme)), "rack");
+    const frame = pathsUnder(rack).find((n) => n.attrs.class === "frame");
+    const panel = pathsUnder(rack).find((n) => n.attrs.class === "panel");
+    assert.ok(frame && panel, "the rack has a frame and a panel");
+    assert.ok(contrast(frame.attrs.fill, PALETTES[theme].bg) >= 2.5, `${theme}: frame on window ${contrast(frame.attrs.fill, PALETTES[theme].bg).toFixed(2)}:1`);
+    assert.ok(contrast(frame.attrs.fill, panel.attrs.fill) >= 2.3, `${theme}: frame on panel ${contrast(frame.attrs.fill, panel.attrs.fill).toFixed(2)}:1`);
+    assert.ok(contrast(panel.attrs.fill, PALETTES[theme].bg) < 1.2, "the premise: the panel alone is nearly the window's colour");
+  }
+});
+
+test("the plinth keeps its own weight: one pixel row, exactly the grid's base line", () => {
+  const rows = readGrid("sleep");
+  const base = new Set<string>();
+  rows.forEach((r, y) => [...r].forEach((c, x) => { if (c === "9") base.add(`${x},${y}`); }));
+  const root = parseXml(mascotDefs(0, 0, "dark"));
+  const plinth = pathsUnder(find(root, "rack")).filter((n) => n.attrs.class === "plinth").flatMap((n) => [...pixels(n.attrs.d)]);
+  assert.deepEqual(plinth.sort(), [...base].sort());
+  assert.equal(new Set(plinth.map((q) => xy(q)[1])).size, 1, "a single row");
+});
+
+test("a cat resting on the frame has its feet continued under the frame line, so the breath cannot open a slit", () => {
+  // Measured when the frame was added: with the cat touching it, holding the breath lifted left a one-pixel strip of
+  // background under all 20 columns of its feet at 8 of 11 widths tried. The continuation is hidden under the frame at rest.
+  for (const theme of ["dark", "light"] as const) {
+    const root = parseXml(mascotDefs(0, 0, theme));
+    const rack = inkOf([find(root, "rack")]);
+    for (const state of states()) {
+      const pose = find(root, `pose-${state}`);
+      const cat = inkOf([pose], ["foot"]);
+      const bottom = Math.max(...[...cat.keys()].map((k) => xy(k)[1]));
+      const foot = walk(pose).filter((n) => classesOf(n).includes("foot"));
+      if (bottom === RACK_FROM - 1) {
+        assert.equal(foot.length, 1, `pose-${state} rests on the frame and needs its feet continued`);
+        const expected = new Map([...cat].filter(([k]) => xy(k)[1] === bottom).map(([k, fill]) => [`${xy(k)[0]},${bottom + 1}`, fill]));
+        assert.deepEqual([...inkOf(foot)].sort(), [...expected].sort(), `pose-${state}: the feet continue the cat's bottom row, in its colours`);
+        for (const k of expected.keys()) assert.equal(rack.get(k), PALETTES[theme].border, `pose-${state}: ${k} would show, it is not under the frame line`);
+      } else {
+        assert.equal(foot.length, 0, `pose-${state} floats clear of the frame, so there is nothing to continue`);
+      }
+    }
+  }
+});
+
+test("the rack is painted after the cat, so its frame line covers the continued feet", () => {
+  const order = walk(parseXml(mascotDefs(0, 0, "dark")));
+  const breath = order.findIndex((n) => classesOf(n).includes("breath"));
+  const lastInBreath = breath + walk(order[breath]).length - 1;
+  assert.ok(order.findIndex((n) => classesOf(n).includes("rack")) > lastInBreath, "the rack must come after everything that breathes");
 });
 
 test("the ear and tail layers are copies of their own pose, in the same colours, so moving them exposes nothing", () => {
@@ -347,7 +454,7 @@ test("a colour drawn over another sits on a shape that already covers it, so no 
   const rack = find(root, "rack");
   const panel = cls(rack, "panel");
   assert.equal(panel.length, 1);
-  covered([...cls(rack, "vent"), ...cls(rack, "led-dim"), ...walk(rack).filter((n) => classesOf(n).includes("led"))], panel, "rack details on panel");
+  covered([...cls(rack, "frame"), ...cls(rack, "vent"), ...cls(rack, "led-dim"), ...walk(rack).filter((n) => classesOf(n).includes("led"))], panel, "rack frame and details on panel");
 });
 
 test("the ear and tail are small, cat-coloured parts: neither carries the zZz or a catchlight", () => {
@@ -691,9 +798,9 @@ test("the breath divides the loop exactly, lifts the cat and its bubble in every
   assert.ok(!inside.some((c) => /^led/.test(c)), "the LEDs are on the rack and must stay still");
 });
 
-test("nothing that moves the cat downward can reach the rack across the clear row", () => {
-  // The cat only ever rises, but the bound is what matters: a downward translate as long as the
-  // clear row under the cat would close it.
+test("nothing that moves the cat downward can push it into the rack it rests on", () => {
+  // The cat only ever rises. A downward translate longer than the gap under the cat (none, when it rests on the frame line)
+  // would sink it into the rack.
   const css = mascotCss();
   const moves = animationsOf(css).filter((a) => ["breath", "ear", "tail"].includes(a.cls)).map((a) => a.name);
   assert.equal(moves.length, 3);
@@ -704,12 +811,10 @@ test("nothing that moves the cat downward can reach the rack across the clear ro
     }
   }
   const root = parseXml(mascotDefs(0, 0, "dark"));
-  const panel = pathsUnder(find(root, "rack")).find((n) => n.attrs.class === "panel");
-  assert.ok(panel);
-  const top = Math.min(...[...pixels(panel.attrs.d)].map((p) => xy(p)[1]));
+  const top = Math.min(...[...inkOf([find(root, "rack")]).keys()].map((p) => xy(p)[1]));
   for (const state of states()) {
-    const bottom = Math.max(...[...inkOf([find(root, `pose-${state}`)]).keys()].map((p) => xy(p)[1]));
-    assert.ok((top - bottom - 1) * PX > down, `pose-${state}: a downward move of ${down}px reaches the rack`);
+    const bottom = Math.max(...[...inkOf([find(root, `pose-${state}`)], ["foot"]).keys()].map((p) => xy(p)[1]));
+    assert.ok((top - bottom - 1) * PX >= down, `pose-${state}: a downward move of ${down}px sinks it into the rack`);
   }
 });
 

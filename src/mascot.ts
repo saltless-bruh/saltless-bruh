@@ -16,9 +16,13 @@ import type { Palette, ThemeName } from "./tokens.ts";
  *
  * Seams. Every colour is its own <path>, and two paths that merely touch can show a hairline between
  * them once the image is scaled to a fractional width. So a colour that sits on another is drawn over
- * a shape that already covers it: the speckles over the whole body, the vents and LEDs over the whole
- * rack panel. The dark lines (character 3) are the window itself and are left unpainted, so they are
- * holes and not a colour that has to meet its neighbours.
+ * a shape that already covers it: the speckles over the whole body, the frame, vents and LEDs over the
+ * whole rack panel.
+ *
+ * Character 3 means two things. In the cat it is an eye, drawn as a hole in the body (the window
+ * showing through). In the rack rows it is the frame: the outer edge and the lines between the three
+ * units. The rack panel is `surface`, which sits within 1.06:1 to 1.15:1 of the window, so a panel
+ * alone has no silhouette; the one-pixel `border` frame carries it, the same device the Session window uses.
  */
 const ART = new URL("../art/", import.meta.url);
 const GRID_W = 64;
@@ -49,18 +53,22 @@ if ([...GLYPHS].sort().join("") !== Object.keys(RECOLOUR).sort().join("")) {
 }
 
 /**
- * One path per painted character, in the token the recolour table gives it. `under` lists further
- * characters the path also covers, so a colour drawn over it has it underneath.
+ * One path per painted character, in the token the recolour table gives it unless `token` says
+ * otherwise. `under` lists further characters the path also covers, so a colour drawn over it has it underneath.
  */
-type Ink = { char: string; cls: string; under?: string };
+type Ink = { char: string; cls: string; under?: string; token?: keyof Palette };
+const tokenOf = (i: Ink): keyof Palette => i.token ?? RECOLOUR[i.char];
 
 const CAT: Ink[] = [
   { char: "2", cls: "body", under: "4" },
   { char: "4", cls: "detail" },
   { char: "1", cls: "faint" },
 ];
+/** In the rack rows, the dark lines are the frame, drawn in this token rather than left as holes. */
+const FRAME_TOKEN: keyof Palette = "border";
 const RACK: Ink[] = [
-  { char: "5", cls: "panel", under: "678" },
+  { char: "5", cls: "panel", under: "3678" },
+  { char: "3", cls: "frame", token: FRAME_TOKEN },
   { char: "8", cls: "vent" },
   { char: "7", cls: "led-dim" },
   { char: "9", cls: "plinth" },
@@ -69,12 +77,7 @@ const RACK: Ink[] = [
 const LIT = "6";
 const RACK_ONLY = "56789";
 
-// A character is either painted or deliberately the window (`bg`); a table entry nothing uses is a mistake.
-const painted = new Set([...CAT, ...RACK].map((i) => i.char).concat(LIT));
-for (const ch of GLYPHS) {
-  if (!painted.has(ch) && RECOLOUR[ch] !== "bg") throw new Error(`character ${ch} is recoloured to ${RECOLOUR[ch]} but nothing paints it`);
-  if (painted.has(ch) && RECOLOUR[ch] === "bg") throw new Error(`character ${ch} is painted but recoloured to bg, which is the window`);
-}
+
 
 const REST: PoseName = MASCOT_TIMELINE[0].state;
 const POSES = Object.fromEntries(
@@ -87,6 +90,19 @@ for (const [name, grid] of Object.entries(POSES)) {
     if (y < RACK_FROM && [...row].some((c) => RACK_ONLY.includes(c))) throw new Error(`${grid.name}: rack character in the cat rows at row ${y}`);
     if (y >= RACK_FROM && row !== POSES[REST].rows[y]) throw new Error(`${grid.name}: rack row ${y} differs from ${POSES[REST].name}, but the rack is drawn once (${name})`);
   });
+}
+
+// In each region a character is either painted or deliberately the window (`bg`); a table entry nothing uses is a mistake.
+const charsIn = (rows: string[]): Set<string> => new Set([...rows.join("")].filter((c) => c !== " "));
+for (const [region, inks, chars] of [
+  ["cat", CAT, charsIn(Object.values(POSES).flatMap((g) => g.rows.slice(0, RACK_FROM)))],
+  ["rack", [...RACK, { char: LIT, cls: "led" }], charsIn(POSES[REST].rows.slice(RACK_FROM))],
+] as [string, Ink[], Set<string>][]) {
+  for (const ch of chars) {
+    const ink = inks.find((i) => i.char === ch);
+    if (!ink && RECOLOUR[ch] !== "bg") throw new Error(`${region}: character ${ch} is recoloured to ${RECOLOUR[ch]} but nothing paints it`);
+    if (ink && tokenOf(ink) === "bg") throw new Error(`${region}: character ${ch} is painted in bg, which is the window`);
+  }
 }
 
 const CAT_ROWS: Box = { x0: 0, x1: GRID_W, y0: 0, y1: RACK_FROM };
@@ -134,13 +150,24 @@ export function mascotDefs(col: number, row: number, theme: ThemeName): string {
     runs.length === 0 ? "" : `<path class="${cls}" d="${runsToPath(runs, x0, y0, PX)}" fill="${p[token]}"/>`;
   /** One path per ink; one that has no pixels in the box is left out. */
   const paints = (rows: string[], list: Ink[], box: Box): string =>
-    list.map((i) => path(i.cls, runsOf(rows, i.char + (i.under ?? ""), box), RECOLOUR[i.char])).filter(Boolean).join("\n");
+    list.map((i) => path(i.cls, runsOf(rows, i.char + (i.under ?? ""), box), tokenOf(i))).filter(Boolean).join("\n");
   const stampRuns = (s: Stamp): Run[] => runsOf(s.grid.rows, "1").map((r) => ({ ...r, x: r.x + s.x, y: r.y + s.y }));
+
+  /**
+   * A cat that rests on the frame line has its bottom row continued one row lower, behind the frame, which paints over it.
+   * Without it the breath's one-unit lift leaves a hairline of window between the feet and the line at most widths.
+   */
+  const foot = (rows: string[]): string => {
+    const bottom = rows.slice(0, RACK_FROM).findLastIndex((row) => /[24]/.test(row));
+    if (bottom !== RACK_FROM - 1) return "";
+    const under = rows.map((_, y) => (y === RACK_FROM ? rows[bottom] : " ".repeat(GRID_W)));
+    return `<g class="foot">${paints(under, CAT, { x0: 0, x1: GRID_W, y0: RACK_FROM, y1: RACK_FROM + 1 })}</g>\n`;
+  };
 
   const pose = (name: PoseName): string => {
     const { rows } = POSES[name];
     return `<g class="pose pose-${name}">
-${paints(rows, CAT, CAT_ROWS)}
+${foot(rows)}${paints(rows, CAT, CAT_ROWS)}
 <g class="ear">${paints(rows, CAT, earBox(POSES[name]))}</g>
 <g class="tail">${paints(rows, CAT, TAIL)}</g>
 </g>`;
@@ -150,15 +177,15 @@ ${paints(rows, CAT, CAT_ROWS)}
   const leds = UNITS.map((u, k) => path(`led led-${k}`, runsOf(rackRows, LIT, u), RECOLOUR[LIT])).join("\n");
   const bubbles = [...BUBBLE.map((s, k) => path(`bubble bubble-${k}`, stampRuns(s), RECOLOUR["1"])), path("bubble burst", stampRuns(BURST), RECOLOUR["1"])].join("\n");
 
-  // The rack is still; the cat and its bubble breathe together.
+  // The cat and its bubble breathe together; the rack is still and is painted last, over the continued feet.
   return `<g class="mascot">
-<g class="rack">
-${paints(rackRows, RACK, RACK_ROWS)}
-${leds}
-</g>
 <g class="breath">
 ${(Object.keys(POSES) as PoseName[]).map(pose).join("\n")}
 ${bubbles}
+</g>
+<g class="rack">
+${paints(rackRows, RACK, RACK_ROWS)}
+${leds}
 </g>
 </g>`;
 }

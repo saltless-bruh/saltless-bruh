@@ -88,13 +88,21 @@ variants work. Use `PALETTES` from `src/tokens.ts`; do not hardcode hex.
 |---|---|---|
 | `1` zZz, bubble | `muted` | quiet, recedes |
 | `2` cat body | `text` | the main silhouette, highest contrast against the window |
-| `3` eyes, rack interior | `bg` | reads as a hole, and gives the eyes their darkness |
+| `3` eyes (cat rows) | `bg` | reads as a hole, and gives the eyes their darkness |
+| `3` frame (rack rows) | `border` | **amended after review**, see below |
 | `4` speckle, paws, nose, tail | `accent` | the one accent, used sparingly as detail |
 | `5` rack body | `surface` | a panel sitting on the window |
 | `6` LED lit | `accent` | the lit state |
 | `7` LED dim | `muted` | the unlit state |
 | `8` vents | `border` | structural lines |
 | `9` plinth | `border` | structural |
+
+**Amendment: the rack needs its frame.** The first version of this table sent every `3` to `bg`. In the cat rows that is right
+(an eye is a hole). In the rack rows it dissolved the rack: the panel is `surface`, which sits at 1.15:1 (dark) and 1.06:1 (light)
+from the window, so a panel alone has no silhouette and the LEDs and vents read as bars floating in space. In the rack rows, `3`
+is the rack's frame (its outer edge, and the lines between the three units) and is drawn in `border`: 2.79:1 against the window
+in dark and 2.92:1 in light, 2.44:1 and 2.75:1 against the panel. The cat against the panel stays at 7.11:1 and 5.10:1. This is the
+same device the Session window uses (an opaque panel plus a one-pixel frame). The plinth (`9`) is unchanged.
 
 **Check the cat reads against the rack.** The previous hand-drawn version failed exactly here: cat and rack measured
 1.13:1 in light mode and merged into one mass. With `text` on `surface` this should be about 7.1:1 dark and 5.1:1
