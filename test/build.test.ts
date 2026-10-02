@@ -102,6 +102,29 @@ test("both variants build, are whole documents and stay inside the size gate", a
   }
 });
 
+test("the published profile carries no Anthropic mark at all, name included", async () => {
+  // ADR 0002 forbids the marks, and until 2026-10-02 the Statusline printed a line that spelled the
+  // name in order to say it was not affiliated with it. Measured then: that sentence was the ONLY
+  // occurrence of "Anthropic" in the whole published profile. It is deleted, so the count is zero,
+  // and this is the assertion that keeps it there rather than the sentence that announced it.
+  //
+  // Everything published is read, not just the transcript: a run the picture draws and the text
+  // omits, or an attribute like the SVG's accessible name, would otherwise walk straight past this.
+  const { dark, light, readme, transcript } = await fresh();
+  const marks: [string, RegExp][] = [
+    ["the Anthropic name", /anthropic/i],
+    ["the Claude name", /\bclaude\b/i],
+    ["Claude orange", /#d[79]7757/i],
+  ];
+  for (const [where, text] of [["dark", dark], ["light", light], ["README", readme], ["the transcript", transcript]] as [string, string][]) {
+    for (const [mark, pattern] of marks) {
+      assert.ok(!pattern.test(text), `${where} carries ${mark}`);
+    }
+  }
+  // And the disclaimer that used to be the one mention is not quietly reworded somewhere else.
+  assert.ok(!/not affiliated/i.test(readme), "the README still carries a not-affiliated note");
+});
+
 test("both variants are parseable XML with every tag closed", async () => {
   for (const [name, svg] of await svgsOf()) {
     const stack: string[] = [];
@@ -138,7 +161,7 @@ test("the transcript reproduces the Session as text, the Banner's name included"
   for (const cmd of ["/whoami", "/ops", "/stack", "/activity"]) assert.ok(transcript.includes(cmd), `${cmd} is missing`);
   // The Banner is geometry, so the handle reaches a reader only through the transcript.
   assert.ok(transcript.includes(content.handle), "the handle is nowhere in the transcript");
-  assert.ok(transcript.includes(content.statusline.note), "the not-affiliated note is missing");
+  assert.ok(transcript.includes(content.statusline.help[0]), "the panel's key hints are missing");
   assert.ok(transcript.includes(content.lanes[0].repos[0].blurb), "a repo blurb is missing");
   assert.ok(transcript.includes(`/${WINDOW_DAYS} `), "the activity line does not name its window");
 });

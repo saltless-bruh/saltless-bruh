@@ -38,7 +38,6 @@ function altered(): Content {
   c.handle = "ZED";
   c.login = "elsewhere";
   c.prompt = { host: "box", command: "idling &" };
-  c.role = "Reverse Engineering";
   c.whoami = ["only one line here"];
   c.lanes = [
     { label: "alpha/", repos: [{ name: "r-one", blurb: "first blurb" }] },
@@ -49,7 +48,7 @@ function altered(): Content {
   c.statusline = {
     effortWord: "Budget", effortEnds: { start: "Cheaper", end: "Better" },
     effortLabels: ["one", "two", "three"], effortSelected: "two",
-    modeBadge: "manual", note: "a short note", toggle: { word: "Hypermellow", state: "idle" },
+    toggle: { word: "Hypermellow", state: "idle" },
     toggleNote: "Hypermellow: a different gloss", toggleHint: "Space to flip",
     help: ["j/k to move", "q to quit"],
   };
@@ -342,8 +341,6 @@ test("each part of the session wears its own style", () => {
   assert.deepEqual(stylesOf(c.statusline.effortEnds.start), ["text"]);
   assert.deepEqual(stylesOf(c.statusline.effortEnds.end), ["text"]);
   assert.deepEqual(stylesOf("▲"), ["accent"]);
-  assert.deepEqual(stylesOf(`▶▶ ${c.statusline.modeBadge}`), ["muted"]);
-  assert.deepEqual(stylesOf(c.statusline.note), ["muted"]);
   assert.deepEqual(stylesOf(c.statusline.toggleNote), ["muted"]);
   assert.deepEqual(stylesOf(c.statusline.toggleHint), ["muted"]);
   assert.deepEqual(stylesOf(c.statusline.toggle.state), ["accent"]);
@@ -351,24 +348,49 @@ test("each part of the session wears its own style", () => {
 
 // ---- the header ----
 
-/** The two prompt rows, then a blank, the Mascot's band, a blank and the role line. */
-const HEADER_ROWS = 2 + 1 + MASCOT_ROWS + 1 + 1;
+/**
+ * The two prompt rows, then a blank, the Mascot's band, and the blank row that is the margin the
+ * artwork does not carry. There is NO role line: it said what `/whoami`'s first line says.
+ */
+const HEADER_ROWS = 2 + 1 + MASCOT_ROWS + 1;
 
-test("the header is the shell prompt, a blank, the Mascot's band, a blank and the role line", () => {
-  const { rows, headerRows, mascotRow } = composeSession(loadContent(), activity);
+test("the header is the shell prompt, a blank, the Mascot's band and a blank, and nothing else", () => {
+  const { rows, headerRows, mascotRow, mascotCol } = composeSession(loadContent(), activity);
   assert.equal(headerRows, HEADER_ROWS);
   assert.equal(mascotRow, 3, "the Mascot's band starts under the prompt and the blank row after it");
   assert.deepEqual(rows[2].runs, [], "a blank row between the command and what it printed");
-  // The Mascot's band carries the startup block beside the sprite, and nothing over the sprite.
+  // The Mascot's band carries the startup block beside the sprite, and nothing over the sprite. The
+  // clearance is the sprite's own column plus its ink, so it follows the sprite to the margin.
   const band = rows.slice(mascotRow, mascotRow + MASCOT_ROWS);
-  const clear = Math.ceil(MASCOT_INK_COLS) + 4;
+  const clear = mascotCol + Math.ceil(MASCOT_INK_COLS);
   for (const [i, row] of band.entries()) {
     for (const run of row.runs) assert.ok(run.col >= clear, `band row ${i}: ${JSON.stringify(run.text)} is drawn over the sprite`);
   }
   assert.equal(band.filter((r) => r.runs.length > 0).length, 3, "the startup block is three rows");
-  assert.deepEqual(rows[mascotRow + MASCOT_ROWS].runs, [], "a blank row separates the artwork from the role line");
+  // The blank row is the artwork's margin and it is the LAST row of the header: the rule follows it
+  // directly, where the role line used to sit between the two.
+  assert.deepEqual(rows[mascotRow + MASCOT_ROWS].runs, [], "a blank row separates the artwork from the rule");
+  assert.equal(mascotRow + MASCOT_ROWS, headerRows - 1, "something is printed between the artwork and the rule");
   assert.equal(rows[headerRows].runs.length, 1);
   assert.equal(rowsToText([rows[headerRows]]), "─".repeat(COLS), "a full-width rule closes the header");
+});
+
+test("nothing in the Session says the owner's discipline twice, and /whoami is where it is said", () => {
+  const c = loadContent();
+  const shipped = JSON.parse(readFileSync(new URL("../content.json", import.meta.url), "utf8"));
+  // The key is gone from the file, not merely unread by the generator: a key the build ignores is a
+  // string the copy audit still has to read and the next person still has to wonder about.
+  assert.ok(!("role" in shipped), "content.json still carries a role key");
+  const lines = linesOf(composeSession(c, activity).rows);
+  // The redundancy that was deleted, stated as the test rather than as a row number: the role row
+  // and `/whoami`'s first line were the same words in two cases, four rows apart.
+  const said = lines.filter((l) => l.trim().toLowerCase().replace(/[.·]/g, "").includes("offensive security"));
+  assert.equal(said.length, 1, `the discipline is stated on ${said.length} rows: ${JSON.stringify(said)}`);
+  assert.equal(said[0], `● ${c.whoami[0]}`, "the one place it is said is not /whoami's first line");
+  // And the header rows above the rule print the prompt and the startup block, nothing else.
+  const { headerRows } = composeSession(c, activity);
+  const printed = lines.slice(0, headerRows).filter((l) => l.trim() !== "");
+  assert.equal(printed.length, 2 + 3, "the header prints more than the prompt's two rows and the block's three");
 });
 
 for (const [label, make] of CONTENTS) {
@@ -413,24 +435,34 @@ for (const [label, make] of CONTENTS) {
 }
 
 for (const [label, make] of CONTENTS) {
-  test(`the Mascot and the role line sit under the command, not under the prompt (${label})`, () => {
+  test(`the Mascot's ink is on the left margin, so the header shares one spine (${label})`, () => {
     const c = make();
-    const { rows, headerRows, mascotCol } = composeSession(c, activity);
-    // Four columns: the sigil's three plus the space after it, which is where a shell's output
-    // lines up with what produced it. Read off the command's own column rather than written down.
-    assert.equal(mascotCol, linesOf(rows)[1].indexOf(c.prompt.command));
-    assert.deepEqual(rows[headerRows - 1].runs, [{ col: mascotCol, text: c.role, style: "bold" }]);
+    const { rows, mascotCol } = composeSession(c, activity);
+    // ZERO, and the point is what that makes true of the picture rather than the number itself: the
+    // prompt's `┌─` and `└─` start at column 0, every rule runs from column 0, and the sprite's ink
+    // now starts there too, so nothing in the Header floats in from the margin. It used to sit at
+    // the command's column, which is where a shell's output belongs and which read as indented
+    // because the sprite and the block beside it are the widest thing on the page.
+    assert.equal(mascotCol, 0, "the Mascot is indented from the Session's left margin");
+    assert.ok(mascotCol < linesOf(rows)[1].indexOf(c.prompt.command), "the Mascot is still under the command");
+    for (const spine of [rowsToText([rows[0]]), rowsToText([rows[1]])]) {
+      assert.ok(!spine.startsWith(" "), `the prompt is indented: ${JSON.stringify(spine)}`);
+    }
+  });
+
+  test(`the sprite is placed by its ink and not by its grid, so column 0 is on the margin (${label})`, () => {
+    const { mascotRow, mascotCol } = composeSession(make(), activity);
+    // `mascotDefs` subtracts MASCOT_INK_LEFT, so the leftmost PAINTED pixel of every pose lands on
+    // the column it is handed. Measured off the emitted geometry rather than trusted: at column 0
+    // the grid's own left edge is off-canvas, and a sprite placed by the grid would leave the ink
+    // ten art pixels inside the margin, which is the bug this is the fix for.
+    const defs = mascotDefs(mascotCol, mascotRow, "dark");
+    const xs = [...defs.matchAll(/ d="([^"]+)"/g)]
+      .flatMap((m) => [...m[1].matchAll(/M(-?\d+(?:\.\d+)?)/g)].map((n) => Number(n[1])));
+    assert.ok(xs.length > 0, "no geometry was emitted to measure");
+    assert.equal(Math.min(...xs), PAD + mascotCol * CELL_W, "the leftmost painted pixel is not on the Mascot's column");
   });
 }
-
-test("a role as wide as the Session's remaining columns fits and one more is rejected", () => {
-  const c = loadContent();
-  const { mascotCol } = composeSession(c, activity);
-  c.role = "r".repeat(COLS - mascotCol);
-  assert.doesNotThrow(() => composeSession(c, activity));
-  c.role = "r".repeat(COLS - mascotCol + 1);
-  assert.throws(() => composeSession(c, activity), new RegExp(`needs ${COLS + 1} columns`));
-});
 
 test("a prompt too wide for the Session is rejected rather than drawn off the edge", () => {
   const c = loadContent();
@@ -1018,7 +1050,7 @@ test("the Session is exactly the rows its parts need", () => {
   const { rows } = composeSession(c, activity);
   const repos = c.lanes.flatMap((lane) => lane.repos).length;
   const expected =
-      HEADER_ROWS                      // the shell prompt, a blank, the Mascot's band, a blank, the role
+      HEADER_ROWS                      // the shell prompt, a blank, the Mascot's band and a blank
     + 1                                // the rule closing the header
     + 1 + c.whoami.length + 1          // /whoami, its bullets, a blank
     + 1 + c.lanes.length + 2 * repos + 1   // /ops, a lane label and two rows per repo, a blank
@@ -1030,8 +1062,10 @@ test("the Session is exactly the rows its parts need", () => {
   // Pinned absolutely as well, so every change to the budget is deliberate. The sweep reserving
   // 4 rows rather than the first draft's 8 took the Session from 57 to 53; the blank row the
   // artwork needs under it puts one back; the Statusline becoming a panel adds eight more; the
-  // Header becoming a shell prompt adds two, two prompt rows and a blank for one cwd row.
-  assert.equal(rows.length, 64);
+  // Header becoming a shell prompt adds two, two prompt rows and a blank for one cwd row. Two came
+  // back off on 2026-10-02: the role row, which said what `/whoami` says, and the row that carried
+  // the mode badge and the not-affiliated note, which were one row and are now none.
+  assert.equal(rows.length, 62);
 });
 
 test("the Scan Sweep gets its own rows right under /activity, and the result line follows them", () => {
@@ -1082,11 +1116,15 @@ test("a rule closes the spinner section and the statusline panel follows it", ()
 // two ends, a track carrying a marker, the five levels, the toggle with its gloss and hint, and the
 // key hints under all of it. The rows are addressed from the END of the Session, because everything
 // above them can grow and the panel is always the last thing printed.
+//
+// IT IS ALSO THE WHOLE BOTTOM OF THE SESSION NOW. The mode badge and the not-affiliated note shared
+// one row under the key hints and both are gone, so `help` is the last row of the Session and the
+// panel ends where it ends.
 
 /** Where each of the panel's rows sits, counted back from the last row of the Session. */
 const PANEL = {
-  border: -11, padding: -10, heading: -9, ends: -8, track: -7,
-  levels: -6, toggle: -5, hint: -4, gap: -3, help: -2, mode: -1,
+  border: -10, padding: -9, heading: -8, ends: -7, track: -6,
+  levels: -5, toggle: -4, hint: -3, gap: -2, help: -1,
 } as const;
 /** How many rows the panel occupies, derived from the row furthest back. */
 const PANEL_ROWS = -Math.min(...Object.values(PANEL));
@@ -1094,6 +1132,9 @@ const PANEL_ROWS = -Math.min(...Object.values(PANEL));
 const rowAt = (rows: Row[], at: number): Row => rows[rows.length + at];
 const lineAt = (rows: Row[], at: number): string => rowsToText([rowAt(rows, at)]);
 const panelOf = (c: Content): Row[] => composeSession(c, activity).rows;
+
+/** The divider the panel draws between the effort scale and the toggle. */
+const PANE_GLYPH = "│";
 
 /**
  * Every run of non-blank characters in a line, with the column it starts at.
@@ -1106,12 +1147,24 @@ function tokensOf(line: string): { text: string; col: number }[] {
   return [...line.matchAll(/\S+/g)].map((m) => ({ text: m[0], col: [...line.slice(0, m.index)].length }));
 }
 
+/**
+ * One of the panel's shared rows with the divider dropped: what the left pane prints on it.
+ *
+ * The divider is structure rather than a word, so a test asking what the scale says on a row has to
+ * step over it; a test asking where the divider is asks for it by name.
+ */
+const scaleTokens = (line: string): { text: string; col: number }[] =>
+  tokensOf(line).filter((t) => t.text !== PANE_GLYPH);
+
 /** The span of columns the track covers, and where its marker sits. */
 function trackOf(rows: Row[]): { from: number; to: number; marker: number } {
   const line = [...lineAt(rows, PANEL.track)];
   const marker = line.indexOf("▲");
   const from = line.findIndex((ch) => ch !== " ");
-  return { from, to: line.length, marker };
+  // Measured from the TRACK'S OWN GLYPHS and not from the line's length: the row carries the pane
+  // divider further right, so the line outlives the track it used to end with.
+  const to = line.findLastIndex((ch) => ch === "─" || ch === "▲") + 1;
+  return { from, to, marker };
 }
 
 for (const [label, make] of CONTENTS) {
@@ -1125,15 +1178,15 @@ for (const [label, make] of CONTENTS) {
     assert.deepEqual(rowAt(rows, PANEL.heading).runs, [{ col: 0, text: s.effortWord, style: "accent" }]);
     assert.deepEqual(rowAt(rows, PANEL.gap).runs, [], "a blank row before the key hints");
 
-    const ends = tokensOf(lineAt(rows, PANEL.ends));
+    const ends = scaleTokens(lineAt(rows, PANEL.ends));
     assert.deepEqual(ends.map((t) => t.text), [s.effortEnds.start, s.effortEnds.end], "the axis is labelled at both ends");
     const { from, to, marker } = trackOf(rows);
     assert.equal(ends[0].col, from, "the first end sits at the track's left end");
     assert.equal(ends[1].col + [...s.effortEnds.end].length, to, "the second ends with the track");
     assert.ok(marker >= from && marker < to, "the marker is on the track");
-    assert.equal(lineAt(rows, PANEL.track).replace(/[─▲]/g, "").trim(), "", "the track is the rule and its marker, nothing else");
+    assert.equal(lineAt(rows, PANEL.track).replace(/[─▲]/g, "").trim(), PANE_GLYPH, "the track is the rule, its marker and the divider, nothing else");
 
-    assert.deepEqual(tokensOf(lineAt(rows, PANEL.levels)).map((t) => t.text), s.effortLabels, "every level in order");
+    assert.deepEqual(scaleTokens(lineAt(rows, PANEL.levels)).map((t) => t.text), s.effortLabels, "every level in order");
     assert.ok(lineAt(rows, PANEL.toggle).startsWith(" ".repeat(from) + s.toggleNote), "the gloss starts where the track does");
     assert.ok(lineAt(rows, PANEL.toggle).endsWith(`${s.toggle.word}  ${s.toggle.state}`), "the toggle closes the row");
     assert.equal(lineAt(rows, PANEL.hint).trim(), s.toggleHint);
@@ -1182,7 +1235,7 @@ test("the levels are evenly distributed across the track, and the track spans th
     const c = make();
     const rows = panelOf(c);
     const { from, to } = trackOf(rows);
-    const levels = tokensOf(lineAt(rows, PANEL.levels));
+    const levels = scaleTokens(lineAt(rows, PANEL.levels));
     assert.ok(levels[0].col >= from, "a level starts before the track does");
     assert.ok(levels.at(-1)!.col + [...levels.at(-1)!.text].length <= to, "a level runs past the end of the track");
     // Each level is centred on its own slot, so the centres step by the slot width. Integer columns
@@ -1207,7 +1260,7 @@ test("the levels are evenly distributed across the track, and the track spans th
   const rows = panelOf(many);
   const { from, to } = trackOf(rows);
   const slot = (to - from) / many.statusline.effortLabels.length;
-  tokensOf(lineAt(rows, PANEL.levels)).forEach((t, i) => {
+  scaleTokens(lineAt(rows, PANEL.levels)).forEach((t, i) => {
     const centre = t.col + [...t.text].length / 2;
     assert.ok(Math.abs(centre - (from + slot * (i + 0.5))) <= 0.5, `level ${i} of seven drifted to ${centre}`);
   });
@@ -1261,15 +1314,105 @@ test("the top tier is drawn as a rainbow, one run per character, whichever level
   assert.ok(lineAt(panelOf(loadContent()), PANEL.levels).includes(top));
 });
 
+// ---- the divider between the two panes --------------------------------------------------------
+//
+// The scale and the toggle shared four rows with nothing but whitespace between them, so the toggle
+// read as having drifted right rather than as a pane of its own. One `│` divides them, and it is the
+// only internal structure the panel has now that the mode badge and the note are gone.
+
+/** The rows the divider is drawn down, named so a shifted panel moves the expectation with it. */
+const PANE_ROWS = [PANEL.ends, PANEL.track, PANEL.levels, PANEL.toggle] as const;
+
 for (const [label, make] of CONTENTS) {
-  test(`the mode row has the badge on the left and the note flush to the right edge (${label})`, () => {
+  test(`one vertical divides the effort scale from the toggle, derived from the toggle's column (${label})`, () => {
     const c = make();
-    const mode = lineAt(composeSession(c, activity).rows, PANEL.mode);
-    assert.ok(mode.startsWith(`▶▶ ${c.statusline.modeBadge}`), mode);
-    assert.ok(mode.endsWith(c.statusline.note), mode);
-    assert.equal([...mode].length, COLS, "the note ends on the last column");
+    const rows = panelOf(c);
+    const toggleLine = lineAt(rows, PANEL.toggle);
+    // The toggle block is flush with the right edge, so its column is the width of the wider of the
+    // toggle and the hint under it. Read off the picture rather than written down, so the expectation
+    // follows a re-worded toggle instead of pinning today's 58.
+    const toggleCol = COLS - Math.max(
+      [...`${c.statusline.toggle.word}  ${c.statusline.toggle.state}`].length,
+      [...c.statusline.toggleHint].length,
+    );
+    // Immediately left of that block with one clear column between: the divider belongs to the
+    // boundary, not to either pane.
+    const want = toggleCol - 2;
+    for (const at of PANE_ROWS) {
+      const line = [...lineAt(rows, at)];
+      const found = line.indexOf("│");
+      assert.equal(found, want, `row ${at} has its divider at ${found}, wanted ${want}: ${line.join("")}`);
+      // A row is printed with its trailing blanks trimmed, so a column past the last glyph is absent
+      // rather than a space; absent is as clear as a column gets.
+      assert.equal(line[want + 1] ?? " ", " ", `row ${at} has no clear column between the divider and the toggle`);
+      assert.equal(line[want - 1], " ", `row ${at} has no clear column between the scale and the divider`);
+      assert.equal(line.filter((ch) => ch === "│").length, 1, `row ${at} draws more than one divider`);
+    }
+    assert.ok(toggleLine.indexOf("│") < toggleCol, "the divider is inside the toggle block");
+  });
+
+  test(`the divider stops at the panes and is not drawn on the heading, the hint or the help line (${label})`, () => {
+    const rows = panelOf(make());
+    const spanned = new Set<number>(PANE_ROWS.map((at) => rows.length + at));
+    // Every other row of the whole Session: the heading above the panes sits outside both of them,
+    // the hint belongs to the right pane alone, and the key hints run the full width underneath.
+    rows.forEach((row, i) => {
+      if (spanned.has(i)) return;
+      const drawn = row.runs.filter((r) => r.text === "│");
+      // `/ops` carries its own verticals down its branches, so the check is against the panel's rows
+      // rather than against the glyph being absent from the Session.
+      const inPanel = i >= rows.length + PANEL.border;
+      if (inPanel) assert.deepEqual(drawn, [], `panel row ${i - rows.length} carries a divider it should not`);
+    });
   });
 }
+
+test("the divider moves with the toggle rather than staying at a column somebody wrote down", () => {
+  const colOf = (c: Content): number => [...lineAt(panelOf(c), PANEL.track)].indexOf("│");
+  const c = loadContent();
+  const before = colOf(c);
+  // A longer toggle takes its column left, and the divider must go with it by exactly as much.
+  const grew = 6;
+  c.statusline.toggle = { word: c.statusline.toggle.word + "x".repeat(grew), state: c.statusline.toggle.state };
+  c.statusline.toggleNote = "a short gloss";   // the gloss shares the toggle's row and would collide
+  assert.equal(colOf(c) - before, -grew, "the divider did not follow the toggle");
+  // And when the HINT is the wider of the two, the divider follows that instead: the toggle block's
+  // column is the wider of the pair, which is the rule the divider is derived through.
+  const d = loadContent();
+  d.statusline.toggleHint = "T".repeat([...`${d.statusline.toggle.word}  ${d.statusline.toggle.state}`].length + grew);
+  d.statusline.toggleNote = "a short gloss";
+  assert.equal(colOf(d) - before, -grew, "the divider did not follow the hint when the hint is wider");
+});
+
+test("the divider is the same light vertical the /ops tree draws, not a heavier one", () => {
+  const rows = composeSession(loadContent(), activity).rows;
+  const drawn = rows.flatMap((r) => r.runs).filter((r) => r.text === "│");
+  assert.ok(drawn.length > PANE_ROWS.length, "the /ops tree draws no verticals, so there is nothing to match");
+  // One glyph, one style, everywhere it appears: the panel's divider and the tree's continuations are
+  // the same mark in the same role, which is the whole argument for choosing it.
+  assert.deepEqual([...new Set(drawn.map((r) => r.text))], ["│"]);
+  assert.deepEqual([...new Set(drawn.map((r) => r.style))], ["muted"]);
+  // The prompt's `┌─` and the tree's `├─` are the Session's own marks, so the refusal is of the
+  // alternatives a divider could have been drawn with, not of box-drawing in general.
+  for (const heavier of ["┃", "╏", "╎", "┆", "┊", "║", "╽", "╿", "|"]) {
+    assert.ok(!rowsToText(rows).includes(heavier), `${heavier} reached the Session`);
+  }
+});
+
+test("a gloss that would run into the divider is rejected rather than drawn through it", () => {
+  const c = loadContent();
+  const divider = [...lineAt(panelOf(c), PANEL.toggle)].indexOf("│");
+  const trackFrom = trackOf(panelOf(c)).from;
+  // The gloss is allowed to run past the track into the gap, and the DIVIDER is now what it stops
+  // short of rather than the toggle, which is two columns further right. One blank column before it
+  // is the most it may have; touching it is refused, and so is reaching past it into the other pane.
+  c.statusline.toggleNote = "g".repeat(divider - trackFrom - 1);
+  assert.doesNotThrow(() => composeSession(c, activity), "one blank column before the divider");
+  for (const over of [0, 1, 5]) {
+    c.statusline.toggleNote = "g".repeat(divider - trackFrom + over);
+    assert.throws(() => composeSession(c, activity), /runs into/, `a gloss ${over} columns past the divider was drawn`);
+  }
+});
 
 test("every word of the panel comes from content.json, and none of them from the generator", () => {
   const c = loadContent();
@@ -1305,28 +1448,6 @@ test("a longer effort word pushes the track along rather than leaving it where i
   }
 });
 
-test("a note that would run into the badge, or touch it, is rejected rather than drawn over it", () => {
-  const c = loadContent();
-  const room = COLS - 3 - c.statusline.modeBadge.length;   // what is left after "▶▶ " and the badge
-  c.statusline.note = "n".repeat(room - 1);                 // one blank column between them
-  assert.doesNotThrow(() => composeSession(c, activity));
-  c.statusline.note = "n".repeat(room);                     // touching: the two would read as one word
-  assert.throws(() => composeSession(c, activity), /runs into/);
-  c.statusline.note = "n".repeat(room + 1);                 // overlapping
-  assert.throws(() => composeSession(c, activity), /runs into/);
-});
-
-test("a gloss that would run into the toggle, or touch it, is rejected", () => {
-  const c = loadContent();
-  const room = COLS - `${c.statusline.toggle.word}  ${c.statusline.toggle.state}`.length - trackOf(panelOf(c)).from;
-  c.statusline.toggleNote = "g".repeat(room - 1);
-  assert.doesNotThrow(() => composeSession(c, activity), "one blank column before the toggle");
-  c.statusline.toggleNote = "g".repeat(room);
-  assert.throws(() => composeSession(c, activity), /runs into/);
-  c.statusline.toggleNote = "g".repeat(room + 5);
-  assert.throws(() => composeSession(c, activity), /runs into/);
-});
-
 test("levels too wide for the track are rejected rather than drawn over one another", () => {
   const c = loadContent();
   c.statusline.effortLabels = c.statusline.effortLabels.map((l) => l + "x".repeat(10));
@@ -1334,10 +1455,10 @@ test("levels too wide for the track are rejected rather than drawn over one anot
   assert.throws(() => composeSession(c, activity), /runs into|do not fit/);
 });
 
-test("a note wider than the whole Session is rejected, not drawn off the left edge", () => {
+test("a gloss wider than the whole Session is rejected, not drawn off the right edge", () => {
   const c = loadContent();
-  c.statusline.note = "n".repeat(COLS + 10);
-  assert.throws(() => composeSession(c, activity), /runs into/);
+  c.statusline.toggleNote = "g".repeat(COLS + 10);
+  assert.throws(() => composeSession(c, activity), /runs into|needs \d+ columns/);
 });
 
 // ---- the toggle: a gradient standing still, and a sheen that travels it ----
@@ -1514,7 +1635,7 @@ test("the prompt starts the line and the command two columns in", () => {
   assert.equal(lines[whoami].indexOf("/whoami"), 2);
 });
 
-// ---- the gap between the artwork and the role line ---------------------------------------------
+// ---- the gap between the artwork and the rule that closes the header ---------------------------
 
 /**
  * Cap height of JetBrains Mono v2.304 in units: 730/1000 em at the grid's font size, as
@@ -1530,7 +1651,7 @@ const artBottomRow = (): number => {
   return Math.max(...rows);
 };
 
-test("the artwork has no bottom margin of its own, which is why the role line needs a blank row", () => {
+test("the artwork has no bottom margin of its own, which is why the header needs a blank row", () => {
   // The premise, measured from the files rather than assumed: the ink runs to the final row, so
   // the band's last pixel and the band's bottom edge are the same line and the art contributes
   // no breathing room at all. Were there a spare row inside the artwork this fix would be wrong.
@@ -1541,19 +1662,27 @@ test("the artwork has no bottom margin of its own, which is why the role line ne
   assert.equal(grid.length * (CELL_W / 2), MASCOT_ROWS * CELL_H);
 });
 
-test("a blank row separates the artwork's last pixel from the role line's cap height", () => {
-  const { rows, mascotRow } = composeSession(loadContent(), activity);
-  const roleRow = rows.findIndex((r) => r.runs.some((run) => run.text === loadContent().role));
-  assert.ok(roleRow > 0, "the role line is not in the Session");
+test("a blank row separates the artwork's last pixel from the rule that closes the header", () => {
+  const { rows, mascotRow, headerRows } = composeSession(loadContent(), activity);
+  // The role line used to be what this row protected. It is deleted, and the clearance was never
+  // the role's: whatever is printed under a band whose ink reaches its own bottom edge lands a
+  // couple of units from it, and the rule is now what is printed there.
+  const ruleRow = headerRows;
+  assert.equal(rowsToText([rows[ruleRow]]), "─".repeat(COLS), "the row after the header is not the rule");
+  assert.deepEqual(rows[ruleRow - 1].runs, [], "the row before the rule is not the artwork's blank margin");
 
   const inkBottom = PAD + (mascotRow + MASCOT_ROWS) * CELL_H;          // the artwork runs to here
-  const capTop = PAD + roleRow * CELL_H + BASELINE_IN_ROW - CAP_HEIGHT; // the role's ink starts here
+  // The rule's own ink, measured the same way the role line's cap height was: the lightest thing
+  // printed on that row is still text on the grid's baseline, so its tallest ink is a cap height
+  // above it. Using the cap keeps this the SAME measurement the role line was judged by rather
+  // than a laxer one chosen because the glyph that replaced it happens to sit lower in the cell.
+  const capTop = PAD + ruleRow * CELL_H + BASELINE_IN_ROW - CAP_HEIGHT;
   const gap = capTop - inkBottom;
 
-  // One whole row of separation is the margin the artwork does not carry. Placing the role
-  // immediately under the band leaves 2.9 units, which is what read as glued.
-  assert.ok(gap >= CELL_H, `only ${gap} units between the rack and the role line, wanted at least one row (${CELL_H})`);
-  assert.equal(roleRow, mascotRow + MASCOT_ROWS + 1, "the role line sits one blank row below the artwork");
+  // One whole row of separation is the margin the artwork does not carry. Printing straight under
+  // the band leaves 2.9 units, which is what read as glued.
+  assert.ok(gap >= CELL_H, `only ${gap} units between the rack and the rule, wanted at least one row (${CELL_H})`);
+  assert.equal(ruleRow, mascotRow + MASCOT_ROWS + 1, "the rule sits one blank row below the artwork");
   const glued = PAD + (mascotRow + MASCOT_ROWS) * CELL_H + BASELINE_IN_ROW - CAP_HEIGHT - inkBottom;
   assert.ok(glued < 3, `the fault being fixed should measure under 3 units, measured ${glued}`);
   assert.ok(gap > glued * 8, "the blank row must be a real separation, not a nudge");

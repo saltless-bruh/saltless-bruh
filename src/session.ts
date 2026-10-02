@@ -17,7 +17,7 @@ export type Activity = {
 
 export type Session = {
   rows: Row[];
-  /** Rows above the first rule: the prompt, the Mascot's band and the role line. */
+  /** Rows above the first rule: the prompt and the Mascot's band, with the blank rows between them. */
   headerRows: number;
   /** First of the MASCOT_ROWS rows held empty for the Mascot, and the column it is drawn at. */
   mascotRow: number;
@@ -90,13 +90,25 @@ const PIECE_TOGGLE = "statusline-toggle";
 export const VERB_SUFFIX = "…";
 
 /**
- * Where the shell prompt's output lines up: under the COMMAND, not under the prompt's own sigil.
- *
- * Derived from the sigil plus the space after it, so a different sigil carries the Mascot and the
- * role line with it. That is where a shell's output sits relative to what produced it, and it is
- * what makes the Mascot read as something the command printed rather than as a picture placed there.
+ * Where the shell prompt's command sits: after the sigil and the space following it. Derived, so a
+ * different sigil carries the command with it instead of colliding with a written-down column.
  */
 const OUTPUT_COL = [...PROMPT_SIGIL].length + 1;
+
+/**
+ * The column the Mascot's INK lands on, which is the Session's left margin.
+ *
+ * It was OUTPUT_COL, on the reasoning that a shell's output sits under the command that printed it.
+ * The reasoning is sound and the result was wrong: the sprite and the startup block are the widest
+ * thing on the page, so indenting them by four made the whole Header read as floating in from the
+ * margin, while the `┌─`/`└─` prompt above it and every rule below it start at column 0. The
+ * reference this grammar is borrowed from puts its startup banner flush against that margin.
+ *
+ * At 0 the Header shares one spine from its first row to its last. `mascotDefs` places the sprite by
+ * its ink and not by its grid (it subtracts `MASCOT_INK_LEFT`), so this is the column the leftmost
+ * painted pixel lands on rather than the column the art file's blank left edge starts at.
+ */
+const MASCOT_COL = 0;
 /** Free columns between the Mascot's ink and the startup block printed beside it. */
 const MASCOT_GAP = 2;
 /** Columns where the body text starts, after the prompt glyph and a space. */
@@ -160,6 +172,30 @@ if (cells(TREE_BRANCH) !== cells(TREE_LAST)) {
  * it. Derived, so a wider connector moves itself left instead of running into the name.
  */
 const REPO_TREE_COL = REPO_NAME_COL - (cells(TREE_BRANCH) + 1);
+
+/**
+ * THE STATUSLINE PANEL'S DIVIDER: the vertical between the effort scale and the toggle.
+ *
+ * It is the tree's own continuation mark, read off that constant rather than retyped, so the two
+ * cannot drift apart. That is the whole argument for the glyph: the Session's structural alphabet is
+ * already the Header prompt's `┌─`/`└─` and the /ops tree's `├─`/`└─`/`│`, so the plain light
+ * vertical divides the two panes at the cost of no new vocabulary, where `┃`, `╎` or a box corner
+ * would each be a mark a reader has to learn for a job this one already does.
+ *
+ * Without it the scale and the toggle share four rows with nothing but whitespace between them, and
+ * the toggle reads as having drifted right rather than as occupying a pane of its own. That reading
+ * got worse when the mode badge and the note were deleted: the panel is now the whole bottom of the
+ * Session, so this is the only internal structure the last block on the page has.
+ */
+const PANE_DIVIDER = TREE_CONTINUE;
+/**
+ * Blank columns between the divider and the pane on either side of it.
+ *
+ * One, which is what `assertNoCollisions` already requires of any two runs that are not fragments of
+ * one thing. It is named because the divider's column is DERIVED from it and from the toggle's own
+ * column, so moving the toggle moves the divider instead of leaving it behind at a written-down 56.
+ */
+const PANE_CLEAR = 1;
 
 /**
  * Columns the language bar is drawn in at a full 100%, and the field the percentage beside it is
@@ -369,20 +405,21 @@ export function composeSession(c: Content, a: Activity): Session {
   ] });
   rows.push(blank());
 
-  // The Mascot, as the command's output. It lines up with the COMMAND and not with the prompt's own
-  // column, because that is where a shell's output lines up with what produced it. `mascotDefs` is
-  // told the same row and column.
+  // The Mascot, as the command's output, with its ink on the Session's left margin. `mascotDefs` is
+  // told the same row and column, and places the sprite by that ink rather than by its grid.
   const mascotRow = rows.length;
   for (let r = 0; r < MASCOT_ROWS; r++) rows.push(blank());
 
   // THE STARTUP BLOCK, beside the Mascot, the way an agent CLI prints its own: sprite at the left
-  // and three lines at its right. It is what fills the fifty columns the sprite leaves empty, and it
-  // is voice rather than fact, which is why the role row below it stays.
+  // and three lines at its right. It is what fills the fifty columns the sprite leaves empty, and
+  // since the role row was deleted it is the only thing in the Header that says anything in words.
   //
-  // Its column is MEASURED, not chosen: the sprite's ink is `MASCOT_INK_COLS` wide, rounded up
-  // because half a column of overlap is overlap, plus the same two-column gap the Session already
-  // uses beside the artwork. Retouching the art moves the text instead of quietly colliding with it.
-  const blockCol = OUTPUT_COL + Math.ceil(MASCOT_INK_COLS) + MASCOT_GAP;
+  // Its column is MEASURED, not chosen: the sprite's own column, plus its ink `MASCOT_INK_COLS`
+  // wide, rounded up because half a column of overlap is overlap, plus the same two-column gap the
+  // Session already uses beside the artwork. Retouching the art moves the text instead of quietly
+  // colliding with it, and moving the sprite to the margin moved the block with it rather than
+  // needing a constant edited to follow.
+  const blockCol = MASCOT_COL + Math.ceil(MASCOT_INK_COLS) + MASCOT_GAP;
   const block: Run[][] = [
     [
       { col: blockCol, text: c.handle, style: "accent" },
@@ -416,11 +453,18 @@ export function composeSession(c: Content, a: Activity): Session {
   // instead of a midpoint only the arithmetic knows about.
   const blockRow = mascotRow + MASCOT_ROWS - block.length;
   block.forEach((runs, i) => rows[blockRow + i].runs.push(...runs));
-  // The artwork fills its band to the last pixel: its ink reaches the bottom of the seventh row
-  // with no margin of its own, and the role line's cap height starts a couple of units under that,
-  // so the rack reads as glued to the text. One blank row is the margin the art does not carry.
+  // The artwork fills its band to the last pixel: its ink reaches the bottom of the seventh row with
+  // no margin of its own, so whatever is printed under it lands a couple of units away and the rack
+  // reads as glued to it. One blank row is the margin the art does not carry, and it is KEPT now
+  // that the rule rather than the role line is what follows: the clearance was never the role's.
+  //
+  // THE ROLE LINE IS GONE. It read "Offensive Security · Agentic AI Systems" and `/whoami`'s first
+  // line reads "offensive security. agentic ai systems." four rows below it, so the Session said the
+  // owner's discipline twice in two cases; a copy audit flagged the redundancy and it only became
+  // more visible as the Header grew. The row also had nothing around it, sitting alone between the
+  // startup block above and the rule below, which is what made it read as orphaned rather than as
+  // the Header's closing statement. `/whoami` is where a session says who it belongs to.
   rows.push(blank());
-  rows.push({ runs: [{ col: OUTPUT_COL, text: c.role, style: "bold" }] });
   const headerRows = rows.length;
   rows.push(rule());
 
@@ -555,6 +599,15 @@ export function composeSession(c: Content, a: Activity): Session {
   const trackEnd = toggleCol - PANEL_GAP;
   const tiers = s.effortLabels;
   const levelCols = effortLabelCols(tiers, trackCol, trackEnd);
+  // Immediately left of the toggle block, one clear column away from it, so the divider belongs to
+  // the boundary rather than to either pane. Derived from the toggle's own column, which is itself
+  // derived from the toggle's wording, so re-wording the toggle carries the divider with it.
+  const dividerCol = toggleCol - (PANE_CLEAR + cells(PANE_DIVIDER));
+
+  // THE SCALE'S OWN ROWS begin here. The divider spans exactly these, which is why the span is taken
+  // from where they start and end rather than written down: the heading above them sits outside both
+  // panes and the key hints below them run the full width under both.
+  const paneFrom = rows.length;
 
   // The two ends of the axis, above the track: one flush with each end of it.
   rows.push({ runs: [
@@ -622,6 +675,24 @@ export function composeSession(c: Content, a: Activity): Session {
   closing.push({ col: toggleCol + cells(word) + TOGGLE_GAP, text: state, style: "accent" });
   rows.push({ runs: closing });
 
+  // THE DIVIDER, down every row the two panes share and no others, placed last so the span is read
+  // off the rows that were actually pushed rather than counted out in advance.
+  //
+  // It carries the gloss row as well as the three above it, which was decided by rendering both and
+  // looking: the gloss is the longest line in the left pane and a divider that stopped at the levels
+  // left it as the one row reaching across the boundary with nothing marking it, so the pane looked
+  // as though it had sprung a leak at the bottom. Beside the full span the gloss reads as the left
+  // pane's last line, and the divider closes the block it is in.
+  //
+  // `muted`, the same role the /ops tree's own verticals wear. `border` was the alternative and is
+  // refused on a measurement rather than on taste: it is 2.79:1 on the dark window and 2.92:1 on the
+  // light one, so a structural mark drawn in it would miss the 3:1 that WCAG 1.4.11 asks of exactly
+  // this kind of element, and it is not a text role here at all (docs/spec.md 3.4 holds every text
+  // role to 4.5:1, which `border` does not clear either). `muted` measures 5.65:1 and 4.77:1.
+  for (let r = paneFrom; r < rows.length; r++) {
+    rows[r].runs.push({ col: dividerCol, text: PANE_DIVIDER, style: "muted" });
+  }
+
   // The toggle's hint, directly beneath it in the same column, and then the key hints for the panel
   // as a whole. Both are affordances of a terminal the Session DEPICTS rather than is: `❯ /whoami`
   // is no more pressable than `Tab`, so printing them is part of the fiction rather than a claim
@@ -629,15 +700,27 @@ export function composeSession(c: Content, a: Activity): Session {
   // is the rule docs/spec.md 4.1 sets for a sentence made of several pieces of copy.
   rows.push({ runs: [{ col: toggleCol, text: s.toggleHint, style: "muted" }] });
   rows.push(blank());
+  // THE KEY HINTS CLOSE THE SESSION, and that is the whole Statusline now.
+  //
+  // There used to be one more row under this one, `▶▶ autopilot on` at the left margin and
+  // `terminal-style design, not affiliated with Anthropic` flush right. Both are gone.
+  //
+  // The badge went because the reference does not show one here: running the effort command REPLACES
+  // the statusline there, so the mode badge and the effort panel are never on screen at the same
+  // instant. Drawing both put two unrelated readouts in the panel's last two rows, which is why the
+  // bottom read as cramped and why the badge read as a row from somewhere else. The effort panel now
+  // owns the bottom of the Session, which is what the reference actually looks like.
+  //
+  // The note went because of what it was measured to be: the ONLY occurrence of the word "Anthropic"
+  // anywhere in the published profile. ADR 0002 forbids the marks and then mandated a line that spells
+  // the name, so deleting it takes the profile from one mention to none and satisfies that ADR's own
+  // rule more completely than keeping it did. ADR 0002 is amended with the owner's reasoning rather
+  // than left contradicting this file; what still binds is unchanged and still holds here: no name, no
+  // logo, no Claude orange, no copied verb list. What is borrowed is layout grammar.
   rows.push({ runs: [{ col: BODY_COL, text: s.help.join(` ${HELP_SEPARATOR} `), style: "muted" }] });
-
-  rows.push({ runs: [
-    { col: 0, text: `▶▶ ${s.modeBadge}`, style: "muted" },
-    { col: COLS - cells(s.note), text: s.note, style: "muted" },
-  ] });
 
   // A Session that does not fit is not returned: the message names the row and its text.
   assertFits(rows);
   assertNoCollisions(rows);
-  return { rows, headerRows, mascotRow, mascotCol: OUTPUT_COL, scanRow, verbRow };
+  return { rows, headerRows, mascotRow, mascotCol: MASCOT_COL, scanRow, verbRow };
 }

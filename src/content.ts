@@ -16,9 +16,18 @@ export type Toggle = { word: string; state: string };
  * are the owner's and the positions are the layout's.
  */
 export type EffortEnds = { start: string; end: string };
+/**
+ * The effort panel's copy, which is the whole Statusline.
+ *
+ * There is no `modeBadge` and no `note`, and both absences are decisions. The badge is not on screen
+ * beside an effort panel in the grammar this borrows, because the effort command replaces the
+ * statusline rather than sitting above it. The note said "not affiliated with Anthropic" and was
+ * measured to be the only occurrence of that name in the whole published profile, so removing it
+ * satisfies ADR 0002's own rule more completely than printing it did; ADR 0002 records that.
+ */
 export type Statusline = {
   effortWord: string; effortEnds: EffortEnds; effortLabels: string[]; effortSelected: string;
-  modeBadge: string; note: string; toggle: Toggle;
+  toggle: Toggle;
   /** The one-line gloss on the toggle, under the scale. The only string that describes the picture. */
   toggleNote: string;
   /** The hint under the toggle, e.g. "Tab to toggle". */
@@ -64,7 +73,7 @@ export type Prompt = { host: string; command: string };
  */
 export type Startup = { version: string; colourWord: string; model: string; status: string };
 export type Content = {
-  handle: string; login: string; prompt: Prompt; startup: Startup; role: string; whoami: string[];
+  handle: string; login: string; prompt: Prompt; startup: Startup; whoami: string[];
   lanes: Lane[]; stackRows: StackRow[]; verbs: Verbs;
   activityLine: ActivityLine; statusline: Statusline; readme: ReadmeCopy;
 };
@@ -181,7 +190,10 @@ function assertShape(c: unknown): asserts c is Content {
   text(c.startup.colourWord, "startup.colourWord");
   text(c.startup.model, "startup.model");
   text(c.startup.status, "startup.status");
-  text(c.role, "role");
+  // There is NO `role` key, and its absence is the decision rather than an omission: it said
+  // "Offensive Security · Agentic AI Systems" four rows above a `whoami` line that said the same
+  // words in lower case, so the Session stated the owner's discipline twice and the role row sat
+  // orphaned between the startup block and the rule. `/whoami` is the one place it is said now.
 
   if (!Array.isArray(c.whoami) || c.whoami.length < 1 || c.whoami.length > 3) fail("whoami must have 1 to 3 lines");
   c.whoami.forEach((line, i) => text(line, `whoami[${i}]`));
@@ -223,7 +235,7 @@ function assertShape(c: unknown): asserts c is Content {
   if (!isObj(c.statusline)) fail("statusline must be an object");
   const {
     effortWord, effortEnds, effortLabels, effortSelected,
-    modeBadge, note, toggle, toggleNote, toggleHint, help,
+    toggle, toggleNote, toggleHint, help,
   } = c.statusline;
   text(effortWord, "statusline.effortWord");
   // The axis is labelled at both ends, so both words are the owner's and both are checked here.
@@ -233,8 +245,6 @@ function assertShape(c: unknown): asserts c is Content {
   if (!Array.isArray(effortLabels) || effortLabels.length === 0) fail("statusline.effortLabels must not be empty");
   effortLabels.forEach((label, i) => text(label, `statusline.effortLabels[${i}]`));
   if (!effortLabels.includes(effortSelected)) fail("statusline.effortSelected must be one of effortLabels");
-  text(modeBadge, "statusline.modeBadge");
-  text(note, "statusline.note");
   // The gloss, the hint and the key fragments are all words a reader reads aloud, so all of them
   // are copy by the docs/spec.md 4.1 test and none of them may live in the generator.
   text(toggleNote, "statusline.toggleNote");

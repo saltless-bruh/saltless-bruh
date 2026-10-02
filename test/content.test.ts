@@ -18,7 +18,6 @@ const VALID: Content = {
   login: "tester-account",
   prompt: { host: "testhost", command: "testing &" },
   startup: { version: "vFixture", colourWord: "blue", model: "fixture model line", status: "fixture status line" },
-  role: "Fixture role · with a middle dot",
   whoami: ["line one", "line two", "line three"],
   lanes: [
     { label: "alpha/", repos: [{ name: "repo-a1", blurb: "does a thing" }, { name: "repo-a2", blurb: "does another" }] },
@@ -45,8 +44,8 @@ const VALID: Content = {
   activityLine: { label: "fixture done:", daysUp: "days seen", contributions: "pushes" },
   statusline: {
     effortWord: "Fixtureffort", effortEnds: { start: "Fixturestart", end: "Fixtureend" },
-    effortLabels: ["low", "mid", "lazy", "max"], effortSelected: "lazy", modeBadge: "autopilot on",
-    note: "fixture note", toggle: { word: "Fixtureword", state: "off" },
+    effortLabels: ["low", "mid", "lazy", "max"], effortSelected: "lazy",
+    toggle: { word: "Fixtureword", state: "off" },
     toggleNote: "fixture gloss", toggleHint: "fixture hint", help: ["fixture key", "fixture other key"],
   },
   readme: { imageAlt: "a fixture picture of a fixture session", transcriptSummary: "Fixture transcript" },
@@ -162,14 +161,14 @@ test("a stack row may have an empty label, because a row can continue the one ab
 });
 
 test("Vietnamese and the middle dot are drawable, so content may use them", () => {
-  const c = load(edited("role", "kỹ sư bảo mật · ăâđêôơư ạắằẵặ"));
-  assert.equal(c.role, "kỹ sư bảo mật · ăâđêôơư ạắằẵặ");
+  const c = load(edited("whoami", ["kỹ sư bảo mật · ăâđêôơư ạắằẵặ"]));
+  assert.deepEqual(c.whoami, ["kỹ sư bảo mật · ăâđêôơư ạắằẵặ"]);
 });
 
 test("the smallest valid document loads: one of everything", () => {
   const smallest: Content = {
     handle: "H", login: "l", prompt: { host: "h", command: "c" },
-    startup: { version: "v", colourWord: "w", model: "m", status: "s" }, role: "r", whoami: ["w"],
+    startup: { version: "v", colourWord: "w", model: "m", status: "s" }, whoami: ["w"],
     lanes: [{ label: "l/", repos: [{ name: "n", blurb: "b" }] }],
     stackRows: [{ label: "", items: ["i"] }],
     verbs: {
@@ -180,7 +179,7 @@ test("the smallest valid document loads: one of everything", () => {
     statusline: {
       effortWord: "e", effortEnds: { start: "f", end: "s" },
       effortLabels: ["only"], effortSelected: "only",
-      modeBadge: "m", note: "n", toggle: { word: "t", state: "s" },
+      toggle: { word: "t", state: "s" },
       toggleNote: "g", toggleHint: "h", help: ["k"],
     },
     readme: { imageAlt: "a", transcriptSummary: "t" },
@@ -243,7 +242,7 @@ const STRUCTURE: [string, unknown, RegExp][] = [
   ["stackRows[0].items[1]", 5, /stackRows\[0\]\.items\[1\] must be a string/],
 
   // identity lines
-  ...["handle", "login", "role", "prompt.host", "prompt.command", "startup.version", "startup.colourWord", "startup.model", "startup.status"].flatMap((f): [string, unknown, RegExp][] => [
+  ...["handle", "login", "prompt.host", "prompt.command", "startup.version", "startup.colourWord", "startup.model", "startup.status"].flatMap((f): [string, unknown, RegExp][] => [
     [f, undefined, new RegExp(`${f} must be a string`)],
     [f, "   ", new RegExp(`${f} must not be blank`)],
     [f, 9, new RegExp(`${f} must be a string`)],
@@ -274,10 +273,6 @@ const STRUCTURE: [string, unknown, RegExp][] = [
   ["statusline.effortSelected", "lazy extra", /statusline\.effortSelected must be one of effortLabels/],
   ["statusline.effortSelected", "", /statusline\.effortSelected must be one of effortLabels/],
   ["statusline.effortSelected", "LAZY", /statusline\.effortSelected must be one of effortLabels/],
-  ["statusline.modeBadge", " ", /statusline\.modeBadge must not be blank/],
-  ["statusline.modeBadge", undefined, /statusline\.modeBadge must be a string/],
-  ["statusline.note", "", /statusline\.note must not be blank/],
-  ["statusline.note", undefined, /statusline\.note must be a string/],
   // the toggle: its own copy, so it is validated like any other visible string
   ["statusline.toggle", undefined, /statusline\.toggle must be an object/],
   ["statusline.toggle", "Ultrachill on", /statusline\.toggle must be an object/],
@@ -348,11 +343,11 @@ test("a file that is not JSON is rejected, and the message says so", () => {
 const EDITABLE = leaves(VALID).filter((p) => p !== "statusline.effortSelected" && p !== "login");
 
 test("the sweep covers every string in the document, so it cannot pass vacuously", () => {
-  assert.equal(leaves(VALID).length, 59);
+  assert.equal(leaves(VALID).length, 56);
   for (const expected of [
     "handle", "prompt.host", "prompt.command", "startup.version", "startup.colourWord", "startup.model", "startup.status", "whoami[2]", "lanes[1].repos[0].blurb", "stackRows[1].items[0]", "verbs.sleep[1]",
     "verbs.swat-down[0]", "verbs.recover[0]",
-    "statusline.note", "statusline.toggle.word", "statusline.toggle.state", "statusline.effortWord",
+    "statusline.toggle.word", "statusline.toggle.state", "statusline.effortWord",
     "statusline.effortEnds.start", "statusline.effortEnds.end",
     "statusline.toggleNote", "statusline.toggleHint", "statusline.help[1]",
     "activityLine.label", "activityLine.daysUp", "activityLine.contributions",
@@ -372,7 +367,7 @@ test("a character outside the font is rejected wherever it appears, naming the f
 
 test("a character outside the font is found at the start and the end of a string too", () => {
   for (const text of ["🙂 start", "end 🙂"]) {
-    assert.match(rejection(edited("role", text), text), /role.*U\+1F642/);
+    assert.match(rejection(edited("startup.status", text), text), /startup\.status.*U\+1F642/);
   }
 });
 
@@ -387,7 +382,7 @@ test("a forbidden glyph is rejected wherever it appears, naming the field", () =
 test("each forbidden glyph is rejected on its own", () => {
   assert.equal([...FORBIDDEN_GLYPHS].length, 10);
   for (const ch of FORBIDDEN_GLYPHS) {
-    const msg = rejection(edited("role", `a${ch}b`), `glyph ${ch}`);
+    const msg = rejection(edited("startup.status", `a${ch}b`), `glyph ${ch}`);
     assert.ok(msg.includes(ch), `message does not show ${ch}: ${msg}`);
     assert.match(msg, /which the font cannot draw/);
   }
@@ -474,13 +469,13 @@ test("the committed name is held to the same order", () => {
 test("a name inside a syntax error's quoted source is not repeated", async () => {
   const mod = await contentWith("Jane Placeholder");
   // V8 quotes the text around an unexpected token, so these would otherwise echo the name.
-  assert.match(JSON.stringify(readSyntaxError('{"role": Firstname Lastname}')), /Firstname/, "premise: V8 quotes the source");
-  for (const body of ["Firstname Lastname", '{"role": Firstname Lastname}']) {
+  assert.match(JSON.stringify(readSyntaxError('{"status": Firstname Lastname}')), /Firstname/, "premise: V8 quotes the source");
+  for (const body of ["Firstname Lastname", '{"status": Firstname Lastname}']) {
     const msg = fileRejection(body, body);
     assert.match(msg, NAME_ERROR);
     quotesNoName(msg, "Firstname Lastname");
   }
-  const viaEnv = fileRejection('{"role": Jane Placeholder}', "name from the variable", mod.loadContent);
+  const viaEnv = fileRejection('{"status": Jane Placeholder}', "name from the variable", mod.loadContent);
   assert.match(viaEnv, NAME_ERROR);
   quotesNoName(viaEnv, "Jane Placeholder");
 });
@@ -514,8 +509,8 @@ test("a name in an earlier duplicate key is caught, though JSON.parse keeps only
   assert.match(msg, /forbidden name appears in content\.json \(/);
   quotesNoName(msg, "Firstname Lastname");
   // with a shape error as well, the name still wins: every name scan precedes the shape check
-  const alsoBroken = JSON.stringify({ ...VALID, role: "  " }).replace("{", '{"handle":"Firstname Lastname",');
-  assert.match(fileRejection(alsoBroken, "duplicate key plus blank role"), /forbidden name appears in content\.json \(/);
+  const alsoBroken = JSON.stringify({ ...VALID, whoami: ["  "] }).replace("{", '{"handle":"Firstname Lastname",');
+  assert.match(fileRejection(alsoBroken, "duplicate key plus a blank whoami line"), /forbidden name appears in content\.json \(/);
 });
 
 function readSyntaxError(body: string): string {
@@ -574,8 +569,8 @@ test("a name from the variable is rejected by the loader, in any case, without b
 
 test("the variable adds to the committed list rather than replacing it", async () => {
   const mod = await contentWith("Jane Placeholder");
-  assert.match(rejection(edited("role", "Firstname Lastname"), "committed name"), /forbidden name/);
-  assert.match(rejection(edited("role", "Firstname Lastname"), "committed name", mod.loadContent), /forbidden name/);
+  assert.match(rejection(edited("startup.status", "Firstname Lastname"), "committed name"), /forbidden name/);
+  assert.match(rejection(edited("startup.status", "Firstname Lastname"), "committed name", mod.loadContent), /forbidden name/);
   assert.throws(() => mod.assertNoForbiddenNames("Firstname Lastname", "x"), /forbidden name/);
   assert.throws(() => mod.assertNoForbiddenNames("Jane Placeholder", "x"), /forbidden name/);
 });
@@ -587,8 +582,8 @@ test("a clean document still loads when the variable is set", async () => {
 
 test("with the variable unset, the same names are not special", async () => {
   const mod = await contentWith(undefined);
-  const doc = edited("role", "Jane Placeholder and Alex Example");
-  assert.equal(mod.loadContent(write(JSON.stringify(doc))).role, "Jane Placeholder and Alex Example");
+  const doc = edited("startup.status", "Jane Placeholder and Alex Example");
+  assert.equal(mod.loadContent(write(JSON.stringify(doc))).startup.status, "Jane Placeholder and Alex Example");
 });
 
 test("an empty entry in the list is ignored, not treated as matching everything", async () => {

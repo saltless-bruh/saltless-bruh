@@ -8,7 +8,6 @@
     "model": "cat with lazy effort · self hosted",
     "status": "agents working · operator horizontal"
   },
-  "role": "Offensive Security · Agentic AI Systems",
   "whoami": [
     "offensive security. agentic ai systems.",
     "i build agents that do the recon, the triage and the paperwork,",
@@ -89,8 +88,6 @@
     "effortEnds": { "start": "Faster", "end": "Smarter" },
     "effortLabels": ["low", "medium", "high", "xhigh", "lazy"],
     "effortSelected": "lazy",
-    "modeBadge": "autopilot on",
-    "note": "terminal-style design, not affiliated with Anthropic",
     "toggle": { "word": "Ultrachill", "state": "on" },
     "toggleNote": "Ultrachill: dynamic nap on every task",
     "toggleHint": "Tab to toggle",

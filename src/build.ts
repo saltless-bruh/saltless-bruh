@@ -141,7 +141,12 @@ export async function build(opts?: BuildOptions): Promise<BuildResult> {
     const svg = await buildSvg({
       rows, theme, fontRegularB64, fontBoldB64, css, defs,
       rowClass: (row) => (scheduled.has(row) ? playbackClass(row) : undefined),
-      title: `${content.handle}: ${content.role}`,
+      // The picture's accessible name, for a client that reaches the SVG on its own rather than
+      // through the README's `<img alt>`. It was the handle and the `role` field; `role` was deleted
+      // for saying the same words as `/whoami`'s first line four rows above it, so this now reads
+      // that line instead of a key kept alive only to feed an attribute. It is the same sentence
+      // either way, and it comes from the one place the Session says it.
+      title: `${content.handle}: ${content.whoami[0]}`,
     });
     variants[theme] = svg;
   }

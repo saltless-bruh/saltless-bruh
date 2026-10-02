@@ -172,7 +172,7 @@ test("the image is named by the owner's own alt text, not by the Session's conte
   assert.notEqual(alt![1].trim(), "", "the alt text is blank, which makes the picture nameless");
   // Says what the picture IS. What it CONTAINS is the transcript below it, and a reader who hears
   // the Session read out of the alt text and then again out of the transcript hears it twice.
-  assert.ok(!alt![1].includes(content.role), "the alt text recites the Session instead of describing the picture");
+  assert.ok(!alt![1].includes(content.whoami[0]), "the alt text recites the Session instead of describing the picture");
   assert.ok(!alt![1].includes(content.handle), "the alt text recites the Session instead of describing the picture");
 });
 
@@ -216,7 +216,7 @@ test("the transcript ships whole, as real selectable text under the picture", as
   // The two the picture cannot give a reader at all: the Banner is geometry, and the spinner's
   // drawn verbs are one-at-a-time alternatives. Both exist as textOnly runs for this block.
   assert.ok(transcript.includes(content.handle), "the handle reaches a reader only here, and it is missing");
-  assert.ok(transcript.includes(content.statusline.note), "the not-affiliated note is missing");
+  assert.ok(transcript.includes(content.statusline.help[0]), "the panel's key hints are missing");
   assert.ok(transcript.includes(content.statusline.toggle.word), "the Statusline toggle is missing");
   // Under the picture, not above it: the description is read first, then the content.
   assert.ok(readme.indexOf("</picture>") < readme.indexOf("<details>"), "the transcript comes before the picture");
