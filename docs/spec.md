@@ -320,7 +320,7 @@ Targets WCAG 2.1 AA, with one documented exception.
 
 The 2.2.2 gap is mitigated, not ignored: `prefers-reduced-motion` removes all motion, every loop is low-amplitude, and the content is fully available as text in the transcript regardless of motion state. Nothing in the Session depends on seeing the animation.
 
-Contribution dots for days with no activity sit at 0.12 opacity. They are below 3:1 by design, because absence of a dot is itself the meaning; the figures that matter are printed as text on the result line.
+A day with no activity is drawn, not omitted: it sits at 0.45 opacity of the `border` token, which measures 1.60:1 against the window in dark and 1.54:1 in light. It is below 3:1 by design, because a quiet day being quiet is itself the meaning; the figures that matter are printed as text on the result line. Before the beam reaches it the same cell sits at 0.30 of that token (1.35:1 and 1.32:1), so an unprobed cell and a probed silent one are deliberately close: what the sweep reveals about a quiet day is that there was nothing to reveal.
 
 ## 8. Deliberate overrides
 
