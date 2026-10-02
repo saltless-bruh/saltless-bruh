@@ -18,7 +18,7 @@ The build fails with a clear message if something will not render, so a mistake 
 | `whoami` | One to three lines of prose for `/whoami`. |
 | `lanes` | The groups under `/ops`. Each has a `label` and a list of repos with a `name` and a one-line `blurb`. |
 | `stackRows` | The rows under `/stack`. Each has a `label` (which may be empty) and a list of `items`, printed as plain text. |
-| `verbs` | The spinner's words, grouped by what the cat is doing: `sleep`, `yawn`, `stretch`, `settle`, `startle`. The spinner always names the pose on screen, so give `yawn` a yawning word. Give `sleep` several and it rotates through them during the long naps. Every group needs at least one word. |
+| `verbs` | The spinner's words, grouped by what the cat is doing: `sleep`, `yawn`, `stretch`, `settle`, `peek`, then the alarm, `alert`, `swat-up`, `swat-down`, `glare`, `butt-up`, `butt-down`, `recover`. The spinner always names the pose on screen, so give `yawn` a yawning word. Give `sleep` several and it rotates through them during the long naps. Every group needs at least one word. The two halves of a blow (`swat-up` and `swat-down`, `butt-up` and `butt-down`) usually want the SAME word, so the spinner holds one phrase for the whole gesture instead of flickering. **The alarm's words shipped as a first draft and are yours to rewrite.** |
 | `statusline` | The effort labels, which one is highlighted (`effortSelected`, which must be one of the labels), the mode badge and the footer note. |
 
 ## Rules the build enforces

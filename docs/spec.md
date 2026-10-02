@@ -130,9 +130,10 @@ Every animation must justify itself in one sentence. Anything that cannot is cut
 | Playback | Once on load, about 4.3s: Banner decrypts, then each Command types and prints | Storytelling: establishes that this is a session being run, not a poster |
 | Banner | Resolves from random block glyphs over 0.8s | Hierarchy: it is the one moment of spectacle, spent on the name |
 | Spinner | After playback, one spinner loops. Its verb names whatever the Mascot is doing right now, on the same 36s clock | State: it is a readout of the Mascot, not decoration, which is why it may loop at all |
-| Mascot | 36s master loop: breathing at 3.0s, with a yawn, a stretch, a settle and a nose-bubble pop at irregular times | Storytelling: the operator naps while the agents work, which is the whole metaphor |
+| Mascot | 36s master loop: breathing at 3.0s, with a yawn, a stretch, a settle, a one-second peek at the viewer, and an alarm she wakes to | Storytelling: the operator naps while the agents work, which is the whole metaphor |
 | Mascot micro-layers | Ear 17s, tail 23s. Co-prime periods mean the combined pattern does not visibly repeat | Keeps the loop from reading as a loop |
-| Rack LEDs | 7s, 11s and 13s flickers | State: the machine is busy; this is the cause the sleeping cat is the effect of |
+| Rack LEDs, healthy | 7s, 11s and 13s flickers, staggered so no two are ever lit at the same instant | State: three services on their own clocks; this is the cause the sleeping cat is the effect of |
+| Rack LEDs, faulting | From 28s to 31.6s they are `error` and flash in unison at 2.5Hz, then hold steady `accent` for the recovery beat | State: unison is what reads as one machine in trouble, precisely because the healthy state is defined by never agreeing |
 | Scan Sweep | Beam crosses the calendar once during playback, then once per 36s master loop | Storytelling: the calendar is read as something being scanned, not a heatmap |
 | Ultrachill shimmer | A bright band crosses the word once every 9s, a quarter of the master loop | Hierarchy: it marks the one joke in the Statusline without running constantly |
 
@@ -142,7 +143,13 @@ Every animation must justify itself in one sentence. Anything that cannot is cut
 
 **Everything derives from one timeline.** `MASCOT_TIMELINE` in `src/timeline.ts` is the only place a pose boundary is written down; every keyframe percentage, the bubble's pop instant and the spinner's verb schedule are computed from it. This is not tidiness. When the loop was retimed from 60s to 36s, the single value that had been hand-typed rather than derived, a breath count, silently produced a 2.25-second breath instead of 3.0 and was caught only because everything around it moved correctly. A derived value cannot drift; a copied one always can.
 
-**The spinner is bound to the Mascot.** The Mascot's timeline is the single source of truth for both. The spinner's verb is derived from it, so the label always names the pose on screen: `Yawning…` while the cat yawns, `Stretching…` while it stretches, `Startled…` for the moment after the bubble pops, and a slow rotation through the sleep verbs the rest of the time. A spinner cycling words unrelated to the picture would be decoration; this one reports state, and the two together read as one coordinated motion rather than two loops competing.
+**The spinner is bound to the Mascot.** The Mascot's timeline is the single source of truth for both. The spinner's verb is derived from it, so the label always names the pose on screen: `Yawning…` while the cat yawns, `Stretching…` while it stretches, the alarm's own verbs while she deals with the rack, and a slow rotation through the sleep verbs the rest of the time. A spinner cycling words unrelated to the picture would be decoration; this one reports state, and the two together read as one coordinated motion rather than two loops competing.
+
+The alarm needs it more than the rest of the loop does. Everforest's `error` and `accent` sit at the same lightness (measured: 1.26:1 apart in dark, 1.00:1 in light), so red-to-green is a pure hue change, which is the pair a protan or deutan viewer cannot separate and which is weak at 308px anyway. The fault is therefore carried by **behaviour** (three lights agreeing, at 2.5Hz, against a healthy state where they never agree) and **named by the spinner**, never by colour alone.
+
+**The alarm replaces the old `startle`, and the two jolts became one.** The nose bubble used to pop at its own moment and the cat startled at another. The bubble now pops at the instant the alarm begins, so the loop has one shock rather than two. The peek is placed late, at 25s, deliberately: it catches a viewer who has been reading rather than one who has just arrived. It lands while the bubble is still inflating, because a bubble says deep sleep and an open eye says she is faking it.
+
+A scroll-triggered peek was considered and is **impossible**: GitHub renders the Session inside an `<img>`, which is a separate document with scripts disabled and no knowledge of the host page's scroll position. The loop clock is the only trigger available.
 
 **Reduced motion is structural, not an add-on.** Base CSS must already be the correct final still frame: Session fully visible, Mascot on its rest pose, Scan Sweep showing all hits. Every animation drives *away from* that base and returns to it. The whole motion layer then collapses with one rule:
 
@@ -196,7 +203,7 @@ is the same for every value it decorates belongs to the generator (the spinner's
 | `whoami` | Up to 3 lines of copy |
 | `lanes[]` | Each has a `label` and `repos[]`, each repo a `name` and a one-line `blurb` |
 | `stackRows[]` | Each has a `label` and `items[]`, printed as plain text |
-| `verbs` | Spinner words, grouped by Mascot state (`sleep`, `yawn`, `stretch`, `settle`, `startle`). A state with several words rotates through them while that state is on screen |
+| `verbs` | Spinner words, grouped by Mascot state. Every state in `MASCOT_TIMELINE` needs at least one: `sleep`, `yawn`, `stretch`, `settle`, `peek`, and the alarm's `alert`, `swat-up`, `swat-down`, `glare`, `butt-up`, `butt-down`, `recover`. A state with several words rotates through them while that state is on screen. Giving the two halves of a blow the same word is deliberate: the spinner then holds one phrase across the whole gesture instead of flickering between two |
 | `activityLine` | The words of the `/activity` result line, as labelled fragments: `label` (`scan complete:`), `daysUp` (`days up`) and `contributions`. The generator supplies the order, the numbers and the `·` |
 | `statusline` | `effortWord` (the word before the levels, e.g. `Effort`; a longer word pushes the levels along), `effortLabels`, `effortSelected`, `modeBadge`, `note`, and `toggle` (the shimmering word and the state it reads, e.g. `Ultrachill` / `on`). The toggle is not one of the effort labels, so it has its own key |
 

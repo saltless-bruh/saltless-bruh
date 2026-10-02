@@ -65,8 +65,8 @@ The Activity visual: the contribution calendar drawn as a target network that a 
 _Avoid_: snake, heatmap, contribution graph
 
 **Finding**:
-A flash of the rack's alert LED that briefly stirs the Mascot; the visible link between the agents' work and Lazie.
-_Avoid_: alert, notification, event
+A fault on the rack that wakes the Mascot: the LEDs go red and flash in unison, she hits the chassis twice with a paw, headbutts it, and the machine comes back green. The visible link between the agents' work and Lazie, and the one moment she is awake.
+_Avoid_: alert, notification, event, incident
 
 **Statusline**:
 The closing lines of the Session: the effort picker set to "lazy", a mode badge and the not-affiliated-with-Anthropic note.

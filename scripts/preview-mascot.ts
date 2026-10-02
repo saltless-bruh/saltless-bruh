@@ -1,5 +1,5 @@
 // Build a standalone page that plays the Mascot live, in both Theme Variants,
-// on the real 60-second timeline. Open the output in a browser to watch it.
+// on the real master timeline. Open the output in a browser to watch it.
 //
 //   node scripts/preview-mascot.ts && xdg-open preview/mascot.html
 //
@@ -91,8 +91,11 @@ const page = `<!doctype html>
     <tr><th>pose</th><th>from</th><th>to</th><th>lasts</th></tr>
     ${legend}
   </table>
-  <p class="note">The nose bubble inflates across the long sleep window and pops exactly as <code>startle</code>
-  begins. The spinner in the finished profile names whichever pose is on screen.</p>
+  <p class="note">The nose bubble inflates across the whole nap, the peek included, and pops exactly as
+  <code>alert</code> begins. From <code>alert</code> to <code>recover</code> the three rack LEDs go
+  <code>error</code> and flash in unison at 2.5Hz; after the headbutt they hold steady green for the
+  <code>recover</code> beat and then go back to their own 7s, 11s and 13s clocks. The spinner in the finished
+  profile names whichever pose is on screen.</p>
   <p class="note">To check the reduced-motion fallback, set your OS to reduce motion and reload, or run
   <kbd>node scripts/render-check.ts preview/mascot-dark.svg out.png --reduced</kbd>.</p>
 </div>
