@@ -1,9 +1,9 @@
 // src/build.ts
 //
-// The build entrypoint: content and activity in, `assets/session-dark.svg` and
-// `assets/session-light.svg` out. `npm run build` runs this file.
+// The build entrypoint: content and activity in, `assets/session-dark.svg`,
+// `assets/session-light.svg` and `README.md` out. `npm run build` runs this file.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { assertRowsCarryNoForbiddenNames, loadContent } from "./content.ts";
+import { assertNoForbiddenNames, assertRowsCarryNoForbiddenNames, loadContent } from "./content.ts";
 import { loadActivity } from "./activity.ts";
 import type { Transport } from "./activity.ts";
 import { assertNoCollisions, composeSession } from "./session.ts";
@@ -14,6 +14,7 @@ import { buildSvg } from "./svg.ts";
 import { bannerLetters } from "./banner.ts";
 import { mascotCss, mascotDefs } from "./mascot.ts";
 import { scanCss, scanDefs } from "./scan.ts";
+import { renderReadme } from "./readme.ts";
 import {
   bannerLetterClass, bannerRevealCss, bannerRevealSeconds,
   playbackClass, playbackCss, playbackMarks, playbackSeconds,
@@ -31,6 +32,13 @@ const MASCOT_COL = 0;
 const MASCOT_ROW = 0;
 
 export type BuildOptions = {
+  /**
+   * Where the two SVGs go. The README is written one directory ABOVE this one and is deliberately
+   * not separately settable, because its image paths are `assets/...` relative to itself: the two
+   * only mean anything as a pair. A caller that could redirect the images and not the README would
+   * write a README whose paths resolve to nothing, and the first version of this option did
+   * exactly that, quietly writing the repository's own README.md during the test suite.
+   */
   outDir?: URL;
   /**
    * The two seams the tests drive the real pipeline through, both of them the ones
@@ -48,6 +56,8 @@ export type BuildResult = {
   dark: string;
   light: string;
   transcript: string;
+  /** The README as written: the `<picture>` that swaps the variants, and the transcript under it. */
+  readme: string;
   /** Null when the figures came off the network. Otherwise their age and why they are not fresh. */
   staleNote: string | null;
   /** How long the playback lasts, in seconds, measured from the schedule that was emitted. */
@@ -144,10 +154,20 @@ export async function build(opts?: BuildOptions): Promise<BuildResult> {
     writeFileSync(new URL(`session-${theme}.svg`, outDir), variants[theme]);
   }
 
+  // The README is the one file a reader's screen reader and search engine actually read, so it
+  // goes through the ADR 0001 gate on its own rather than being trusted because its parts were
+  // checked: the transcript cleared the gate as rows, and the two README strings cleared it as
+  // content.json fields, but a future addition here would arrive inside neither. Checked before
+  // it is written, so a name never reaches the disk in the first place.
+  const readme = renderReadme({ content, transcript });
+  assertNoForbiddenNames(readme, "the generated README");
+  writeFileSync(new URL("../README.md", outDir), readme);
+
   return {
     dark: variants.dark,
     light: variants.light,
     transcript,
+    readme,
     staleNote: loaded.staleNote,
     playbackSeconds: Math.max(playbackSeconds(marks), bannerRevealSeconds(letters.length)),
   };
@@ -155,5 +175,5 @@ export async function build(opts?: BuildOptions): Promise<BuildResult> {
 
 if (import.meta.main) {
   const result = await build();
-  console.log(`wrote assets/session-dark.svg and assets/session-light.svg; the playback lasts ${result.playbackSeconds.toFixed(2)}s`);
+  console.log(`wrote assets/session-dark.svg, assets/session-light.svg and README.md; the playback lasts ${result.playbackSeconds.toFixed(2)}s`);
 }

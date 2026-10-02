@@ -1,7 +1,13 @@
 // Render the whole Session for looking at, before any real figures exist.
 //
-//   node scripts/preview-session.ts [outDir]          # defaults to preview/
-//   node scripts/render-check.ts preview/session-dark.svg /tmp/f.png --freeze=0.4
+//   node scripts/preview-session.ts [root]            # defaults to preview/
+//   node scripts/render-check.ts preview/assets/session-dark.svg /tmp/f.png --freeze=0.4
+//
+// The argument is a REPOSITORY ROOT, not an asset directory: the build writes `assets/` and
+// `README.md` inside it, in the same arrangement the real repository has. That is deliberate.
+// The README's image paths are relative to the README, so a preview that scattered the two would
+// be a preview in which those paths resolve to nothing, which is exactly the mistake worth
+// catching here rather than after publishing.
 //
 // WHY THIS EXISTS, AND WHAT IT IS NOT.
 //
@@ -67,22 +73,25 @@ const fixture: Transport = async (request) => {
   return JSON.stringify({ data: { user } });
 };
 
-const outDir = process.argv[2] === undefined
+const root = process.argv[2] === undefined
   ? new URL("../preview/", import.meta.url)
   : pathToFileURL(`${process.argv[2].replace(/\/?$/, "/")}`);
 
 const result = await build({
-  outDir,
+  // `assets/` inside the preview root, because the README lands beside it and names it by that
+  // relative path. The pair is the thing being previewed, not the two SVGs on their own.
+  outDir: new URL("assets/", root),
   // A scratch cache, so a preview can never overwrite the committed figures.
   cachePath: pathToFileURL(join(mkdtempSync(join(tmpdir(), "preview-session-")), "activity.json")),
   transport: fixture,
   log: (m) => console.warn(m),
 });
 
-const dir = fileURLToPath(outDir);
+const dir = fileURLToPath(root);
 for (const theme of ["dark", "light"]) {
-  const path = join(dir, `session-${theme}.svg`);
+  const path = join(dir, "assets", `session-${theme}.svg`);
   console.log(`${path}  ${(statSync(path).size / 1024).toFixed(1)} KB`);
 }
+console.log(`${join(dir, "README.md")}  ${(statSync(join(dir, "README.md")).size / 1024).toFixed(1)} KB`);
 console.log(`playback: ${result.playbackSeconds.toFixed(3)}s`);
-console.log("the figures in these two files are FABRICATED, for looking at only. assets/ is written by npm run build.");
+console.log("the figures in these three files are FABRICATED, for looking at only. assets/ and README.md are written by npm run build.");

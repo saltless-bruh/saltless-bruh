@@ -67,9 +67,15 @@ const okTransport: Transport = async (request) => fixtureBody(request.variables.
 const failingTransport = (message: string): Transport => async () => { throw new Error(message); };
 
 let serial = 0;
+/**
+ * A scratch repository root: `assets/` for the two SVGs, with the README landing beside it. The
+ * nesting is not tidiness. `build` writes its README one directory above `outDir`, because that
+ * is where the README's own `assets/...` paths resolve from, so an `outDir` pointing straight at
+ * the temp directory would put the README in the parent of every temp directory there is.
+ */
 const scratch = (): { outDir: URL; cachePath: URL } => {
   const dir = mkdtempSync(join(tmpdir(), `build-test-${serial++}-`));
-  return { outDir: pathToFileURL(`${dir}/`), cachePath: pathToFileURL(join(dir, "activity.json")) };
+  return { outDir: pathToFileURL(`${join(dir, "assets")}/`), cachePath: pathToFileURL(join(dir, "activity.json")) };
 };
 
 /** A build whose figures come off the fixture response, writing only into a temp directory. */
