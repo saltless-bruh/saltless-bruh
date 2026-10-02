@@ -372,7 +372,11 @@ test("a stale cache is announced on the build's own output and reaches neither v
 test("the token never reaches a log line, whatever the failure quotes", async () => {
   const dirs = scratch();
   await build({ ...dirs, transport: okTransport, log: () => {} });
-  const token = "ghp_FIXTURE_NOT_A_REAL_TOKEN_0123456789";
+  // Deliberately NOT shaped like a GitHub token, the same discipline test/activity.test.ts
+  // records for its own stand-in: a committed file that looks like a credential trips the secret
+  // gate it exists to defend, and this literal did exactly that on the gate's first run. The
+  // test cares that the value is scrubbed, never what it looks like.
+  const token = "TOKEN-VALUE-THAT-MUST-NEVER-REACH-A-LOG";
   const before = process.env[TOKEN_ENV];
   process.env[TOKEN_ENV] = token;
   try {
