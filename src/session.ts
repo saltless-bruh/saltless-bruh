@@ -4,6 +4,7 @@ import { assertFits } from "./rows.ts";
 import type { Row, Run } from "./rows.ts";
 import { BANNER_ROWS, bannerWidthCols } from "./banner.ts";
 import { MASCOT_COLS, MASCOT_ROWS } from "./mascot.ts";
+import { MASCOT_TIMELINE } from "./timeline.ts";
 
 export type Activity = {
   totalContributions: number;
@@ -21,17 +22,35 @@ export type Session = {
   bannerRow: number;
   /** First of the SCAN_ROWS rows held empty for the Scan Sweep geometry. */
   scanRow: number;
-  /** The spinner's row. Only the glyph is here; the words are layered over it later. */
+  /**
+   * The spinner's row. It holds the glyph and, as text only, the verb of the pose the loop
+   * rests on; every drawn verb is layered over it by the motion layer.
+   */
   verbRow: number;
 };
 
-/** Rows kept empty under /activity for the Scan Sweep. */
-export const SCAN_ROWS = 8;
+/**
+ * Rows kept empty under /activity for the Scan Sweep.
+ *
+ * The contribution calendar is 53 week-columns by 7 day-rows. One week per grid column makes
+ * it 53 columns wide, which fits inside the Session's 72. Square cells, which is what GitHub's
+ * own calendar uses, then want CELL_W of height each, so 7 days is 7 x 12 = 84 units; at
+ * CELL_H = 24 that is 3.5 rows. Four rows hold the sweep, with the spare half-row as breathing
+ * room. Cells of 12 x 24 would read as a bar chart instead of a grid, so the height follows the
+ * width rather than the row pitch. The "N/365 days up" result line stays a text row of its own:
+ * a status colour is always paired with a word, so the sweep needs its printed result.
+ */
+export const SCAN_ROWS = 4;
 
-/** The Statusline toggle that carries a shimmer. Its highlight runs are `shimmer-0`, `shimmer-1`, and so on. */
-export const SHIMMER_WORD = "Ultrachill";
+/** Prefix of the per-character highlight hooks on the Statusline toggle: `shimmer-0`, `shimmer-1`, ... */
 const SHIMMER_PREFIX = "shimmer-";
 export const shimmerClass = (index: number): string => `${SHIMMER_PREFIX}${index}`;
+
+/**
+ * What a spinner verb ends with. Exported so the motion layer, which draws one verb per
+ * Mascot pose, spells them the same way as the verb the transcript names.
+ */
+export const VERB_SUFFIX = "…";
 
 /** Days in the window the activity line counts against. */
 const WINDOW_DAYS = 365;
@@ -99,9 +118,12 @@ export function composeSession(c: Content, a: Activity): Session {
   }
   const bannerRow = Math.floor((MASCOT_ROWS - BANNER_ROWS) / 2);
 
-  // Header. The Mascot and the Banner are geometry, so their rows hold no text. The role and
-  // the cwd get rows of their own under the Mascot, with the whole width to themselves.
+  // Header. The Mascot and the Banner are geometry, so nothing is drawn as glyphs over their
+  // rows. The Banner's middle row still carries the handle as a text-only run, so the
+  // transcript names the owner and the forbidden-name scan can read what the block art spells.
+  // The role and the cwd get rows of their own under the Mascot, with the whole width to them.
   const rows: Row[] = Array.from({ length: MASCOT_ROWS }, blank);
+  rows[bannerRow + Math.floor(BANNER_ROWS / 2)].runs.push({ col: bannerCol, text: c.handle, textOnly: true });
   rows.push({ runs: [{ col: 0, text: c.role, style: "bold" }] });
   rows.push({ runs: [{ col: 0, text: c.cwd, style: "muted" }] });
   const headerRows = rows.length;
@@ -158,10 +180,15 @@ export function composeSession(c: Content, a: Activity): Session {
   result(`scan complete: ${a.activeDays}/${WINDOW_DAYS} days up · ${a.totalContributions} contributions`, "accent");
   rows.push(blank());
 
-  // The spinner's words depend on which pose is on screen, so they are layered over this
-  // row later. Only the glyph, which spins whatever the word, belongs to the row itself.
+  // The drawn words depend on which pose is on screen, so every one of them is layered over
+  // this row by the motion layer. The row itself keeps the glyph, which spins whatever the
+  // word, and the verb of the pose the loop starts and rests on, as text only: the transcript
+  // then gets a spinner that says something instead of a lone glyph.
   const verbRow = rows.length;
-  rows.push({ runs: [{ col: 0, text: "✶", style: "accent", cls: "spinner-glyph" }] });
+  rows.push({ runs: [
+    { col: 0, text: "✶", style: "accent", cls: "spinner-glyph" },
+    { col: BODY_COL, text: `${c.verbs[MASCOT_TIMELINE[0].state][0]}${VERB_SUFFIX}`, textOnly: true },
+  ] });
   rows.push(rule());
 
   // Statusline: the effort picker on the left, the shimmering toggle on the right.
@@ -173,15 +200,17 @@ export function composeSession(c: Content, a: Activity): Session {
     effort.push({ col, text: shown, style: selected ? "accent" : "muted" });
     col += cells(shown) + SPACING;
   }
+  // The toggle's word and its state are the owner's copy, so both come from content.json.
   // The word is drawn twice at one position: a muted base copy, and an accent copy split into
   // one run per character. Staggering the copy's opacity character by character is what sweeps
-  // a bright band across the letters. Nothing is animated here.
-  const toggleCol = COLS - cells(`${SHIMMER_WORD} on`);
-  effort.push({ col: toggleCol, text: SHIMMER_WORD, style: "muted" });
-  [...SHIMMER_WORD].forEach((ch, i) => {
+  // a bright band across the letters, for a word of any length. Nothing is animated here.
+  const { word, state } = c.statusline.toggle;
+  const toggleCol = COLS - cells(`${word} ${state}`);
+  effort.push({ col: toggleCol, text: word, style: "muted" });
+  [...word].forEach((ch, i) => {
     effort.push({ col: toggleCol + i, text: ch, style: "accent", cls: shimmerClass(i) });
   });
-  effort.push({ col: toggleCol + cells(SHIMMER_WORD) + 1, text: "on", style: "muted" });
+  effort.push({ col: toggleCol + cells(word) + 1, text: state, style: "muted" });
   rows.push({ runs: effort });
 
   rows.push({ runs: [

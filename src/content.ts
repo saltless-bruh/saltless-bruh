@@ -6,7 +6,11 @@ import { MASCOT_TIMELINE, type PoseName } from "./timeline.ts";
 export type Repo = { name: string; blurb: string };
 export type Lane = { label: string; repos: Repo[] };
 export type StackRow = { label: string; items: string[] };
-export type Statusline = { effortLabels: string[]; effortSelected: string; modeBadge: string; note: string };
+/** The Statusline toggle: the owner's word and the state it reads, e.g. "Ultrachill" and "on". */
+export type Toggle = { word: string; state: string };
+export type Statusline = {
+  effortLabels: string[]; effortSelected: string; modeBadge: string; note: string; toggle: Toggle;
+};
 /** Spinner words grouped by Mascot state, so the label names the pose on screen. */
 export type Verbs = Record<PoseName, string[]>;
 export type Content = {
@@ -96,12 +100,17 @@ function assertShape(c: unknown): asserts c is Content {
   }
 
   if (!isObj(c.statusline)) fail("statusline must be an object");
-  const { effortLabels, effortSelected, modeBadge, note } = c.statusline;
+  const { effortLabels, effortSelected, modeBadge, note, toggle } = c.statusline;
   if (!Array.isArray(effortLabels) || effortLabels.length === 0) fail("statusline.effortLabels must not be empty");
   effortLabels.forEach((label, i) => text(label, `statusline.effortLabels[${i}]`));
   if (!effortLabels.includes(effortSelected)) fail("statusline.effortSelected must be one of effortLabels");
   text(modeBadge, "statusline.modeBadge");
   text(note, "statusline.note");
+  // The toggle is its own copy, not one of the effort labels, so it needs its own home here:
+  // every visible word belongs to the owner, and the copy audit only reads this file.
+  if (!isObj(toggle)) fail("statusline.toggle must be an object");
+  text(toggle.word, "statusline.toggle.word");
+  text(toggle.state, "statusline.toggle.state");
 }
 
 /**

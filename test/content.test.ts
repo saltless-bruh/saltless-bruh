@@ -31,7 +31,10 @@ const VALID: Content = {
     settle: ["Resettling"],
     startle: ["Startled"],
   },
-  statusline: { effortLabels: ["low", "mid", "lazy", "max"], effortSelected: "lazy", modeBadge: "autopilot on", note: "fixture note" },
+  statusline: {
+    effortLabels: ["low", "mid", "lazy", "max"], effortSelected: "lazy", modeBadge: "autopilot on",
+    note: "fixture note", toggle: { word: "Fixtureword", state: "off" },
+  },
 };
 
 const STATES = [...new Set(MASCOT_TIMELINE.map((w) => w.state))];
@@ -151,7 +154,7 @@ test("the smallest valid document loads: one of everything", () => {
     lanes: [{ label: "l/", repos: [{ name: "n", blurb: "b" }] }],
     stackRows: [{ label: "", items: ["i"] }],
     verbs: { sleep: ["a"], yawn: ["b"], stretch: ["c"], settle: ["d"], startle: ["e"] },
-    statusline: { effortLabels: ["only"], effortSelected: "only", modeBadge: "m", note: "n" },
+    statusline: { effortLabels: ["only"], effortSelected: "only", modeBadge: "m", note: "n", toggle: { word: "t", state: "s" } },
   };
   assert.deepEqual(load(smallest), smallest);
 });
@@ -233,6 +236,17 @@ const STRUCTURE: [string, unknown, RegExp][] = [
   ["statusline.modeBadge", undefined, /statusline\.modeBadge must be a string/],
   ["statusline.note", "", /statusline\.note must not be blank/],
   ["statusline.note", undefined, /statusline\.note must be a string/],
+  // the toggle: its own copy, so it is validated like any other visible string
+  ["statusline.toggle", undefined, /statusline\.toggle must be an object/],
+  ["statusline.toggle", "Ultrachill on", /statusline\.toggle must be an object/],
+  ["statusline.toggle", [], /statusline\.toggle must be an object/],
+  ["statusline.toggle.word", undefined, /statusline\.toggle\.word must be a string/],
+  ["statusline.toggle.word", "   ", /statusline\.toggle\.word must not be blank/],
+  ["statusline.toggle.word", "", /statusline\.toggle\.word must not be blank/],
+  ["statusline.toggle.word", 3, /statusline\.toggle\.word must be a string/],
+  ["statusline.toggle.state", undefined, /statusline\.toggle\.state must be a string/],
+  ["statusline.toggle.state", " ", /statusline\.toggle\.state must not be blank/],
+  ["statusline.toggle.state", true, /statusline\.toggle\.state must be a string/],
 ];
 
 test("the structure table covers every mascot state, and the baseline it edits loads", () => {
@@ -277,8 +291,11 @@ test("a file that is not JSON is rejected, and the message says so", () => {
 const EDITABLE = leaves(VALID).filter((p) => p !== "statusline.effortSelected");
 
 test("the sweep covers every string in the document, so it cannot pass vacuously", () => {
-  assert.equal(leaves(VALID).length, 32);
-  for (const expected of ["handle", "whoami[2]", "lanes[1].repos[0].blurb", "stackRows[1].items[0]", "verbs.sleep[1]", "statusline.note"]) {
+  assert.equal(leaves(VALID).length, 34);
+  for (const expected of [
+    "handle", "whoami[2]", "lanes[1].repos[0].blurb", "stackRows[1].items[0]", "verbs.sleep[1]",
+    "statusline.note", "statusline.toggle.word", "statusline.toggle.state",
+  ]) {
     assert.ok(EDITABLE.includes(expected), `${expected} is not swept`);
   }
 });

@@ -3,14 +3,15 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { loadContent } from "../src/content.ts";
 import type { Content } from "../src/content.ts";
-import { composeSession, languageShares, SCAN_ROWS, SHIMMER_WORD } from "../src/session.ts";
+import { composeSession, languageShares, SCAN_ROWS, VERB_SUFFIX } from "../src/session.ts";
 import type { Activity } from "../src/session.ts";
-import { assertFits, rowsToText, charsUsed } from "../src/rows.ts";
+import { assertFits, rowsToText, renderRows, charsUsed } from "../src/rows.ts";
 import type { Row } from "../src/rows.ts";
-import { COLS } from "../src/grid.ts";
+import { CELL_H, CELL_W, COLS } from "../src/grid.ts";
 import { MASCOT_COLS, MASCOT_ROWS } from "../src/mascot.ts";
 import { BANNER_ROWS, bannerWidthCols } from "../src/banner.ts";
 import { assertCovered } from "../src/font.ts";
+import { MASCOT_TIMELINE } from "../src/timeline.ts";
 
 const activity: Activity = {
   totalContributions: 950, activeDays: 99,
@@ -41,7 +42,10 @@ function altered(): Content {
     { label: "beta/", repos: [{ name: "r-two", blurb: "second blurb" }, { name: "r-three", blurb: "third blurb" }] },
   ];
   c.stackRows = [{ label: "tools", items: ["aa", "bb"] }, { label: "", items: ["cc"] }];
-  c.statusline = { effortLabels: ["one", "two", "three"], effortSelected: "two", modeBadge: "manual", note: "a short note" };
+  c.statusline = {
+    effortLabels: ["one", "two", "three"], effortSelected: "two", modeBadge: "manual",
+    note: "a short note", toggle: { word: "Hypermellow", state: "idle" },
+  };
   return c;
 }
 
@@ -142,7 +146,8 @@ test("each part of the session wears its own style", () => {
   assert.deepEqual(stylesOf("Effort"), ["muted"]);
   assert.deepEqual(stylesOf(`▶▶ ${c.statusline.modeBadge}`), ["muted"]);
   assert.deepEqual(stylesOf(c.statusline.note), ["muted"]);
-  assert.deepEqual(stylesOf("on"), ["muted"]);
+  assert.deepEqual(stylesOf(c.statusline.toggle.word), ["muted"], "the base copy of the toggle word");
+  assert.deepEqual(stylesOf(c.statusline.toggle.state), ["muted"]);
 });
 
 // ---- the header ----
@@ -150,10 +155,27 @@ test("each part of the session wears its own style", () => {
 test("the header is the Mascot's rows plus a role row and a cwd row, derived from the Mascot", () => {
   const { rows, headerRows } = composeSession(loadContent(), activity);
   assert.equal(headerRows, MASCOT_ROWS + 2);
-  assert.deepEqual(rows.slice(0, MASCOT_ROWS).map((r) => r.runs.length), Array(MASCOT_ROWS).fill(0), "text must not be drawn over the Mascot");
+  const drawn = rows.slice(0, MASCOT_ROWS).map((r) => r.runs.filter((run) => !run.textOnly).length);
+  assert.deepEqual(drawn, Array(MASCOT_ROWS).fill(0), "no glyph may be drawn over the Mascot or the Banner");
   assert.equal(rows[headerRows].runs.length, 1);
   assert.equal(rowsToText([rows[headerRows]]), "─".repeat(COLS), "a full-width rule closes the header");
 });
+
+for (const [label, make] of CONTENTS) {
+  test(`the Banner spells the handle for the transcript and draws no glyph for it (${label})`, () => {
+    const c = make();
+    const { rows, bannerCol, bannerRow } = composeSession(c, activity);
+    const band = rows.slice(bannerRow, bannerRow + BANNER_ROWS);
+    const carrying = band.filter((r) => r.runs.some((run) => run.text === c.handle && run.textOnly === true));
+    assert.equal(carrying.length, 1, "exactly one row of the Banner band carries the handle");
+    assert.equal(carrying[0].runs.find((run) => run.text === c.handle)!.col, bannerCol, "the word sits where the art does");
+    // The transcript is the no-image fallback, so it has to name the owner, once.
+    const lines = linesOf(rows);
+    assert.deepEqual(lines.filter((l) => l.includes(c.handle)), [" ".repeat(bannerCol) + c.handle]);
+    // Nothing draws it: the letters are block art, so a glyph here would print over the art.
+    assert.ok(!renderRows(rows).includes(c.handle), "the handle was drawn as text");
+  });
+}
 
 for (const [label, make] of CONTENTS) {
   test(`the role and cwd each get their own full-width row under the Mascot (${label})`, () => {
@@ -381,6 +403,41 @@ test("the result line carries this activity's own numbers", () => {
   }
 });
 
+test("the Scan Sweep reserves the rows square cells on a 53 by 7 calendar actually need", () => {
+  const WEEK_COLS = 53;   // a contribution year, one grid column per week
+  const DAY_ROWS = 7;     // one grid row per weekday
+  assert.ok(WEEK_COLS <= COLS, `${WEEK_COLS} week columns must fit the Session's ${COLS}`);
+  // Square cells, which is what GitHub's own calendar uses: each is CELL_W wide and CELL_W
+  // tall, so the grid is DAY_ROWS * CELL_W units of ink. Cells of CELL_W x CELL_H would read
+  // as a bar chart rather than a contribution grid, so the height follows the width.
+  const ink = DAY_ROWS * CELL_W;
+  assert.equal(ink, 84);
+  assert.equal(ink / CELL_H, 3.5, "7 square cells is three and a half text rows, not eight");
+  assert.ok(SCAN_ROWS * CELL_H >= ink, "the reserved rows must hold the whole grid");
+  assert.ok((SCAN_ROWS - 1) * CELL_H < ink, "a reserved row that the grid does not reach is waste");
+  assert.equal(SCAN_ROWS, 4, "3.5 rows of ink, the remaining half row as breathing room");
+});
+
+test("the Session is exactly the rows its parts need, and four shorter than the first draft", () => {
+  const c = loadContent();
+  const { rows } = composeSession(c, activity);
+  const repos = c.lanes.flatMap((lane) => lane.repos).length;
+  const expected =
+      MASCOT_ROWS + 2                  // the Mascot's band, then the role and the cwd
+    + 1                                // the rule closing the header
+    + 1 + c.whoami.length + 1          // /whoami, its bullets, a blank
+    + 1 + c.lanes.length + 2 * repos + 1   // /ops, a lane label and two rows per repo, a blank
+    + 1 + activity.languages.length + c.stackRows.length + 1  // /stack, languages, tool rows, a blank
+    + 1 + SCAN_ROWS + 1 + 1            // /activity, the sweep's rows, the result line, a blank
+    + 1                                // the spinner
+    + 1 + 2;                           // the closing rule, the effort row, the mode row
+  assert.equal(rows.length, expected, "a row was added or lost somewhere in the composition");
+  // Pinned absolutely as well, so the drop is deliberate: the sweep reserved 8 rows while the
+  // calendar's real geometry needs 4, which made the Session 57 rows instead of 53.
+  assert.equal(rows.length, 53);
+  assert.equal(rows.length + 4, 57, "the four rows come from the sweep's reservation, nowhere else");
+});
+
 test("the Scan Sweep gets its own rows right under /activity, and the result line follows them", () => {
   const { rows, scanRow } = composeSession(loadContent(), activity);
   const lines = linesOf(rows);
@@ -391,15 +448,30 @@ test("the Scan Sweep gets its own rows right under /activity, and the result lin
 
 // ---- the spinner ----
 
-test("the spinner row holds only the glyph; the words are not chosen here", () => {
-  const c = loadContent();
-  const { rows, verbRow, scanRow } = composeSession(c, activity);
-  assert.deepEqual(rows[verbRow].runs, [{ col: 0, text: "✶", style: "accent", cls: "spinner-glyph" }]);
-  assert.equal(verbRow, scanRow + SCAN_ROWS + 2, "one blank row after the result line, then the spinner");
-  assert.equal(rows[verbRow - 1].runs.length, 0);
-  const text = rowsToText(rows);
-  for (const word of Object.values(c.verbs).flat()) assert.ok(!text.includes(word), `${word} was written into the rows`);
-});
+for (const [label, make] of CONTENTS) {
+  test(`the spinner row holds the glyph and, as text only, the verb of the pose the loop rests on (${label})`, () => {
+    const c = make();
+    const { rows, verbRow, scanRow } = composeSession(c, activity);
+    // MASCOT_TIMELINE is the single source of truth for the loop, so the verb the row names is
+    // the one on screen at t = 0, which is also the still frame a reduced-motion reader sees.
+    const resting = c.verbs[MASCOT_TIMELINE[0].state][0];
+    assert.deepEqual(rows[verbRow].runs, [
+      { col: 0, text: "✶", style: "accent", cls: "spinner-glyph" },
+      { col: 2, text: `${resting}${VERB_SUFFIX}`, textOnly: true },
+    ]);
+    assert.equal(verbRow, scanRow + SCAN_ROWS + 2, "one blank row after the result line, then the spinner");
+    assert.equal(rows[verbRow - 1].runs.length, 0);
+    // The transcript says what the spinner is saying, so the row is not a lone glyph there.
+    assert.equal(linesOf(rows)[verbRow], `✶ ${resting}${VERB_SUFFIX}`);
+    // The motion layer owns every drawn verb, so this row draws none of them.
+    assert.ok(!renderRows([rows[verbRow]]).includes(resting), "a verb was drawn as text");
+    // and only the resting verb is named: no other pose's word is written into the rows
+    const text = rowsToText(rows);
+    for (const word of Object.values(c.verbs).flat().filter((w) => w !== resting)) {
+      assert.ok(!text.includes(word), `${word} was written into the rows`);
+    }
+  });
+}
 
 test("a rule closes the spinner section and the statusline follows it", () => {
   const { rows, verbRow } = composeSession(loadContent(), activity);
@@ -468,7 +540,7 @@ test("effort labels that would run into the toggle, or touch it, are rejected", 
   const c = loadContent();
   const { effortLabels, effortSelected } = c.statusline;
   const start = 9 + effortLabels.reduce((s, l) => s + (l === effortSelected ? l.length + 2 : l.length) + 2, 0);
-  const toggleCol = COLS - `${SHIMMER_WORD} on`.length;
+  const toggleCol = COLS - `${c.statusline.toggle.word} ${c.statusline.toggle.state}`.length;
   const withLast = (len: number): Content => {
     const copy = loadContent();
     copy.statusline.effortLabels = [...effortLabels, "x".repeat(len)];
@@ -492,15 +564,51 @@ function effortRow(c: Content): Row {
   return rows[rows.length - 2];
 }
 
-test("the toggle word is the owner's", () => {
-  assert.equal(SHIMMER_WORD, "Ultrachill");
+test("the toggle's word and its state are the owner's copy, read from content.json", () => {
+  const shipped = JSON.parse(readFileSync(new URL("../content.json", import.meta.url), "utf8"));
+  assert.deepEqual(loadContent().statusline.toggle, shipped.statusline.toggle);
+  assert.deepEqual(shipped.statusline.toggle, { word: "Ultrachill", state: "on" }, "the owner's joke, in their file");
+  assert.ok(!shipped.statusline.effortLabels.includes("Ultrachill"), "the toggle is not one of the effort labels");
+
+  // The generator spells neither of them: change the file and the Statusline changes with it.
+  const c = loadContent();
+  c.statusline.toggle = { word: "Overcaffeinated", state: "warm" };
+  const text = rowsToText([effortRow(c)]);
+  assert.ok(text.endsWith("Overcaffeinated warm"), text);
+  assert.ok(!text.includes("Ultrachill"), "the old word is still written into the generator");
+  assert.ok(!/ on$/.test(text), "the old state is still written into the generator");
+});
+
+test("the shimmer is a per-character stagger over a base copy, for a word of any length", () => {
+  for (const word of ["x", "Ultrachill", "Supercalifragilistic"]) {
+    const c = loadContent();
+    c.statusline.toggle = { word, state: "on" };
+    const row = effortRow(c);
+    const chars = [...word];
+    const base = row.runs.filter((r) => r.text === word && r.cls === undefined);
+    assert.equal(base.length, 1, `${word}: exactly one base copy`);
+    assert.equal(base[0].style, "muted");
+    const copy = row.runs.filter((r) => isShimmer(r.cls));
+    assert.equal(copy.length, chars.length, `${word}: one highlight run per character`);
+    copy.forEach((r, i) => {
+      assert.equal(r.cls, `shimmer-${i}`, `${word}: character ${i}`);
+      assert.equal(r.text, chars[i]);
+      assert.equal(r.style, "accent");
+      assert.equal(r.col, base[0].col + i, `${word}: character ${i} sits over its own letter of the base`);
+    });
+    const text = rowsToText([row]);
+    assert.ok(text.endsWith(`${word} on`), text);
+    assert.equal([...text].length, COLS, `${word}: the state ends on the last column`);
+  }
 });
 
 for (const [label, make] of CONTENTS) {
   test(`the word is drawn twice at one position, a muted base and an accent copy split per character (${label})`, () => {
-    const row = effortRow(make());
-    const chars = [...SHIMMER_WORD];
-    const base = row.runs.filter((r) => r.text === SHIMMER_WORD);
+    const c = make();
+    const word = c.statusline.toggle.word;
+    const row = effortRow(c);
+    const chars = [...word];
+    const base = row.runs.filter((r) => r.text === word);
     assert.equal(base.length, 1, "exactly one base copy");
     assert.equal(base[0].style, "muted");
     assert.equal(base[0].cls, undefined);
@@ -516,20 +624,52 @@ for (const [label, make] of CONTENTS) {
   });
 }
 
-test("the word reads once in the transcript, followed by on, and ends flush with the right edge", () => {
-  const lines = linesOf(composeSession(loadContent(), activity).rows);
-  const text = lines.join("\n");
-  assert.equal(text.split(SHIMMER_WORD).length - 1, 1, "the word is written twice in the transcript");
-  const effort = lines[lines.length - 2];
-  assert.ok(effort.endsWith(`${SHIMMER_WORD} on`), effort);
-  assert.equal([...effort].length, COLS);
-});
+for (const [label, make] of CONTENTS) {
+  test(`the word reads once in the transcript, followed by its state, flush with the right edge (${label})`, () => {
+    const c = make();
+    const { word, state } = c.statusline.toggle;
+    const lines = linesOf(composeSession(c, activity).rows);
+    const text = lines.join("\n");
+    assert.equal(text.split(word).length - 1, 1, "the word is written twice but must read once");
+    const effort = lines[lines.length - 2];
+    assert.ok(effort.endsWith(`${word} ${state}`), effort);
+    assert.equal([...effort].length, COLS);
+  });
+}
 
 test("the highlight copy lives in the same row as the word, in no other row", () => {
-  const { rows } = composeSession(loadContent(), activity);
+  const c = loadContent();
+  const { rows } = composeSession(c, activity);
   const withShimmer = rows.filter((r) => r.runs.some((run) => isShimmer(run.cls)));
   assert.equal(withShimmer.length, 1);
-  assert.ok(withShimmer[0].runs.some((run) => run.text === SHIMMER_WORD));
+  assert.ok(withShimmer[0].runs.some((run) => run.text === c.statusline.toggle.word));
+});
+
+// ---- the identity gate ----
+
+test("a forbidden name spelled by the Banner is caught by the scan of the transcript", async () => {
+  // The Banner is block art, so before the handle rode a text-only run nothing the art spelled
+  // reached rowsToText, and the ADR 0001 gate, which scans that text, was blind to it. The
+  // stand-in below is an invented word: the real name is never written down anywhere (ADR 0001).
+  const key = "PROFILE_FORBIDDEN_NAMES";
+  const saved = process.env[key];
+  process.env[key] = "Nobody";
+  try {
+    // A query on the specifier gets a fresh module, so it reads the variable set just above.
+    const fresh: typeof import("../src/content.ts") = await import(`../src/content.ts?banner-gate=${key}`);
+    assert.ok(fresh.FORBIDDEN_NAMES.includes("Nobody"), "the stand-in did not reach the list");
+    const c = loadContent();
+    c.handle = "Nobody";
+    const text = rowsToText(composeSession(c, activity).rows);
+    assert.ok(text.includes("Nobody"), "the Banner's word never reached the transcript");
+    assert.throws(() => fresh.assertNoForbiddenNames(text, "the transcript"), /forbidden name/);
+    // and a clean Banner still passes, so the gate is not simply always throwing
+    const ok = loadContent();
+    assert.doesNotThrow(() => fresh.assertNoForbiddenNames(rowsToText(composeSession(ok, activity).rows), "the transcript"));
+  } finally {
+    if (saved === undefined) delete process.env[key];
+    else process.env[key] = saved;
+  }
 });
 
 // ---- the inputs ----

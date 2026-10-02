@@ -171,7 +171,7 @@ Animation must only touch `opacity` and `transform`. No `filter`, `mask` or `blu
 | `lanes[]` | Each has a `label` and `repos[]`, each repo a `name` and a one-line `blurb` |
 | `stackRows[]` | Each has a `label` and `items[]`, printed as plain text |
 | `verbs` | Spinner words, grouped by Mascot state (`sleep`, `yawn`, `stretch`, `settle`, `startle`). A state with several words rotates through them while that state is on screen |
-| `statusline` | Effort labels, the selected one, and the mode badge |
+| `statusline` | Effort labels, the selected one, the mode badge, the note, and `toggle` (the shimmering word and the state it reads, e.g. `Ultrachill` / `on`). The toggle is not one of the effort labels, so it has its own key |
 
 Validation rules, all enforced at build time:
 
