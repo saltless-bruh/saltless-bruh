@@ -11,26 +11,19 @@ import type { Activity } from "./session.ts";
 import { assertFits, charsUsed, rowsToText } from "./rows.ts";
 import { assertCovered, subsetToBase64 } from "./font.ts";
 import { buildSvg } from "./svg.ts";
-import { bannerLetters } from "./banner.ts";
 import { mascotCss, mascotDefs } from "./mascot.ts";
 import { scanCss, scanDefs } from "./scan.ts";
 import { rampCss } from "./ramp.ts";
 import { renderReadme } from "./readme.ts";
 import {
-  bannerLetterClass, bannerRevealCss, bannerRevealSeconds,
   playbackClass, playbackCss, playbackMarks, playbackSeconds,
   shimmerCss, spinnerCss, verbRuns, verbSchedule,
 } from "./playback.ts";
-import { PALETTES } from "./tokens.ts";
 import type { ThemeName } from "./tokens.ts";
 
 const OUT_DIR = new URL("../assets/", import.meta.url);
 const FONT_REGULAR = new URL("../vendor/JetBrainsMono-Regular.ttf", import.meta.url);
 const FONT_BOLD = new URL("../vendor/JetBrainsMono-Bold.ttf", import.meta.url);
-
-/** Where the Mascot's scene sits: hard against the left edge of the Session's first row. */
-const MASCOT_COL = 0;
-const MASCOT_ROW = 0;
 
 export type BuildOptions = {
   /**
@@ -88,7 +81,7 @@ export async function build(opts?: BuildOptions): Promise<BuildResult> {
   const activity: Activity = loaded.activity;
 
   const session = composeSession(content, activity);
-  const { rows, bannerCol, bannerRow, scanRow, verbRow } = session;
+  const { rows, mascotRow, mascotCol, scanRow, verbRow } = session;
 
   // The spinner's drawn words. The column is read off the verb composeSession already placed on
   // that row rather than written down here, so the drawn verbs land exactly where the one the
@@ -122,14 +115,12 @@ export async function build(opts?: BuildOptions): Promise<BuildResult> {
   // Only the rows the playback owns get its hook. A row left out of the schedule must not carry a
   // class with no rule behind it, and more to the point must not look as though it were scheduled.
   const scheduled = new Set(marks.map((m) => m.row));
-  const letters = bannerLetters(content.handle, bannerCol, bannerRow);
   const tiers = content.statusline.effortLabels;
   const toggleChars = [...content.statusline.toggle.word].length;
   const topTierChars = [...tiers[tiers.length - 1]].length;
   // Everything here is the same in both variants, so it is built once.
   const motion = [
     playbackCss(marks),
-    bannerRevealCss(letters.length),
     spinnerCss(schedule),
     shimmerCss(toggleChars),
     mascotCss(),
@@ -141,12 +132,10 @@ export async function build(opts?: BuildOptions): Promise<BuildResult> {
     // The two Statusline ramps are the one part of the stylesheet that is NOT shared: both are
     // computed from the variant's own `muted` and `accent`, so each file carries its own.
     const css = `${motion}\n${rampCss(theme, toggleChars, topTierChars)}`;
-    const banner = letters
-      .map((l, i) => `<path class="${bannerLetterClass(i)}" d="${l.d}" fill="${PALETTES[theme].accent}"/>`)
-      .join("\n");
+    // Two pieces of geometry, not three: the Banner was retired when the Header became a shell
+    // prompt, and the Handle is now real text that `renderRows` draws like any other word.
     const defs = [
-      mascotDefs(MASCOT_COL, MASCOT_ROW, theme),
-      banner,
+      mascotDefs(mascotCol, mascotRow, theme),
       scanDefs(activity, scanRow, theme),
     ].join("\n");
     const svg = await buildSvg({
@@ -177,7 +166,9 @@ export async function build(opts?: BuildOptions): Promise<BuildResult> {
     transcript,
     readme,
     staleNote: loaded.staleNote,
-    playbackSeconds: Math.max(playbackSeconds(marks), bannerRevealSeconds(letters.length)),
+    // The Banner's stepped reveal used to run beside the playback and could outlast it, so this was
+    // the later of the two. With the Banner retired the playback is the only thing a reader waits on.
+    playbackSeconds: playbackSeconds(marks),
   };
 }
 

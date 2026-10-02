@@ -1,3 +1,17 @@
+// UNUSED BY THE SESSION as of 2026-10-02, RETAINED DELIBERATELY WITH ITS TESTS.
+//
+// The Header used to draw the Handle as block-art lettering beside the Mascot. Looked at live, the
+// wordmark and the pixel cat competed rather than complemented: same blocks, same Accent, same
+// weight, so the Header read as two drawings instead of one picture, and the wordmark floated at a
+// column that was not a margin while every rule below it ran to the grid's edge. The Header is now a
+// Kali-style shell prompt, where the Handle is real text, so nothing here is called by `src/build.ts`
+// any more.
+//
+// The owner wants this alphabet for the Landing Page, so it is kept, and its tests are kept with it
+// so it cannot rot silently between now and then. That is also why this note exists: an unused
+// module with no explanation is deleted by the next person who tidies up, and an unused module with
+// passing tests and a stated consumer is not. The per-letter reveal that animated it lives in
+// `src/playback.ts` and is retained on the same terms.
 import { artToPath } from "./blockart.ts";
 
 /**

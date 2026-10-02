@@ -2,8 +2,7 @@ import { COLS } from "./grid.ts";
 import type { Content } from "./content.ts";
 import { assertFits } from "./rows.ts";
 import type { Row, Run } from "./rows.ts";
-import { BANNER_ROWS, bannerWidthCols } from "./banner.ts";
-import { MASCOT_COLS, MASCOT_ROWS } from "./mascot.ts";
+import { MASCOT_ROWS } from "./mascot.ts";
 import { MASCOT_TIMELINE } from "./timeline.ts";
 // The window belongs to the module that trims the calendar to it. A second copy of it here
 // could drift from that one with no test noticing, which is the BREATHS_PER_LOOP mistake exactly.
@@ -18,11 +17,11 @@ export type Activity = {
 
 export type Session = {
   rows: Row[];
-  /** Rows above the first rule: the Mascot's rows, then the role and the cwd. */
+  /** Rows above the first rule: the prompt, the Mascot's band and the role line. */
   headerRows: number;
-  /** Where the Banner geometry goes: beside the Mascot, sharing its ground plane. */
-  bannerCol: number;
-  bannerRow: number;
+  /** First of the MASCOT_ROWS rows held empty for the Mascot, and the column it is drawn at. */
+  mascotRow: number;
+  mascotCol: number;
   /** First of the SCAN_ROWS rows held empty for the Scan Sweep geometry. */
   scanRow: number;
   /**
@@ -66,7 +65,20 @@ export const shimmerClass = (index: number): string => `${SHIMMER_PREFIX}${index
 export const gradientClass = (index: number): string => `gradient-${index}`;
 export const rainbowClass = (index: number): string => `rainbow-${index}`;
 
-/** The track's fragments, and the two split words, each named so the collision check can tell them apart. */
+/**
+ * The shell prompt's own marks. Structural glyphs carrying no lexical content, so they are Session
+ * Grammar and live here, by the same test that keeps the Handle, the host and the command in
+ * `content.json` (docs/spec.md 4.1). `㉿`, the circled KA in Kali's own prompt, is absent from
+ * JetBrains Mono (3.3), so `@` is the only spelling available and not a softened one.
+ */
+const PROMPT_OPEN = "┌─(";
+const PROMPT_AT = "@";
+const PROMPT_PATH_OPEN = ")-[";
+const PROMPT_PATH_CLOSE = "]";
+const PROMPT_SIGIL = "└─$";
+
+/** The track's fragments, the prompt, and the two split words, each named so the check tells them apart. */
+const PIECE_PROMPT = "shell-prompt";
 const PIECE_TRACK = "effort-track";
 const PIECE_TOP_TIER = "effort-top-tier";
 const PIECE_TOGGLE = "statusline-toggle";
@@ -77,8 +89,14 @@ const PIECE_TOGGLE = "statusline-toggle";
  */
 export const VERB_SUFFIX = "…";
 
-/** Free columns between the Mascot and the Banner. */
-const MASCOT_GAP = 2;
+/**
+ * Where the shell prompt's output lines up: under the COMMAND, not under the prompt's own sigil.
+ *
+ * Derived from the sigil plus the space after it, so a different sigil carries the Mascot and the
+ * role line with it. That is where a shell's output sits relative to what produced it, and it is
+ * what makes the Mascot read as something the command printed rather than as a picture placed there.
+ */
+const OUTPUT_COL = [...PROMPT_SIGIL].length + 1;
 /** Columns where the body text starts, after the prompt glyph and a space. */
 const BODY_COL = 2;
 /** Where a language name or a tool label starts, under the result glyph. */
@@ -212,30 +230,60 @@ export function assertNoCollisions(rows: Row[]): void {
 }
 
 export function composeSession(c: Content, a: Activity): Session {
-  const bannerCol = MASCOT_COLS + MASCOT_GAP;
-  const bannerEnd = bannerCol + bannerWidthCols(c.handle);
-  if (bannerEnd > COLS) {
-    throw new Error(`the banner for ${JSON.stringify(c.handle)} needs ${bannerEnd} columns, the Session is ${COLS}; use a shorter handle`);
-  }
-  // GROUNDED, not centred. The Mascot is a cat on a rack whose bottom row is a visible base line,
-  // so a wordmark centred on the Mascot's band hangs above that line with nothing under it and
-  // reads as floating. Bottom-aligning the two makes the Banner's last row and the rack's base one
-  // ground plane, and both rendered side by side the grounded one is plainly right. Derived from
-  // the two bands rather than written down, so a Banner of any height still lands on the floor.
-  const bannerRow = MASCOT_ROWS - BANNER_ROWS;
+  // THE HEADER IS A SHELL PROMPT, and the Mascot is what that prompt's command printed.
+  //
+  // It used to be a block-art wordmark beside the Mascot. Looked at live, the two competed: same
+  // blocks, same Accent, same weight, so they read as two drawings rather than as one picture, and
+  // the wordmark floated at a column that was not a margin while every rule below ran to the grid's
+  // edge. Repositioning it did not help, because where it sat was not the problem.
+  //
+  // This is the Kali Linux prompt, which anyone in offensive security recognises on sight, so the
+  // Header says what the owner does without a word about it. It also fixes what the wordmark could
+  // not: a wordmark is decoration dressed as a terminal, while a prompt IS a terminal, so the name
+  // stops being an object that has to justify itself and becomes the one place a name structurally
+  // belongs in a shell. The cat then reads as what the command printed, which is the first thing in
+  // this design to explain why there is a cat at all, and `❯ /whoami` below reads as an agent CLI
+  // running inside that shell, which is literally what the picture shows.
+  //
+  // `㉿`, the circled KA in Kali's own prompt, is ABSENT from JetBrains Mono, so `@` is the only
+  // option rather than a compromise. Every glyph here was checked against the real font.
+  //
+  // The path is the login with a `~/` in front of it, and there is no separate working-directory
+  // row any more: a path printed in the prompt and again on its own line is the same fact twice.
+  const head: Run[] = [];
+  let at = 0;
+  const part = (text: string, style: Run["style"]): void => {
+    head.push({ col: at, text, style, piece: PIECE_PROMPT });
+    at += cells(text);
+  };
+  // Chrome in `muted`, the Handle in the Accent, the host and the path in `text`. NOT `error` or
+  // `warning` on the host, however authentic a red root prompt is: both tokens already carry a
+  // meaning here and one colour means one thing (`tui-design`). The fragments share a piece, so
+  // they may sit shoulder to shoulder while the row still collides normally with anything else.
+  part(PROMPT_OPEN, "muted");
+  part(c.handle, "accent");
+  part(PROMPT_AT, "muted");
+  part(c.prompt.host, "text");
+  part(PROMPT_PATH_OPEN, "muted");
+  part(`~/${c.login}`, "text");
+  part(PROMPT_PATH_CLOSE, "muted");
+  const rows: Row[] = [{ runs: head }];
+  rows.push({ runs: [
+    { col: 0, text: PROMPT_SIGIL, style: "muted", piece: PIECE_PROMPT },
+    { col: OUTPUT_COL, text: c.prompt.command, style: "text", piece: PIECE_PROMPT },
+  ] });
+  rows.push(blank());
 
-  // Header. The Mascot and the Banner are geometry, so nothing is drawn as glyphs over their
-  // rows. The Banner's middle row still carries the handle as a text-only run, so the
-  // transcript names the owner and the forbidden-name scan can read what the block art spells.
-  // The role and the cwd get rows of their own under the Mascot, with the whole width to them.
-  const rows: Row[] = Array.from({ length: MASCOT_ROWS }, blank);
-  rows[bannerRow + Math.floor(BANNER_ROWS / 2)].runs.push({ col: bannerCol, text: c.handle, textOnly: true });
+  // The Mascot, as the command's output. Nothing is drawn as glyphs over its rows: it is geometry,
+  // and `mascotDefs` is told the same row and column. It lines up with the COMMAND and not with the
+  // prompt's own column, because that is where a shell's output lines up with what produced it.
+  const mascotRow = rows.length;
+  for (let r = 0; r < MASCOT_ROWS; r++) rows.push(blank());
   // The artwork fills its band to the last pixel: its ink reaches the bottom of the seventh row
   // with no margin of its own, and the role line's cap height starts a couple of units under that,
   // so the rack reads as glued to the text. One blank row is the margin the art does not carry.
   rows.push(blank());
-  rows.push({ runs: [{ col: 0, text: c.role, style: "bold" }] });
-  rows.push({ runs: [{ col: 0, text: c.cwd, style: "muted" }] });
+  rows.push({ runs: [{ col: OUTPUT_COL, text: c.role, style: "bold" }] });
   const headerRows = rows.length;
   rows.push(rule());
 
@@ -427,5 +475,5 @@ export function composeSession(c: Content, a: Activity): Session {
   // A Session that does not fit is not returned: the message names the row and its text.
   assertFits(rows);
   assertNoCollisions(rows);
-  return { rows, headerRows, bannerCol, bannerRow, scanRow, verbRow };
+  return { rows, headerRows, mascotRow, mascotCol: OUTPUT_COL, scanRow, verbRow };
 }

@@ -130,6 +130,10 @@ ${rules}
  * is the same intent (the name resolves rather than fading in) on the mechanism the architecture
  * actually has. The contract has been corrected to say so.
  */
+// UNUSED BY THE SESSION as of 2026-10-02, like `src/banner.ts` itself and for the same reason: the
+// Header is a shell prompt now and there is no block-art wordmark to reveal. Retained with its tests
+// so the Landing Page can have both the alphabet and the reveal that goes with it; the full note is
+// at the top of `src/banner.ts`.
 export const BANNER_FRAME = 0.045;
 
 /** Opacity of a letter's one flicker frame, before it settles. */

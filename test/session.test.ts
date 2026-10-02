@@ -36,8 +36,9 @@ const busy: Activity = {
 function altered(): Content {
   const c = loadContent();
   c.handle = "ZED";
+  c.login = "elsewhere";
+  c.prompt = { host: "box", command: "idling &" };
   c.role = "Reverse Engineering";
-  c.cwd = "~/elsewhere";
   c.whoami = ["only one line here"];
   c.lanes = [
     { label: "alpha/", repos: [{ name: "r-one", blurb: "first blurb" }] },
@@ -257,7 +258,7 @@ test("fragments of one drawn thing may touch, and still may not overlap", () => 
   // And the composed Session's own pieces are exactly the three the panel builds.
   const names = new Set(composeSession(loadContent(), busy).rows.flatMap((r) => r.runs.map((run) => run.piece)));
   names.delete(undefined);
-  assert.deepEqual([...names].sort(), ["effort-top-tier", "effort-track", "statusline-toggle"]);
+  assert.deepEqual([...names].sort(), ["effort-top-tier", "effort-track", "shell-prompt", "statusline-toggle"]);
 });
 
 test("no run is empty, so no empty element is drawn", () => {
@@ -306,100 +307,97 @@ test("each part of the session wears its own style", () => {
 
 // ---- the header ----
 
-test("the header is the Mascot's rows plus a blank, a role row and a cwd row, derived from the Mascot", () => {
-  const { rows, headerRows } = composeSession(loadContent(), activity);
-  assert.equal(headerRows, MASCOT_ROWS + 3, "the Mascot's band, the blank row under it, the role and the cwd");
-  const drawn = rows.slice(0, MASCOT_ROWS).map((r) => r.runs.filter((run) => !run.textOnly).length);
-  assert.deepEqual(drawn, Array(MASCOT_ROWS).fill(0), "no glyph may be drawn over the Mascot or the Banner");
+/** The two prompt rows, then a blank, the Mascot's band, a blank and the role line. */
+const HEADER_ROWS = 2 + 1 + MASCOT_ROWS + 1 + 1;
+
+test("the header is the shell prompt, a blank, the Mascot's band, a blank and the role line", () => {
+  const { rows, headerRows, mascotRow } = composeSession(loadContent(), activity);
+  assert.equal(headerRows, HEADER_ROWS);
+  assert.equal(mascotRow, 3, "the Mascot's band starts under the prompt and the blank row after it");
+  assert.deepEqual(rows[2].runs, [], "a blank row between the command and what it printed");
+  const band = rows.slice(mascotRow, mascotRow + MASCOT_ROWS);
+  assert.deepEqual(band.map((r) => r.runs.length), Array(MASCOT_ROWS).fill(0), "no glyph may be drawn over the Mascot");
+  assert.deepEqual(rows[mascotRow + MASCOT_ROWS].runs, [], "a blank row separates the artwork from the role line");
   assert.equal(rows[headerRows].runs.length, 1);
   assert.equal(rowsToText([rows[headerRows]]), "─".repeat(COLS), "a full-width rule closes the header");
 });
 
 for (const [label, make] of CONTENTS) {
-  test(`the Banner spells the handle for the transcript and draws no glyph for it (${label})`, () => {
+  test(`the header's first row is the shell prompt, spelled from the owner's own fields (${label})`, () => {
     const c = make();
-    const { rows, bannerCol, bannerRow } = composeSession(c, activity);
-    const band = rows.slice(bannerRow, bannerRow + BANNER_ROWS);
-    const carrying = band.filter((r) => r.runs.some((run) => run.text === c.handle && run.textOnly === true));
-    assert.equal(carrying.length, 1, "exactly one row of the Banner band carries the handle");
-    assert.equal(carrying[0].runs.find((run) => run.text === c.handle)!.col, bannerCol, "the word sits where the art does");
-    // The transcript is the no-image fallback, so it has to name the owner, once.
-    const lines = linesOf(rows);
-    assert.deepEqual(lines.filter((l) => l.includes(c.handle)), [" ".repeat(bannerCol) + c.handle]);
-    // Nothing draws it: the letters are block art, so a glyph here would print over the art.
-    assert.ok(!renderRows(rows).includes(c.handle), "the handle was drawn as text");
+    const { rows } = composeSession(c, activity);
+    // The whole point of the prompt is that the Handle is REAL TEXT in it. It used to reach the
+    // transcript through a text-only run shimmed onto the Banner's row, because the Banner was art
+    // with no text in it; one run now does both jobs and that special case is gone.
+    assert.equal(rowsToText([rows[0]]), `┌─(${c.handle}@${c.prompt.host})-[~/${c.login}]`);
+    assert.equal(rowsToText([rows[1]]), `└─$ ${c.prompt.command}`);
+    assert.ok(rows[0].runs.every((r) => r.textOnly === undefined), "the prompt carries a run the picture does not draw");
+    assert.ok(renderRows([rows[0]]).includes(c.handle), "the handle is not drawn as text");
+    // The path is the login with a mark in front of it, so it is never a second field to keep in
+    // step with the first, and it is NOT the handle, which is a different value (CONTEXT.md).
+    assert.ok(!rows[0].runs.some((r) => r.text === c.handle && r.style !== "accent"));
+    const styles = new Map(rows[0].runs.map((r) => [r.text, r.style]));
+    assert.equal(styles.get(c.handle), "accent", "the Handle wears the Accent");
+    assert.equal(styles.get(c.prompt.host), "text");
+    assert.equal(styles.get(`~/${c.login}`), "text");
+    for (const chrome of ["┌─(", "@", ")-[", "]"]) assert.equal(styles.get(chrome), "muted", chrome);
+    const second = new Map(rows[1].runs.map((r) => [r.text, r.style]));
+    assert.equal(second.get("└─$"), "muted", "the sigil is chrome");
+    assert.equal(second.get(c.prompt.command), "text", "the command is the owner's word");
+    // One piece, so the fragments may touch; nothing else on either row may.
+    assert.ok([...rows[0].runs, ...rows[1].runs].every((r) => r.piece === "shell-prompt"));
+  });
+
+  test(`the handle reads exactly once in the transcript, in the prompt (${label})`, () => {
+    const c = make();
+    const lines = linesOf(composeSession(c, activity).rows);
+    const carrying = lines.filter((l) => l.includes(c.handle));
+    assert.equal(carrying.length, 1, `the handle appears on ${carrying.length} lines`);
+    assert.equal(carrying[0], lines[0]);
   });
 }
 
 for (const [label, make] of CONTENTS) {
-  test(`the role and cwd each get their own full-width row under the Mascot (${label})`, () => {
+  test(`the Mascot and the role line sit under the command, not under the prompt (${label})`, () => {
     const c = make();
-    const { rows } = composeSession(c, activity);
-    assert.deepEqual(rows[MASCOT_ROWS].runs, [], "a blank row separates the artwork from the role line");
-    assert.deepEqual(rows[MASCOT_ROWS + 1].runs, [{ col: 0, text: c.role, style: "bold" }]);
-    assert.deepEqual(rows[MASCOT_ROWS + 2].runs, [{ col: 0, text: c.cwd, style: "muted" }]);
+    const { rows, headerRows, mascotCol } = composeSession(c, activity);
+    // Four columns: the sigil's three plus the space after it, which is where a shell's output
+    // lines up with what produced it. Read off the command's own column rather than written down.
+    assert.equal(mascotCol, linesOf(rows)[1].indexOf(c.prompt.command));
+    assert.deepEqual(rows[headerRows - 1].runs, [{ col: mascotCol, text: c.role, style: "bold" }]);
   });
 }
 
-test("a role the width of the whole Session fits and one column more is rejected", () => {
+test("a role as wide as the Session's remaining columns fits and one more is rejected", () => {
   const c = loadContent();
-  c.role = "r".repeat(COLS);
+  const { mascotCol } = composeSession(c, activity);
+  c.role = "r".repeat(COLS - mascotCol);
   assert.doesNotThrow(() => composeSession(c, activity));
-  c.role = "r".repeat(COLS + 1);
-  assert.throws(() => composeSession(c, activity), /needs 73 columns/);
+  c.role = "r".repeat(COLS - mascotCol + 1);
+  assert.throws(() => composeSession(c, activity), new RegExp(`needs ${COLS + 1} columns`));
 });
 
-test("the banner sits two columns clear of the Mascot and stands on its ground plane", () => {
+test("a prompt too wide for the Session is rejected rather than drawn off the edge", () => {
   const c = loadContent();
-  const { bannerCol, bannerRow } = composeSession(c, activity);
-  assert.equal(bannerCol, MASCOT_COLS + 2);
-  assert.ok(bannerRow >= 0 && bannerRow + BANNER_ROWS <= MASCOT_ROWS, "the banner must stay beside the Mascot");
-  // GROUNDED, not centred. The Mascot is a cat on a rack whose bottom row is a visible base line,
-  // so a wordmark centred on the band hangs over nothing and reads as floating. This says the two
-  // bands END together and says nothing about where the Banner starts, so it holds for a Banner of
-  // any height: the implementation may not satisfy it by writing down a row number.
-  assert.equal(bannerRow + BANNER_ROWS, MASCOT_ROWS, "the Banner's last row must be the Mascot's last row");
-  assert.ok(bannerRow > MASCOT_ROWS - (bannerRow + BANNER_ROWS), "a centred Banner would leave as much room below it as above");
-
-  // And so does the ink, read out of the geometry the two actually emit rather than from the rows.
-  // Both are built from `M x y h w v h h-w z` rectangles, so the lowest edge is the largest y + v.
-  const bottomOf = (d: string): number =>
-    Math.max(...[...d.matchAll(/M[\d.]+ ([\d.]+)h-?[\d.]+v([\d.]+)/g)].map((m) => Number(m[1]) + Number(m[2])));
-  const ground = PAD + MASCOT_ROWS * CELL_H;
-  const banner = bannerLetters(c.handle, bannerCol, bannerRow).map((l) => l.d).join("");
-  assert.equal(bottomOf(banner), ground, "the wordmark's lowest ink is not on the rack's base line");
-  assert.equal(bottomOf(mascotDefs(0, 0, "dark")), ground, "the rack's lowest ink is not where the band ends");
+  c.prompt = { host: "h".repeat(COLS), command: "x" };
+  assert.throws(() => composeSession(c, activity), /needs \d+ columns/);
+  const d = loadContent();
+  d.prompt = { host: "root", command: "c".repeat(COLS) };
+  assert.throws(() => composeSession(d, activity), /needs \d+ columns/);
 });
 
-test("a handle whose banner fills the space beside the Mascot fits and one column more does not", () => {
-  const room = COLS - (MASCOT_COLS + 2);
-  // N is a column wider than A, so swapping letters one at a time reaches every width.
-  const handleOfWidth = (width: number): string | undefined => Array.from({ length: 20 }, (_, n) => n + 1)
-    .flatMap((n) => Array.from({ length: n + 1 }, (_, k) => "N".repeat(k) + "A".repeat(n - k)))
-    .find((h) => bannerWidthCols(h) === width);
-  const exact = handleOfWidth(room);
-  const over = handleOfWidth(room + 1);
-  assert.ok(exact && over, "no handle of M and A has the width needed");
-  const c = loadContent();
-  c.handle = exact;
-  assert.doesNotThrow(() => composeSession(c, activity));
-  c.handle = over;
-  assert.throws(() => composeSession(c, activity), /banner/);
-});
-
-test("a handle far too wide to draw is refused by name, with the width it would need", () => {
-  const c = loadContent();
-  c.handle = "MAXIMUMOVERDRIVE";
-  const needed = MASCOT_COLS + 2 + bannerWidthCols(c.handle);
-  assert.ok(needed > COLS, "the probe handle has to be one that cannot fit");
-  assert.throws(
-    () => composeSession(c, activity),
-    (err) => err instanceof Error
-      && err.message.includes("MAXIMUMOVERDRIVE")
-      && err.message.includes(String(needed))
-      && err.message.includes(String(COLS)),
-    "the message must name the handle, the columns it needs and the columns there are",
-  );
+test("the Session draws no block-art wordmark any more, and the alphabet is still sound", () => {
+  // The Banner was retired from the Header: it and the pixel cat were the same visual language, so
+  // they competed. `src/banner.ts` is kept for the Landing Page, which is why this checks that it
+  // still works rather than that it is gone, and checks that nothing in the Session calls it.
+  assert.ok(bannerWidthCols("LAZIE") > 0 && BANNER_ROWS > 0, "the alphabet stopped working while unused");
+  const build = readFileSync(new URL("../src/build.ts", import.meta.url), "utf8");
+  assert.ok(!build.includes("bannerLetters("), "the build still draws the Banner");
+  const session = readFileSync(new URL("../src/session.ts", import.meta.url), "utf8");
+  assert.ok(!session.includes("banner.ts"), "the Session still imports the Banner");
+  const banner = readFileSync(new URL("../src/banner.ts", import.meta.url), "utf8");
+  assert.match(banner, /UNUSED BY THE SESSION/, "an unused module with no note is deleted by the next person");
+  assert.match(banner, /Landing Page/, "the note must name who the module is being kept for");
 });
 
 // ---- the commands ----
@@ -671,7 +669,7 @@ test("the Session is exactly the rows its parts need", () => {
   const { rows } = composeSession(c, activity);
   const repos = c.lanes.flatMap((lane) => lane.repos).length;
   const expected =
-      MASCOT_ROWS + 3                  // the Mascot's band, a blank, then the role and the cwd
+      HEADER_ROWS                      // the shell prompt, a blank, the Mascot's band, a blank, the role
     + 1                                // the rule closing the header
     + 1 + c.whoami.length + 1          // /whoami, its bullets, a blank
     + 1 + c.lanes.length + 2 * repos + 1   // /ops, a lane label and two rows per repo, a blank
@@ -682,8 +680,9 @@ test("the Session is exactly the rows its parts need", () => {
   assert.equal(rows.length, expected, "a row was added or lost somewhere in the composition");
   // Pinned absolutely as well, so every change to the budget is deliberate. The sweep reserving
   // 4 rows rather than the first draft's 8 took the Session from 57 to 53; the blank row the
-  // artwork needs under it puts one back; the Statusline becoming a panel adds eight more.
-  assert.equal(rows.length, 62);
+  // artwork needs under it puts one back; the Statusline becoming a panel adds eight more; the
+  // Header becoming a shell prompt adds two, two prompt rows and a blank for one cwd row.
+  assert.equal(rows.length, 64);
 });
 
 test("the Scan Sweep gets its own rows right under /activity, and the result line follows them", () => {
@@ -1192,19 +1191,19 @@ test("the artwork has no bottom margin of its own, which is why the role line ne
 });
 
 test("a blank row separates the artwork's last pixel from the role line's cap height", () => {
-  const { rows } = composeSession(loadContent(), activity);
+  const { rows, mascotRow } = composeSession(loadContent(), activity);
   const roleRow = rows.findIndex((r) => r.runs.some((run) => run.text === loadContent().role));
   assert.ok(roleRow > 0, "the role line is not in the Session");
 
-  const inkBottom = PAD + MASCOT_ROWS * CELL_H;                        // the artwork runs to here
+  const inkBottom = PAD + (mascotRow + MASCOT_ROWS) * CELL_H;          // the artwork runs to here
   const capTop = PAD + roleRow * CELL_H + BASELINE_IN_ROW - CAP_HEIGHT; // the role's ink starts here
   const gap = capTop - inkBottom;
 
   // One whole row of separation is the margin the artwork does not carry. Placing the role
   // immediately under the band leaves 2.9 units, which is what read as glued.
   assert.ok(gap >= CELL_H, `only ${gap} units between the rack and the role line, wanted at least one row (${CELL_H})`);
-  assert.equal(roleRow, MASCOT_ROWS + 1, "the role line sits one blank row below the artwork");
-  const glued = PAD + MASCOT_ROWS * CELL_H + BASELINE_IN_ROW - CAP_HEIGHT - inkBottom;
+  assert.equal(roleRow, mascotRow + MASCOT_ROWS + 1, "the role line sits one blank row below the artwork");
+  const glued = PAD + (mascotRow + MASCOT_ROWS) * CELL_H + BASELINE_IN_ROW - CAP_HEIGHT - inkBottom;
   assert.ok(glued < 3, `the fault being fixed should measure under 3 units, measured ${glued}`);
   assert.ok(gap > glued * 8, "the blank row must be a real separation, not a nudge");
 });

@@ -43,8 +43,15 @@ export type Verbs = Record<PoseName, string[]>;
  * `<details>` toggle. Both are read aloud, so both are the owner's (docs/spec.md 4.1).
  */
 export type ReadmeCopy = { imageAlt: string; transcriptSummary: string };
+/**
+ * The shell prompt the Header is built from: the host the Handle is logged in to, and the command
+ * whose output the Mascot is. Both are read aloud, so both are the owner's (docs/spec.md 4.1); the
+ * prompt's own marks are Session Grammar and stay in the generator, and the path is not here at all
+ * because it is the `login` with a `~/` in front of it.
+ */
+export type Prompt = { host: string; command: string };
 export type Content = {
-  handle: string; login: string; cwd: string; role: string; whoami: string[];
+  handle: string; login: string; prompt: Prompt; role: string; whoami: string[];
   lanes: Lane[]; stackRows: StackRow[]; verbs: Verbs;
   activityLine: ActivityLine; statusline: Statusline; readme: ReadmeCopy;
 };
@@ -149,7 +156,11 @@ function assertShape(c: unknown): asserts c is Content {
   // is queried by (CONTEXT.md). Nothing renders the login, but it is validated here like every
   // other string so a wrong one fails the build instead of returning no user from the API.
   accountName(c.login, "login");
-  text(c.cwd, "cwd");
+  // The Header's prompt. There is no separate working-directory field any more: the path the prompt
+  // prints is the login, and a path drawn twice is the same fact twice.
+  if (!isObj(c.prompt)) fail("prompt must be an object");
+  text(c.prompt.host, "prompt.host");
+  text(c.prompt.command, "prompt.command");
   text(c.role, "role");
 
   if (!Array.isArray(c.whoami) || c.whoami.length < 1 || c.whoami.length > 3) fail("whoami must have 1 to 3 lines");

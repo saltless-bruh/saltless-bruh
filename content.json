@@ -1,7 +1,7 @@
 {
   "handle": "LAZIE",
   "login": "saltless-bruh",
-  "cwd": "~/saltless-bruh",
+  "prompt": { "host": "root", "command": "napping &" },
   "role": "Offensive Security · Agentic AI Systems",
   "whoami": [
     "offensive security. agentic ai systems.",

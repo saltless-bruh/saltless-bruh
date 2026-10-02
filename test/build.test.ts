@@ -143,11 +143,17 @@ test("the transcript reproduces the Session as text, the Banner's name included"
   assert.ok(transcript.includes(`/${WINDOW_DAYS} `), "the activity line does not name its window");
 });
 
-test("the handle is drawn as geometry, never as text", async () => {
+test("the handle is drawn as text, once, inside the shell prompt", async () => {
   const content = loadContent();
   for (const [name, svg] of await svgsOf()) {
     const text = [...svg.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)].map((m) => m[1]).join("");
-    assert.ok(!text.includes(content.handle), `${name} draws the handle as glyphs instead of block art`);
+    // It used to be block art, which is why it needed a text-only run to reach the transcript at
+    // all. The prompt draws it, so one run does both jobs and that special case is gone.
+    assert.equal(text.split(content.handle).length - 1, 1, `${name} draws the handle ${text.split(content.handle).length - 1} times`);
+    // Right after the prompt's opening bracket: PAD + 3 cells, read off the grid rather than typed.
+    const x = 16 + [..."┌─("].length * 12;
+    assert.ok(svg.includes(`<tspan x="${x}" class="accent">${content.handle}</tspan>`), `${name} does not draw the handle in the Accent at the prompt's column`);
+    assert.ok(!/class="bl-\d+"/.test(svg), `${name} still carries a Banner letter path`);
   }
 });
 
@@ -249,18 +255,14 @@ test("the playback reaches the last row of the Session, not a fixed number of ro
 // The Banner's reveal, the verbs and the shimmer, as they land in the artifact
 // ---------------------------------------------------------------------------------------------
 
-test("the Banner is one path per letter, and together they draw the word", async () => {
-  const content = loadContent();
-  const letters = [...content.handle];
+test("no Banner geometry and no Banner reveal reach the artifact any more", async () => {
+  // The Banner was retired from the Header, and `src/banner.ts` is retained for the Landing Page
+  // rather than deleted, so the thing worth pinning is that nothing of it ships HERE. Its alphabet
+  // and its reveal keep their own tests in test/banner.test.ts and test/playback.test.ts.
   for (const [name, svg] of await svgsOf()) {
-    const paths = [...svg.matchAll(/<path class="(bl-\d+)" d="([^"]*)"/g)];
-    assert.equal(paths.length, letters.length, `${name} draws ${paths.length} letter paths for ${letters.length} letters`);
-    paths.forEach((m, i) => assert.equal(m[1], bannerLetterClass(i), `${name}: letter ${i} is out of order`));
-    const split = paths.flatMap((m) => m[2].split("M").filter(Boolean)).sort();
-    // The reference is the single-path Banner, so splitting it per letter cannot change the drawing.
-    const whole = bannerPath(content.handle, bannerLetters(content.handle, 0, 0)[0].col, 0);
-    assert.equal(split.length, whole.split("M").filter(Boolean).length, `${name}: the letters do not add up to the word`);
-    for (let i = 0; i < letters.length; i++) assert.ok(svg.includes(`.${bannerLetterClass(i)} {`), `${name}: letter ${i} has no rule`);
+    assert.ok(!/class="bl-\d+"/.test(svg), `${name} still draws a Banner letter`);
+    assert.ok(!svg.includes("banner-letter"), `${name} still carries the Banner's reveal`);
+    assert.ok(!svg.includes(`.${bannerLetterClass(0)} {`), `${name} still carries a Banner rule`);
   }
 });
 

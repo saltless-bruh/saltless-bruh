@@ -16,7 +16,7 @@ const VALID: Content = {
   // Deliberately unlike the handle: the two are different values and the fixture must not
   // let a generator confuse them.
   login: "tester-account",
-  cwd: "~/tester",
+  prompt: { host: "testhost", command: "testing &" },
   role: "Fixture role · with a middle dot",
   whoami: ["line one", "line two", "line three"],
   lanes: [
@@ -167,7 +167,7 @@ test("Vietnamese and the middle dot are drawable, so content may use them", () =
 
 test("the smallest valid document loads: one of everything", () => {
   const smallest: Content = {
-    handle: "H", login: "l", cwd: "c", role: "r", whoami: ["w"],
+    handle: "H", login: "l", prompt: { host: "h", command: "c" }, role: "r", whoami: ["w"],
     lanes: [{ label: "l/", repos: [{ name: "n", blurb: "b" }] }],
     stackRows: [{ label: "", items: ["i"] }],
     verbs: {
@@ -241,7 +241,7 @@ const STRUCTURE: [string, unknown, RegExp][] = [
   ["stackRows[0].items[1]", 5, /stackRows\[0\]\.items\[1\] must be a string/],
 
   // identity lines
-  ...["handle", "login", "cwd", "role"].flatMap((f): [string, unknown, RegExp][] => [
+  ...["handle", "login", "role", "prompt.host", "prompt.command"].flatMap((f): [string, unknown, RegExp][] => [
     [f, undefined, new RegExp(`${f} must be a string`)],
     [f, "   ", new RegExp(`${f} must not be blank`)],
     [f, 9, new RegExp(`${f} must be a string`)],
@@ -346,9 +346,9 @@ test("a file that is not JSON is rejected, and the message says so", () => {
 const EDITABLE = leaves(VALID).filter((p) => p !== "statusline.effortSelected" && p !== "login");
 
 test("the sweep covers every string in the document, so it cannot pass vacuously", () => {
-  assert.equal(leaves(VALID).length, 54);
+  assert.equal(leaves(VALID).length, 55);
   for (const expected of [
-    "handle", "whoami[2]", "lanes[1].repos[0].blurb", "stackRows[1].items[0]", "verbs.sleep[1]",
+    "handle", "prompt.host", "prompt.command", "whoami[2]", "lanes[1].repos[0].blurb", "stackRows[1].items[0]", "verbs.sleep[1]",
     "verbs.swat-down[0]", "verbs.recover[0]",
     "statusline.note", "statusline.toggle.word", "statusline.toggle.state", "statusline.effortWord",
     "statusline.effortEnds.start", "statusline.effortEnds.end",

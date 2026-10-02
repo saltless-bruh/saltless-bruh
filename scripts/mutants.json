@@ -1794,16 +1794,7 @@
     "replace": "  \"--headless\", \"--profile\", profile,\n  `--window-size=${s.width},2400`,"
   },
   {
-    "id": "S1 session: the wordmark goes back to floating in the middle of the Mascot's band",
-    "file": "src/session.ts",
-    "tests": [
-      "test/session.test.ts"
-    ],
-    "find": "  const bannerRow = MASCOT_ROWS - BANNER_ROWS;",
-    "replace": "  const bannerRow = Math.floor((MASCOT_ROWS - BANNER_ROWS) / 2);"
-  },
-  {
-    "id": "S2 session: the effort marker goes to the track's midpoint instead of the selection",
+    "id": "S1 session: the effort marker goes to the track's midpoint instead of the selection",
     "file": "src/session.ts",
     "tests": [
       "test/session.test.ts"
@@ -1812,7 +1803,7 @@
     "replace": "  const markerCol = Math.round((trackCol + trackEnd - 1) / 2);"
   },
   {
-    "id": "S3 session: the effort marker is read off the first level, whatever is selected",
+    "id": "S2 session: the effort marker is read off the first level, whatever is selected",
     "file": "src/session.ts",
     "tests": [
       "test/session.test.ts"
@@ -1821,7 +1812,7 @@
     "replace": "  const markerCol = centreCol(levelCols[0], tiers[0]);"
   },
   {
-    "id": "S4 session: a level is placed at its slot's left edge rather than centred on it",
+    "id": "S3 session: a level is placed at its slot's left edge rather than centred on it",
     "file": "src/session.ts",
     "tests": [
       "test/session.test.ts"
@@ -1830,7 +1821,7 @@
     "replace": "  return labels.map((_, i) => Math.round(trackCol + slot * i));"
   },
   {
-    "id": "S5 session: the slot edges are rounded first, so the levels drift along the row",
+    "id": "S4 session: the slot edges are rounded first, so the levels drift along the row",
     "file": "src/session.ts",
     "tests": [
       "test/session.test.ts"
@@ -1839,7 +1830,7 @@
     "replace": "  return labels.map((label, i) => Math.round(trackCol + Math.round(slot) * i + (Math.round(slot) - cells(label)) / 2));"
   },
   {
-    "id": "S6 session: the marker leans left of an even-width level instead of sitting on its centre",
+    "id": "S5 session: the marker leans left of an even-width level instead of sitting on its centre",
     "file": "src/session.ts",
     "tests": [
       "test/session.test.ts"
@@ -1848,7 +1839,7 @@
     "replace": "export const centreCol = (col: number, text: string): number => col + Math.floor((cells(text) - 1) / 2);"
   },
   {
-    "id": "S7 session: the selected level keeps its colour but loses its weight",
+    "id": "S6 session: the selected level keeps its colour but loses its weight",
     "file": "src/session.ts",
     "tests": [
       "test/session.test.ts"
@@ -1857,7 +1848,7 @@
     "replace": "      levels.push({ col: levelCols[i], text: label, style: picked ? \"accent\" : \"muted\" });"
   },
   {
-    "id": "S8 session: the rainbow follows the selection rather than marking the top tier",
+    "id": "S7 session: the rainbow follows the selection rather than marking the top tier",
     "file": "src/session.ts",
     "tests": [
       "test/session.test.ts"
@@ -1866,7 +1857,7 @@
     "replace": "    if (picked) {"
   },
   {
-    "id": "S9 session: the marker is painted like the track, so nothing but its shape marks the level",
+    "id": "S8 session: the marker is painted like the track, so nothing but its shape marks the level",
     "file": "src/session.ts",
     "tests": [
       "test/session.test.ts"
@@ -1875,7 +1866,7 @@
     "replace": "  const track: Run[] = [{ col: markerCol, text: \"▲\", style: \"muted\", piece: PIECE_TRACK }];"
   },
   {
-    "id": "S10 session: the panel's top border goes back to being an ordinary rule",
+    "id": "S9 session: the panel's top border goes back to being an ordinary rule",
     "file": "src/session.ts",
     "tests": [
       "test/session.test.ts"
@@ -1884,7 +1875,7 @@
     "replace": "  rows.push(rule());"
   },
   {
-    "id": "S11 session: the right column is sized by the toggle alone, so a longer hint runs off the grid",
+    "id": "S10 session: the right column is sized by the toggle alone, so a longer hint runs off the grid",
     "file": "src/session.ts",
     "tests": [
       "test/session.test.ts"
@@ -1893,7 +1884,7 @@
     "replace": "  const toggleCol = COLS - toggleWidth;"
   },
   {
-    "id": "S12 session: fragments of one piece are allowed to overlap, not merely to touch",
+    "id": "S11 session: fragments of one piece are allowed to overlap, not merely to touch",
     "file": "src/session.ts",
     "tests": [
       "test/session.test.ts"
@@ -1902,13 +1893,58 @@
     "replace": "          const gap = prev.piece && prev.piece === next.piece ? -1 : 1;"
   },
   {
-    "id": "S13 session: every run is allowed to touch its neighbour, not only a piece's own fragments",
+    "id": "S12 session: every run is allowed to touch its neighbour, not only a piece's own fragments",
     "file": "src/session.ts",
     "tests": [
       "test/session.test.ts"
     ],
     "find": "          const gap = prev.piece && prev.piece === next.piece ? 0 : 1;",
     "replace": "          const gap = 0;"
+  },
+  {
+    "id": "S13 session: the Mascot and the role line go back to column 0, so the output does not line up with the command",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "const OUTPUT_COL = [...PROMPT_SIGIL].length + 1;",
+    "replace": "const OUTPUT_COL = 0;"
+  },
+  {
+    "id": "S14 session: the prompt's path is spelled from the drawn Handle rather than from the login",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  part(`~/${c.login}`, \"text\");",
+    "replace": "  part(`~/${c.handle}`, \"text\");"
+  },
+  {
+    "id": "S15 session: the host is coloured as a privilege warning, which spends a token that already means something",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  part(c.prompt.host, \"text\");",
+    "replace": "  part(c.prompt.host, \"error\");"
+  },
+  {
+    "id": "S16 session: the Handle loses the Accent in the prompt and reads as chrome",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  part(c.handle, \"accent\");",
+    "replace": "  part(c.handle, \"muted\");"
+  },
+  {
+    "id": "S17 session: the blank row between the command and what it printed is dropped",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  rows.push(blank());\n\n  // The Mascot, as the command's output.",
+    "replace": "  // The Mascot, as the command's output."
   },
   {
     "id": "C1 ramp: the toggle's gradient is interpolated in sRGB instead of OKLab",
