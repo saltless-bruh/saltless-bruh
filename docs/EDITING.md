@@ -49,4 +49,8 @@ The easy way is `.env`, which is gitignored and never committed. Copy `.env.exam
 
 Set it the same way in CI, as a repository secret of the same name. The check also runs over everything fetched from the API.
 
-**Without it, `npm run gates` says so rather than passing.** The name scan reports itself as `ABSENT ... NOT CONFIGURED` instead of clean, because nothing was checked and that is not the same thing as nothing being wrong.
+**Setting it is optional.** The owner weighed their own name and chose not to (ADR 0001, amended 2026-10-02), so with nothing set the scan passes carrying a note that it scanned for nothing, and neither a build nor the daily refresh is held back. That note is deliberately not the same sentence as "the tree is clean", because nothing was checked and that is a different claim. Set it and the scan runs over every file a commit could carry and fails on a hit.
+
+**Do not put your handle or your login here.** They are what the profile exists to show, so they are in `content.json`, the README and both assets by design. The gate fails and says so, rather than listing the six files it is deliberately in.
+
+Two checks never depended on this and always run: the scan over everything fetched from the API, which is where a name you did not write could arrive, and a scan of the generated output for the placeholder that ships in `src/content.ts`.

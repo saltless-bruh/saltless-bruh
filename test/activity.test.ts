@@ -305,6 +305,30 @@ test("with the variable unset the failure names the variable and where to set it
   });
 });
 
+test("a 401 or a 403 blames the scope the API actually needs, and nothing else blames a scope", async () => {
+  // Found by a surviving mutant: nothing asserted this hint's wording, so the scope it named could
+  // be changed back to one the API does not need without a single test noticing. It is read at the
+  // moment somebody is deciding what is wrong with their credential, and docs/spec.md 5.2 measured
+  // on 2026-10-02 that `repo` is enough for the owner's own figures.
+  const statusOf = async (status: number): Promise<Error> => {
+    const { outcome } = await withStubbedFetch(
+      () => new Response("{}", { status }),
+      () => withToken(FAKE_TOKEN, () => githubTransport({ query: ACTIVITY_QUERY, variables: {} })),
+    );
+    assert.ok(outcome instanceof Error, `a ${status} was treated as a success`);
+    return outcome;
+  };
+  for (const status of [401, 403]) {
+    const e = await statusOf(status);
+    assert.match(e.message, new RegExp(String(status)), "the failure does not quote the status");
+    assert.match(e.message, /repo scope/, `the ${status} hint does not name the scope that matters`);
+    assert.doesNotMatch(e.message, /read:user/, `the ${status} hint blames a scope the API does not need`);
+  }
+  // A failure that is not about authorisation gets no scope advice at all, or the advice is noise
+  // on every outage.
+  assert.doesNotMatch((await statusOf(500)).message, /scope/, "a 500 is reported as a scope problem");
+});
+
 test("the scan over fetched data does not depend on anything being configured", async () => {
   // ADR 0001's amendment made the TREE scan opt-in. This one was never configuration-dependent and
   // must not become so: it is the path that matters most and the one nobody inspects, since a name
