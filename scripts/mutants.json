@@ -1974,12 +1974,12 @@
     "replace": "      { col: blockCol + cells(c.startup.colourWord) + 1, text: c.startup.model, style: \"error\" },"
   },
   {
-    "id": "S21 session: the startup block starts at the top of the Mascot's band instead of centring on it",
+    "id": "S21 session: the startup block starts at the top of the Mascot's band instead of sitting on its floor",
     "file": "src/session.ts",
     "tests": [
       "test/session.test.ts"
     ],
-    "find": "  const blockRow = mascotRow + Math.floor((MASCOT_ROWS - block.length) / 2);",
+    "find": "  const blockRow = mascotRow + MASCOT_ROWS - block.length;",
     "replace": "  const blockRow = mascotRow;"
   },
   {
@@ -2045,5 +2045,243 @@
     ],
     "find": "  const fits = (c: number): boolean => hues.every((h) => inGamut(colourAt(h, c)));",
     "replace": "  const fits = (c: number): boolean => hues.some((h) => inGamut(colourAt(h, c)));"
+  },
+  {
+    "id": "P1 pixelart: the clearance takes the NARROWEST frame, so every wider one is overlapped",
+    "file": "src/pixelart.ts",
+    "tests": [
+      "test/pixelart.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "find": "  return Math.max(...grids.map((g) => inkRight(g.rows))) - sharedInkLeft(grids) + 1;",
+    "replace": "  return Math.min(...grids.map((g) => inkRight(g.rows))) - sharedInkLeft(grids) + 1;"
+  },
+  {
+    "id": "P2 pixelart: the span is measured exclusively, so a clearance is one column short",
+    "file": "src/pixelart.ts",
+    "tests": [
+      "test/pixelart.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "find": "  return Math.max(...grids.map((g) => inkRight(g.rows))) - sharedInkLeft(grids) + 1;",
+    "replace": "  return Math.max(...grids.map((g) => inkRight(g.rows))) - sharedInkLeft(grids);"
+  },
+  {
+    "id": "P3 pixelart: the span is measured from the grid's edge rather than from the shared ink edge",
+    "file": "src/pixelart.ts",
+    "tests": [
+      "test/pixelart.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "find": "  return Math.max(...grids.map((g) => inkRight(g.rows))) - sharedInkLeft(grids) + 1;",
+    "replace": "  return Math.max(...grids.map((g) => inkRight(g.rows))) + 1;"
+  },
+  {
+    "id": "P4 pixelart: the right edge is read off the first row that paints, not the furthest",
+    "file": "src/pixelart.ts",
+    "tests": [
+      "test/pixelart.test.ts"
+    ],
+    "find": "  return Math.max(...xs);",
+    "replace": "  return xs[0];"
+  },
+  {
+    "id": "P5 pixelart: trailing spaces count as ink, so the right edge is the grid's own width",
+    "file": "src/pixelart.ts",
+    "tests": [
+      "test/pixelart.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "find": "  const xs = rows.map((row) => row.replace(/ +$/, \"\").length - 1).filter((x) => x >= 0);",
+    "replace": "  const xs = rows.map((row) => row.length - 1).filter((x) => x >= 0);"
+  },
+  {
+    "id": "P6 pixelart: a frame that drifts RIGHT is accepted, so the scene slides between frames",
+    "file": "src/pixelart.ts",
+    "tests": [
+      "test/pixelart.test.ts"
+    ],
+    "find": "    if (other.left !== first.left) {",
+    "replace": "    if (other.left < first.left) {"
+  },
+  {
+    "id": "S23 session: the lane's last repo keeps the branch connector, so nothing closes the lane",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "        { col: REPO_TREE_COL, text: last ? TREE_LAST : TREE_BRANCH, style: \"muted\" },",
+    "replace": "        { col: REPO_TREE_COL, text: TREE_BRANCH, style: \"muted\" },"
+  },
+  {
+    "id": "S24 session: the connector is derived from the FIRST position rather than the last",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "      const last = i === lane.repos.length - 1;",
+    "replace": "      const last = i === 0;"
+  },
+  {
+    "id": "S25 session: the continuation is carried under the last repo too, so the lane never ends",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "      const blurb: Run[] = last ? [] : [{ col: REPO_TREE_COL, text: TREE_CONTINUE, style: \"muted\" }];",
+    "replace": "      const blurb: Run[] = [{ col: REPO_TREE_COL, text: TREE_CONTINUE, style: \"muted\" }];"
+  },
+  {
+    "id": "S26 session: the continuation is dropped, so the branch has no spine between its repos",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "      const blurb: Run[] = last ? [] : [{ col: REPO_TREE_COL, text: TREE_CONTINUE, style: \"muted\" }];",
+    "replace": "      const blurb: Run[] = [];"
+  },
+  {
+    "id": "S27 session: the connector's column is written down rather than measured back from the name's",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "const REPO_TREE_COL = REPO_NAME_COL - (cells(TREE_BRANCH) + 1);",
+    "replace": "const REPO_TREE_COL = 3;"
+  },
+  {
+    "id": "S28 session: the eighth is floored, so every bar is up to an eighth short of its figure",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const eighths = Math.round((pct / 100) * width * 8);",
+    "replace": "  const eighths = Math.floor((pct / 100) * width * 8);"
+  },
+  {
+    "id": "S29 session: the eighth is ceiled, so every bar is up to an eighth long",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const eighths = Math.round((pct / 100) * width * 8);",
+    "replace": "  const eighths = Math.ceil((pct / 100) * width * 8);"
+  },
+  {
+    "id": "S30 session: the bar is rounded to whole columns, losing the sub-character precision",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const eighths = Math.round((pct / 100) * width * 8);",
+    "replace": "  const eighths = Math.round((pct / 100) * width) * 8;"
+  },
+  {
+    "id": "S31 session: the full block is read off the front of the eighths table instead of its end",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  return EIGHTHS[EIGHTHS.length - 1].repeat(full) + (part === 0 ? \"\" : EIGHTHS[part - 1]);",
+    "replace": "  return EIGHTHS[0].repeat(full) + (part === 0 ? \"\" : EIGHTHS[part - 1]);"
+  },
+  {
+    "id": "S32 session: the partial block is indexed by the eighth itself, so every tail is one too wide",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  return EIGHTHS[EIGHTHS.length - 1].repeat(full) + (part === 0 ? \"\" : EIGHTHS[part - 1]);",
+    "replace": "  return EIGHTHS[EIGHTHS.length - 1].repeat(full) + (part === 0 ? \"\" : EIGHTHS[part]);"
+  },
+  {
+    "id": "S33 session: the eighths table loses its full block, so every bar is drawn seven eighths wide",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "const EIGHTHS = \"▏▎▍▌▋▊▉█\";",
+    "replace": "const EIGHTHS = \"▏▎▍▌▋▊▉\";"
+  },
+  {
+    "id": "S34 session: a share that rounds away prints 0%, which reads as a language that failed to measure",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "export const pctLabel = (pct: number, bytes: number): string => (pct === 0 && bytes > 0 ? \"<1%\" : `${pct}%`);",
+    "replace": "export const pctLabel = (pct: number, bytes: number): string => (pct === 0 && bytes < 0 ? \"<1%\" : `${pct}%`);"
+  },
+  {
+    "id": "S35 session: <1% is printed for a language with no bytes at all, claiming something is there",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "export const pctLabel = (pct: number, bytes: number): string => (pct === 0 && bytes > 0 ? \"<1%\" : `${pct}%`);",
+    "replace": "export const pctLabel = (pct: number, bytes: number): string => (pct === 0 && bytes >= 0 ? \"<1%\" : `${pct}%`);"
+  },
+  {
+    "id": "S36 session: the figures are left-aligned again, so they are ragged on the digit that matters",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "    runs.push({ col: pctEnd - cells(pct), text: pct, style: \"muted\" });",
+    "replace": "    runs.push({ col: pctEnd - PCT_COLS, text: pct, style: \"muted\" });"
+  },
+  {
+    "id": "S37 session: the bar is dimmed to the muted token, so the figure is drawn like chrome",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "    if (bar !== \"\") runs.push({ col: barCol, text: bar, style: \"accent\" });",
+    "replace": "    if (bar !== \"\") runs.push({ col: barCol, text: bar, style: \"muted\" });"
+  },
+  {
+    "id": "S38 session: a bar that rounds away is pushed as an empty run, which draws an empty element",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "    if (bar !== \"\") runs.push({ col: barCol, text: bar, style: \"accent\" });",
+    "replace": "    runs.push({ col: barCol, text: bar, style: \"accent\" });"
+  },
+  {
+    "id": "S39 session: the bars start after the shortest name, so the longest name runs into its own bar",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const barCol = LIST_COL + Math.max(0, ...shares.map((s) => cells(s.name))) + SPACING;",
+    "replace": "  const barCol = LIST_COL + Math.min(99, ...shares.map((s) => cells(s.name))) + SPACING;"
+  },
+  {
+    "id": "S40 session: the tools lose their brackets and go back to reading as prose",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "    runs.push({ col: itemsCol, text: row.items.map((i) => `${TAG_OPEN}${i}${TAG_CLOSE}`).join(TAG_GAP), style: \"text\" });",
+    "replace": "    runs.push({ col: itemsCol, text: row.items.join(TAG_GAP), style: \"text\" });"
+  },
+  {
+    "id": "S41 session: the tags are spaced by the list gap as well as by their own brackets",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "    runs.push({ col: itemsCol, text: row.items.map((i) => `${TAG_OPEN}${i}${TAG_CLOSE}`).join(TAG_GAP), style: \"text\" });",
+    "replace": "    runs.push({ col: itemsCol, text: row.items.map((i) => `${TAG_OPEN}${i}${TAG_CLOSE}`).join(\" \".repeat(SPACING)), style: \"text\" });"
+  },
+  {
+    "id": "S42 session: the startup block goes back to centring on the band, which reads high",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const blockRow = mascotRow + MASCOT_ROWS - block.length;",
+    "replace": "  const blockRow = mascotRow + Math.floor((MASCOT_ROWS - block.length) / 2);"
   }
 ]

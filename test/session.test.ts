@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { loadContent } from "../src/content.ts";
 import type { Content } from "../src/content.ts";
-import { assertNoCollisions, centreCol, composeSession, languageShares, SCAN_ROWS, VERB_SUFFIX } from "../src/session.ts";
+import { assertNoCollisions, BAR_COLS, centreCol, composeSession, languageBar, languageShares, pctLabel, SCAN_ROWS, VERB_SUFFIX } from "../src/session.ts";
 import type { Activity } from "../src/session.ts";
 import { assertFits, rowsToText, renderRows, charsUsed } from "../src/rows.ts";
 import type { Row, Run } from "../src/rows.ts";
@@ -74,13 +74,41 @@ function sectionOf(lines: string[], command: string): string[] {
   return next < 0 ? rest : rest.slice(0, next);
 }
 
-/** The /stack section's language rows: name, whole percent, and the column the percent starts at. */
-function languageRows(lines: string[]): { name: string; pct: number; pctCol: number }[] {
+/** The eighth-block glyphs a bar is drawn from, one eighth through to eight. */
+const EIGHTHS = "▏▎▍▌▋▊▉█";
+
+/**
+ * The /stack section's language rows, read back off the printed line: the name, the bar's own
+ * glyphs, the figure as printed, and the column the figure ends in.
+ *
+ * `pct` is the figure as a number and is NaN for `<1%`, which is not one; `label` is what the row
+ * actually says. A row that rounds away draws no bar at all, so the bar group is allowed to be
+ * empty rather than being optional, which keeps the group indices the same for every row.
+ */
+function languageRows(lines: string[]): { name: string; bar: string; pct: number; label: string; pctEnd: number }[] {
   return sectionOf(lines, "/stack").flatMap((l) => {
-    const m = /^ {5}(\S.*?) {2,}(\d+)%$/.exec(l);
-    return m ? [{ name: m[1], pct: Number(m[2]), pctCol: l.length - (m[2].length + 1) }] : [];
+    const m = new RegExp(`^ {5}(\\S.*?) {2,}([${EIGHTHS}]*) *((?:<1|\\d+)%)$`).exec(l);
+    return m ? [{ name: m[1], bar: m[2], pct: Number(m[3].replace("%", "")), label: m[3], pctEnd: [...l].length }] : [];
   });
 }
+
+/** One lane's rows as /ops draws them: the label, then a connector row and a blurb row per repo. */
+function laneLines(lane: Content["lanes"][number]): string[] {
+  return [
+    `  ╰  ${lane.label}`,
+    ...lane.repos.flatMap((r, i) => {
+      const last = i === lane.repos.length - 1;
+      return [
+        `    ${last ? "└─" : "├─"} ${r.name}`,
+        (last ? " ".repeat(9) : `    │    `) + r.blurb,
+      ];
+    }),
+  ];
+}
+
+/** One tool row as /stack draws it: the label padded to its column, then the bracketed items. */
+const toolLine = (label: string, items: string[], gutter: number): string =>
+  (" ".repeat(5) + label.padEnd(gutter) + items.map((i) => `[${i}]`).join(" ")).trimEnd();
 
 const total = (xs: number[]): number => xs.reduce((s, x) => s + x, 0);
 
@@ -289,7 +317,16 @@ test("each part of the session wears its own style", () => {
   assert.deepEqual(stylesOf("TypeScript"), ["text"]);
   assert.deepEqual(stylesOf("56%"), ["muted"]);
   assert.deepEqual(stylesOf(stack.label), ["muted"]);
-  assert.deepEqual(stylesOf(stack.items.join("  ")), ["text"]);
+  assert.deepEqual(stylesOf(stack.items.map((i) => `[${i}]`).join(" ")), ["text"]);
+  // The tree's connectors are chrome and wear the muted token; the bars are a measured figure and
+  // wear the Accent, which is the colour every other fetched figure in the Session is drawn in.
+  for (const connector of ["├─", "└─", "│"]) {
+    assert.ok(stylesOf(connector).length > 0, `${connector} is not drawn anywhere`);
+    assert.ok(stylesOf(connector).every((st) => st === "muted"), `${connector} is not muted`);
+  }
+  const bars = runs.filter((r) => [...r.text].every((ch) => EIGHTHS.includes(ch)) && r.text !== "");
+  assert.ok(bars.length > 0, "no language bar is drawn");
+  assert.ok(bars.every((r) => r.style === "accent"), "a language bar is not drawn in the Accent");
   assert.deepEqual(stylesOf(resultLine(c, busy)), ["accent"]);
   // Two full-width rules: the one closing the header, and the Statusline panel's accent top border.
   assert.deepEqual(stylesOf("─".repeat(COLS)), ["muted", "accent"]);
@@ -360,7 +397,11 @@ for (const [label, make] of CONTENTS) {
     const carrying = lines.map((l, i) => [i, l] as const).filter(([, l]) => l.includes(c.handle));
     // Twice, and both are the owner's: the shell prompt names who is logged in, and the startup
     // block names what is starting up. It is the one word this Session repeats on purpose.
-    assert.deepEqual(carrying.map(([i]) => i), [0, mascotRow + 2], `the handle appears on lines ${carrying.map(([i]) => i)}`);
+    //
+    // The block's row is its FIRST line, and the block is grounded on the band, so that is three
+    // rows up from the band's last. Written that way rather than as a number, because the number
+    // changes if the block ever gains a line and the relationship does not.
+    assert.deepEqual(carrying.map(([i]) => i), [0, mascotRow + MASCOT_ROWS - 3], `the handle appears on lines ${carrying.map(([i]) => i)}`);
   });
 }
 
@@ -404,8 +445,12 @@ for (const [label, make] of CONTENTS) {
     const band = rows.slice(mascotRow, mascotRow + MASCOT_ROWS);
     const printed = band.map((r, i) => [i, rowsToText([r])] as const).filter(([, line]) => line.trim() !== "");
     assert.equal(printed.length, 3, "the block is three lines");
-    // Centred on the band, so the sprite and the text read as one block.
-    assert.deepEqual(printed.map(([i]) => i), [2, 3, 4]);
+    // GROUNDED on the band: the block's last line is level with the sprite's last row, so the two
+    // end on one floor. Expressed from the band's foot rather than as three row numbers, because
+    // that is the rule; the numbers are only what it comes to for a three-line block in seven rows.
+    assert.deepEqual(printed.map(([i]) => i), [MASCOT_ROWS - 3, MASCOT_ROWS - 2, MASCOT_ROWS - 1]);
+    assert.equal(printed[printed.length - 1][0], MASCOT_ROWS - 1, "the block's last line is not level with the sprite's last row");
+    assert.deepEqual(band.slice(0, MASCOT_ROWS - 3).flatMap((r) => r.runs), [], "the band's top rows are the sprite's alone");
     assert.deepEqual(printed.map(([, line]) => line), [
       " ".repeat(blockCol) + `${c.handle}  ${s.version}`,
       " ".repeat(blockCol) + `${s.colourWord} ${s.model}`,
@@ -473,28 +518,124 @@ for (const [label, make] of CONTENTS) {
   test(`/ops puts each repo's name on one row and its description indented on the next (${label})`, () => {
     const c = make();
     const section = sectionOf(linesOf(composeSession(c, activity).rows), "/ops");
-    const expected = c.lanes.flatMap((lane) => [
-      `  ╰  ${lane.label}`,
-      ...lane.repos.flatMap((r) => [" ".repeat(7) + r.name, " ".repeat(9) + r.blurb]),
-    ]);
-    assert.deepEqual(section, [...expected, ""]);
+    assert.deepEqual(section, [...c.lanes.flatMap(laneLines), ""]);
   });
 
   test(`/stack prints each tool row with its items aligned after the longest label (${label})`, () => {
     const c = make();
     const section = sectionOf(linesOf(composeSession(c, activity).rows), "/stack");
-    const longest = Math.max(...c.stackRows.map((r) => r.label.length));
-    const toolRows = c.stackRows.map((r) => (" ".repeat(5) + r.label.padEnd(longest + 2) + r.items.join("  ")).trimEnd());
+    const gutter = Math.max(...c.stackRows.map((r) => r.label.length)) + 2;
+    const toolRows = c.stackRows.map((r) => toolLine(r.label, r.items, gutter));
     assert.deepEqual(section.slice(section.length - 1 - toolRows.length), [...toolRows, ""]);
   });
 }
 
 test("a stack label longer than the old fixed column pushes its items along rather than running into them", () => {
   const c = loadContent();
-  c.stackRows[0].label = "x".repeat(20);
+  c.stackRows[0].label = "x".repeat(12);
   const section = sectionOf(linesOf(composeSession(c, activity).rows), "/stack");
   const row = section.find((l) => l.includes("metasploit"));
-  assert.equal(row, " ".repeat(5) + "x".repeat(20) + "  " + c.stackRows[0].items.join("  "));
+  assert.equal(row, toolLine("x".repeat(12), c.stackRows[0].items, 14));
+});
+
+test("every tool is bracketed, separated by one column, and a continuation row keeps its blank label", () => {
+  for (const [label, make] of CONTENTS) {
+    const c = make();
+    const section = sectionOf(linesOf(composeSession(c, activity).rows), "/stack");
+    const tools = section.slice(section.length - 1 - c.stackRows.length, section.length - 1);
+    const gutter = Math.max(...c.stackRows.map((r) => [...r.label].length)) + 2;
+    c.stackRows.forEach((row, i) => {
+      assert.equal(tools[i], toolLine(row.label, row.items, gutter), label);
+      for (const item of row.items) assert.ok(tools[i].includes(`[${item}]`), `${label}: ${item} is not bracketed`);
+      // One column between two tags. The brackets already separate them, so the list spacing on top
+      // of them would space them twice and cost two columns a row for nothing.
+      assert.ok(!tools[i].includes("]  ["), `${label}: two tags are separated twice over`);
+    });
+    const blank = c.stackRows.findIndex((r) => r.label === "");
+    assert.ok(blank > 0, `${label}: the content has no continuation row to check`);
+    assert.equal(tools[blank].indexOf("["), tools[blank - 1].indexOf("["), `${label}: the continuation does not align under the row above`);
+    assert.equal(tools[blank].slice(0, 5 + gutter).trim(), "", `${label}: the continuation printed a label`);
+  }
+});
+
+test("the shipped tool rows each land on ONE row with the brackets, measured against the real gutter", () => {
+  // The brief measured this at a 9-column gutter; the gutter the generator actually derives is
+  // wider, so it is re-measured here rather than taken on trust. The headroom is recorded so the
+  // next tool added to a row is weighed against a number instead of against an impression.
+  const c = loadContent();
+  const section = sectionOf(linesOf(composeSession(c, activity).rows), "/stack");
+  const tools = section.slice(section.length - 1 - c.stackRows.length, section.length - 1);
+  assert.equal(tools.length, c.stackRows.length, "a tool row wrapped onto a second row");
+  const widths = tools.map((l) => [...l].length);
+  assert.equal(Math.max(...widths), 64, "the widest shipped tool row, bracketed");
+  assert.ok(Math.max(...widths) <= COLS, `the widest tool row is ${Math.max(...widths)} of ${COLS} columns`);
+});
+
+test("the brackets cost two columns a tool, and a row that no longer fits is reported", () => {
+  // Stated rather than discovered. The widest shipped row is five tools, and bracketing them spends
+  // ten of the columns the label gutter was free to grow into. A row that overruns names itself.
+  const c = loadContent();
+  const widest = c.stackRows[0].items;
+  const bare = widest.join(" ".repeat(2)).length;
+  const tagged = widest.map((i) => `[${i}]`).join(" ").length;
+  assert.equal(tagged - bare, 2 * widest.length - (widest.length - 1), "two columns a tool, less the separator that shrank");
+  const room = COLS - 5 - 2 - tagged;
+  c.stackRows[0].label = "x".repeat(room);
+  assert.doesNotThrow(() => composeSession(c, activity));
+  c.stackRows[0].label = "x".repeat(room + 1);
+  assert.throws(() => composeSession(c, activity), /needs 73 columns/);
+});
+
+// ---- the /ops tree ----
+
+test("the connector comes from the repo's position: the last closes its lane, the rest carry it on", () => {
+  // Every lane size that can change the answer, including the lane of ONE, whose only repo is also
+  // its last. That is where a connector chosen from the front, or a flag written beside the repo,
+  // gives the wrong glyph and the other shapes do not notice.
+  for (const sizes of [[1], [2], [3], [1, 1], [4, 1, 2]]) {
+    const c = loadContent();
+    c.lanes = sizes.map((n, l) => ({
+      label: `lane-${l}/`,
+      repos: Array.from({ length: n }, (_, r) => ({ name: `repo-${l}-${r}`, blurb: `blurb ${l} ${r}` })),
+    }));
+    const section = sectionOf(linesOf(composeSession(c, activity).rows), "/ops");
+    assert.deepEqual(section, [...c.lanes.flatMap(laneLines), ""], `lanes of ${sizes.join(", ")}`);
+    // Counted as well as spelled, so a connector that happens to be right in one lane is not taken
+    // as evidence about the rest: exactly one closer per lane, wherever that lane happens to end.
+    assert.equal(section.filter((l) => l.includes("└─")).length, sizes.length, `lanes of ${sizes.join(", ")}: closers`);
+    assert.equal(
+      section.filter((l) => l.includes("├─")).length,
+      sizes.reduce((s, n) => s + n, 0) - sizes.length,
+      `lanes of ${sizes.join(", ")}: branches`,
+    );
+  }
+});
+
+test("the spine runs unbroken down a lane and stops under its last repo", () => {
+  // THE WHOLE POINT OF THE CONTINUATION, read as one column rather than as a set of rows: the lane
+  // is drawn as a line that ends, and what ends it is the one blank cell under the last name. A
+  // continuation dropped altogether leaves gaps in that column; one drawn under the last repo too
+  // leaves a line running into the next lane, which says the lane did not end.
+  const c = loadContent();
+  c.lanes = [{ label: "one/", repos: Array.from({ length: 4 }, (_, i) => ({ name: `r${i}`, blurb: `b${i}` })) }];
+  const section = sectionOf(linesOf(composeSession(c, activity).rows), "/ops");
+  const column = section.map((l) => [...l][4] ?? " ");
+  assert.deepEqual(column, [" ", "├", "│", "├", "│", "├", "│", "└", " ", " "]);
+});
+
+test("the tree is drawn into columns the indent was already spending on nothing", () => {
+  // The claim that this change costs no rows AND no columns. The names and the descriptions sit
+  // exactly where they sat before the connectors arrived, so nothing had to be re-measured.
+  const c = loadContent();
+  for (const lane of c.lanes) {
+    for (const repo of lane.repos) {
+      const lines = linesOf(composeSession(c, activity).rows);
+      const at = lines.findIndex((l) => l.endsWith(` ${repo.name}`) && l.trimStart().startsWith("├─") || l.endsWith(` ${repo.name}`) && l.trimStart().startsWith("└─"));
+      assert.ok(at >= 0, `${repo.name} has no connector row`);
+      assert.equal(lines[at].indexOf(repo.name), 7, `${repo.name} moved off column 7`);
+      assert.equal(lines[at + 1].indexOf(repo.blurb), 9, `${repo.name}'s description moved off column 9`);
+    }
+  }
 });
 
 // ---- repo descriptions ----
@@ -579,8 +720,8 @@ test("with no bytes at all a share is zero, never NaN, and an empty list is empt
 
 test("languages are shown as whole percentages that come from the bytes", () => {
   const text = rowsToText(composeSession(loadContent(), activity).rows);
-  assert.match(text, /Alpha\s+70%/);
-  assert.match(text, /Beta\s+30%/);
+  assert.match(text, /Alpha\s+█+[▏▎▍▌▋▊▉]?\s+70%/);
+  assert.match(text, /Beta\s+█+[▏▎▍▌▋▊▉]?\s+30%/);
 });
 
 test("the percentages on screen come from the byte counts, whatever the languages are", () => {
@@ -610,11 +751,153 @@ test("languages are listed by size even when the data arrives in another order",
   assert.deepEqual(shown.map((r) => r.name), ["Alpha", "Beta", "Gamma"]);
 });
 
-test("every percentage starts in the same column, clear of the longest language name", () => {
+test("every percentage ENDS in the same column, so the figures line up on the digit that matters", () => {
+  // Right-aligned, not left: these are numbers of different widths, and `<1%` is not even a number,
+  // so the only column they can all share is the one the `%` lands in. Left-aligning them puts
+  // `6%` and `90%` flush at the start and ragged at the end, which is what reads as unaligned.
+  for (const a of [busy, activity, { ...busy, languages: [{ name: "Solo", bytes: 10 }] }]) {
+    const shown = languageRows(linesOf(composeSession(loadContent(), a).rows));
+    assert.ok(shown.length > 0);
+    assert.equal(new Set(shown.map((r) => r.pctEnd)).size, 1, "the figures are ragged on the right");
+  }
+  // And the whole block clears the longest name with the bar's own field between the two.
   const shown = languageRows(linesOf(composeSession(loadContent(), busy).rows));
-  const longest = Math.max(...shown.map((r) => r.name.length));
-  assert.equal(new Set(shown.map((r) => r.pctCol)).size, 1, "percentages are ragged");
-  assert.ok(shown[0].pctCol >= 5 + longest + 2, "a percentage sits against the name before it");
+  const longest = Math.max(...shown.map((r) => [...r.name].length));
+  assert.equal(shown[0].pctEnd, 5 + longest + 2 + BAR_COLS + 2 + 4, "the figure's field is the bar's width plus its own");
+});
+
+test("the bar's left edge is one column for every language, so the lengths are comparable", () => {
+  // The whole point of a bar is that two of them can be compared by eye, which requires one origin.
+  // Starting each bar after its own name would make the longest-named language look the smallest.
+  for (const a of [busy, activity]) {
+    const lines = linesOf(composeSession(loadContent(), a).rows);
+    const starts = new Set(languageRows(lines).map((r) => {
+      const line = lines.find((l) => l.includes(r.name) && l.endsWith(r.label))!;
+      return r.bar === "" ? null : [...line].indexOf([...r.bar][0]);
+    }).filter((x) => x !== null));
+    assert.equal(starts.size, 1, "the bars do not share an origin");
+  }
+});
+
+// ---- the language bars ----
+
+test("the bar is drawn to the nearest eighth of a column, and the rounding CARRIES", () => {
+  // The three cases the brief asked for, at the shipped width, chosen because they straddle a whole
+  // block by less than half a point each and are therefore invisible by eye:
+  //
+  //   50% is 17.00 columns, exactly on a block;
+  //   47% is 15.98, JUST UNDER one, and rounds up to a whole block with no eighth after it;
+  //   48% is 16.32, just over, and keeps three eighths.
+  //
+  // 47% is the one that kills the obvious implementation. Flooring to whole columns and rounding
+  // what is left over separately gives 15 blocks and a remainder of 0.98, which rounds to an eighth
+  // eighth: a ninth sub-cell, or a glyph one past the end of the table.
+  assert.equal(languageBar(50), "█".repeat(17));
+  assert.equal(languageBar(47), "█".repeat(16));
+  assert.equal(languageBar(48), "█".repeat(16) + "▍");
+  assert.equal(languageBar(0), "", "nothing to draw draws nothing, not one empty cell");
+  assert.equal(languageBar(100), "█".repeat(BAR_COLS));
+});
+
+test("the owner's own figures draw the bars the design asked for", () => {
+  assert.equal(languageBar(90), "█".repeat(30) + "▋");
+  assert.equal(languageBar(6), "██");
+  assert.equal(languageBar(3), "█");
+  assert.equal(languageBar(1), "▍", "one percent is a third of a column, and it is drawn");
+});
+
+test("every whole percentage draws the length it names, to within the half eighth rounding costs", () => {
+  // The property, over all 101 of them, rather than the six the content happens to use. Both the
+  // carry and a floor-where-a-round-belongs show up here as a whole eighth of error.
+  for (let pct = 0; pct <= 100; pct++) {
+    const bar = [...languageBar(pct)];
+    assert.ok(bar.length <= BAR_COLS, `${pct}% is ${bar.length} columns, over ${BAR_COLS}`);
+    assert.match(languageBar(pct), /^█*[▏▎▍▌▋▊▉]?$/, `${pct}% is not whole blocks and at most one eighth: ${languageBar(pct)}`);
+    const eighths = bar.reduce((s, ch) => s + EIGHTHS.indexOf(ch) + 1, 0);
+    assert.ok(
+      Math.abs(eighths - (pct / 100) * BAR_COLS * 8) <= 0.5,
+      `${pct}% draws ${eighths} eighths, wanted ${(pct / 100) * BAR_COLS * 8}`,
+    );
+  }
+  const lengths = Array.from({ length: 101 }, (_, pct) => [...languageBar(pct)].length);
+  for (let pct = 1; pct <= 100; pct++) assert.ok(lengths[pct] >= lengths[pct - 1], `${pct}% is shorter than ${pct - 1}%`);
+});
+
+test("the bar scales with the width it is given, so the constant is the only thing to change", () => {
+  assert.equal(languageBar(100, 8), "█".repeat(8));
+  assert.equal(languageBar(50, 8), "█".repeat(4));
+  assert.equal(languageBar(1, 8), "▏", "0.64 of an eighth still rounds to a visible one");
+  assert.equal(languageBar(100, 1), "█");
+});
+
+test("the bar is drawn from the figure that is printed, never from the bytes behind it", () => {
+  // Two byte splits that round to the same whole percentages must draw the same bars. A bar taken
+  // from the raw share would differ between these by a fifth of a point, which is a figure nobody
+  // computed wearing the shape of a measurement (docs/spec.md 3.6).
+  const bars = (languages: Activity["languages"]): [string, string][] =>
+    languageRows(linesOf(composeSession(loadContent(), { ...activity, languages }).rows)).map((r) => [r.label, r.bar]);
+  const near = bars([{ name: "A", bytes: 6_990 }, { name: "B", bytes: 3_010 }]);   // 69.90 / 30.10
+  const over = bars([{ name: "A", bytes: 7_010 }, { name: "B", bytes: 2_990 }]);   // 70.10 / 29.90
+  assert.deepEqual(near, [["70%", languageBar(70)], ["30%", languageBar(30)]]);
+  assert.deepEqual(near, over, "the bars follow the bytes rather than the printed figure");
+});
+
+// ---- the languages that round away ----
+
+test("a share that rounds away prints <1%, and only when there is something there", () => {
+  assert.equal(pctLabel(0, 1), "<1%", "a language with bytes behind it is present and tiny");
+  assert.equal(pctLabel(0, 0), "0%", "nothing at all is not <1%, which claims something is there");
+  assert.equal(pctLabel(1, 100), "1%");
+  assert.equal(pctLabel(100, 9), "100%");
+});
+
+test("a sub-one-percent language keeps its row, with an empty bar beside <1%", () => {
+  // The owner's decision, pinned: these rows stay, and the pair of an empty bar and `<1%` is what
+  // says what is true of them. `0%` beside the same blank reads as a language that failed to
+  // measure, which is the one reading that is false.
+  const languages = [{ name: "Big", bytes: 999_000 }, { name: "Tiny", bytes: 500 }, { name: "Smaller", bytes: 1 }];
+  const shown = languageRows(linesOf(composeSession(loadContent(), { ...activity, languages }).rows));
+  assert.deepEqual(shown.map((r) => r.name), ["Big", "Tiny", "Smaller"], "a small language was dropped");
+  assert.deepEqual(shown.map((r) => r.label), ["100%", "<1%", "<1%"]);
+  assert.deepEqual(shown.map((r) => r.bar), [languageBar(100), "", ""], "a share that rounds away drew a bar");
+});
+
+test("with no bytes at all every language reads 0%, because nothing is there to be tiny", () => {
+  const languages = [{ name: "A", bytes: 0 }, { name: "B", bytes: 0 }];
+  const shown = languageRows(linesOf(composeSession(loadContent(), { ...activity, languages }).rows));
+  assert.deepEqual(shown.map((r) => r.label), ["0%", "0%"]);
+  assert.deepEqual(shown.map((r) => r.bar), ["", ""]);
+});
+
+test("the owner's real languages read as the design drew them, bars and figures together", () => {
+  const real = {
+    ...activity,
+    languages: [
+      { name: "Python", bytes: 3_585_978 }, { name: "Rust", bytes: 220_619 },
+      { name: "Go", bytes: 98_377 }, { name: "Shell", bytes: 50_835 },
+      { name: "HTML", bytes: 10_880 }, { name: "TypeScript", bytes: 6_989 },
+    ],
+  };
+  const shown = languageRows(linesOf(composeSession(loadContent(), real).rows));
+  assert.deepEqual(shown.map((r) => [r.name, r.bar, r.label]), [
+    ["Python", "█".repeat(30) + "▋", "90%"],
+    ["Rust", "██", "6%"],
+    ["Go", "█", "3%"],
+    ["Shell", "▍", "1%"],
+    ["HTML", "", "<1%"],
+    ["TypeScript", "", "<1%"],
+  ]);
+});
+
+test("a language name too long for its name, bar and figure is refused, not drawn off the edge", () => {
+  // The bar's width is a constant, so it costs the name field some of what it had. This states the
+  // limit that buys rather than leaving it to be found by a build failing on somebody's Perl.
+  const room = COLS - 5 - 2 - BAR_COLS - 2 - 4;
+  assert.equal(room, 25, "the longest language name /stack can print beside a bar");
+  const fits = { ...activity, languages: [{ name: "L".repeat(room), bytes: 10 }] };
+  assert.doesNotThrow(() => composeSession(loadContent(), fits));
+  const over = { ...activity, languages: [{ name: "L".repeat(room + 1), bytes: 10 }] };
+  assert.throws(() => composeSession(loadContent(), over), /needs 73 columns/);
 });
 
 test("with no languages to show, /stack holds only the tool rows", () => {
@@ -1205,10 +1488,12 @@ test("a description at column 9 starts at character 9 of its line, and a name at
   const c = loadContent();
   const { name, blurb } = c.lanes[0].repos[0];
   const lines = linesOf(composeSession(c, activity).rows);
-  const nameAt = lines.indexOf(" ".repeat(7) + name);
+  // The connector is at column 4 and the name still at 7: the tree is drawn into columns the
+  // indent was already spending on nothing, so neither the name nor the blurb moved.
+  const nameAt = lines.indexOf(`    ├─ ${name}`);
   assert.ok(nameAt >= 0, "the name row is missing");
   assert.equal(lines[nameAt].indexOf(name), 7);
-  assert.equal(lines[nameAt + 1], " ".repeat(9) + blurb);
+  assert.equal(lines[nameAt + 1], `    │    ${blurb}`);
   assert.equal(lines[nameAt + 1].indexOf(blurb), 9);
 });
 

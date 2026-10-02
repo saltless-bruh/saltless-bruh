@@ -135,6 +135,58 @@ const rule = (style: Run["style"] = "muted"): Row => ({ runs: [{ col: 0, text: "
 const isHighlight = (r: Run): boolean => r.cls?.startsWith(SHIMMER_PREFIX) ?? false;
 
 /**
+ * THE /ops TREE. What `tree(1)` prints, so the hierarchy is drawn rather than left to be inferred
+ * from an indent: `├─` for every repo but the last in its lane, `└─` for the last, and `│` carried
+ * down the blurb row beneath a non-last repo. On the LAST repo that column is blank, and that
+ * absence is what closes the branch.
+ *
+ * Every one of them comes from the repo's POSITION in its lane and from nothing else, so a lane
+ * holding one repo gets `└─` for exactly the reason the last of seven does, and no field in
+ * `content.json` can disagree with what is drawn.
+ *
+ * These are structural marks carrying no lexical content, so they are Session Grammar and live
+ * here (docs/spec.md 4.1), and they are the alphabet the Header's own `┌─`/`└─` prompt already
+ * spells: the Session gains no new vocabulary, which is what makes this terminal-native rather
+ * than a decoration drawn to look like one.
+ */
+const TREE_BRANCH = "├─";
+const TREE_LAST = "└─";
+const TREE_CONTINUE = "│";
+if (cells(TREE_BRANCH) !== cells(TREE_LAST)) {
+  throw new Error(`the two /ops connectors must be the same width or the names under them do not line up: ${TREE_BRANCH} is ${cells(TREE_BRANCH)} and ${TREE_LAST} is ${cells(TREE_LAST)}`);
+}
+/**
+ * Where a repo's connector is drawn: its name's column, back by the connector and the space after
+ * it. Derived, so a wider connector moves itself left instead of running into the name.
+ */
+const REPO_TREE_COL = REPO_NAME_COL - (cells(TREE_BRANCH) + 1);
+
+/**
+ * Columns the language bar is drawn in at a full 100%, and the field the percentage beside it is
+ * right-aligned in. `100%` is the widest figure that field can ever hold, and right-aligning is
+ * what puts every `%` in one column while `<1%` still ends where `90%` does.
+ *
+ * The bar's width is a constant rather than whatever is left over between the longest language
+ * name and the right margin: a figure whose drawn length changed with the longest name in the data
+ * would mean 90% was a different length in two builds of the same profile.
+ */
+export const BAR_COLS = 34;
+const PCT_COLS = 4;
+
+/**
+ * The eighth-block glyphs, one eighth through to eight eighths, all verified present in both faces
+ * of JetBrains Mono (docs/spec.md 3.3). The full block is read off the end of this table rather
+ * than written a second time, so the table is the single place the ramp is spelled.
+ */
+const EIGHTHS = "▏▎▍▌▋▊▉█";
+
+/** What wraps one tool, so a row reads as a set of discrete things rather than as a list of words. */
+const TAG_OPEN = "[";
+const TAG_CLOSE = "]";
+/** One column between two tags. The brackets already separate them, so SPACING would space them twice. */
+const TAG_GAP = " ";
+
+/**
  * The column a drawn word's own glyphs centre on.
  *
  * This is what the effort marker is placed from. An even-length word has no exact centre column, so
@@ -181,6 +233,44 @@ export function languageShares(langs: { name: string; bytes: number }[]): { name
   for (const i of byRest.slice(0, leftover)) parts[i].pct++;
   return parts.map(({ name, pct }) => ({ name, pct }));
 }
+
+/**
+ * One language's bar: `width` columns at a full 100%, drawn to the nearest EIGHTH of a column.
+ *
+ * The eighth blocks are what make the drawing worth having. A bar rounded to whole columns can only
+ * say 34 things, so at this width 3% and 5% are the same picture; an eighth is 0.37 of a point here,
+ * so the length a reader sees IS the figure printed beside it.
+ *
+ * And it is taken from that printed WHOLE PERCENTAGE rather than from the raw byte share, so the
+ * two can never disagree. A bar drawn from the bytes beside a number rounded from them would differ
+ * by up to half a point, which is a figure nobody computed wearing the shape of a measurement
+ * (docs/spec.md 3.6).
+ *
+ * THE ROUNDING HAPPENS ONCE, IN EIGHTHS, and the whole blocks are the whole part of that one
+ * figure. The obvious alternative, flooring to whole columns and rounding what is left over
+ * separately, is wrong exactly where no eye can check it: 47% of 34 columns is 15.98, whose
+ * leftover rounds to a ninth eighth, so that arithmetic emits either a 35th cell or a glyph one
+ * past the end of the table. Carrying is not a special case here; it is what `/ 8` already does.
+ */
+export function languageBar(pct: number, width: number = BAR_COLS): string {
+  const eighths = Math.round((pct / 100) * width * 8);
+  const full = Math.floor(eighths / 8);
+  const part = eighths % 8;
+  return EIGHTHS[EIGHTHS.length - 1].repeat(full) + (part === 0 ? "" : EIGHTHS[part - 1]);
+}
+
+/**
+ * How a share is printed. A language whose share rounds away is `<1%`, never `0%`.
+ *
+ * The owner keeps these rows rather than cutting them, and the pair of an empty bar and `<1%` says
+ * what is true of them: present, and too small to draw. `0%` beside the same empty bar reads as a
+ * language that failed to measure, which an earlier copy audit flagged, and it is also the one
+ * reading that is false.
+ *
+ * With no bytes at all there is nothing present to be tiny, so that stays `0%`: `<1%` is a claim
+ * about something being there.
+ */
+export const pctLabel = (pct: number, bytes: number): string => (pct === 0 && bytes > 0 ? "<1%" : `${pct}%`);
 
 /**
  * `assertFits` measures only where a row ends, so two runs placed on top of one another, or
@@ -309,9 +399,19 @@ export function composeSession(c: Content, a: Activity): Session {
     ],
     [{ col: blockCol, text: c.startup.status, style: "muted" }],
   ];
-  // Centred on the Mascot's band, so the sprite and the text read as one block rather than as a
-  // caption that happens to start at the top of the art.
-  const blockRow = mascotRow + Math.floor((MASCOT_ROWS - block.length) / 2);
+  // GROUNDED on the Mascot's band: the block's last line sits level with the sprite's last row, so
+  // the two end on one floor and the blank row and the role line below close both of them together.
+  //
+  // It was centred on the band until it was rendered both ways and looked at, which is what the
+  // brief asked for and had not been done. Centred reads high, and the artwork says why: the band's
+  // top two rows carry 47 of the sprite's 818 ink pixels, because up there the scene is a narrow cat
+  // and two wisps of a dream bubble, while the rack below is a full-width slab. The ink's own
+  // centroid is 4.35 rows down a 7-row band, so a block centred on the BAND sits a row and a third
+  // above the centre of the thing it is beside, and the whole lower right of the sprite is left
+  // empty. Grounded, the three lines land one per rack unit, the air that is left goes to the top
+  // right where the dream bubble already floats, and the block gains a rule a reader can see
+  // instead of a midpoint only the arithmetic knows about.
+  const blockRow = mascotRow + MASCOT_ROWS - block.length;
   block.forEach((runs, i) => rows[blockRow + i].runs.push(...runs));
   // The artwork fills its band to the last pixel: its ink reaches the bottom of the seventh row
   // with no margin of its own, and the role line's cap height starts a couple of units under that,
@@ -338,30 +438,57 @@ export function composeSession(c: Content, a: Activity): Session {
   command("/ops");
   for (const lane of c.lanes) {
     result(lane.label, "accent");
-    for (const repo of lane.repos) {
+    lane.repos.forEach((repo, i) => {
+      // DERIVED FROM THE POSITION, never written down beside the repo: the last one in the lane
+      // closes the branch and every other one carries it on, which is true of a lane of one as
+      // much as of a lane of seven.
+      const last = i === lane.repos.length - 1;
+      rows.push({ runs: [
+        { col: REPO_TREE_COL, text: last ? TREE_LAST : TREE_BRANCH, style: "muted" },
+        { col: REPO_NAME_COL, text: repo.name, style: "text" },
+      ] });
       // A name and its description share a row only if the description fits in what the
       // name leaves, which no useful sentence does. Two rows also read like real command output.
-      rows.push({ runs: [{ col: REPO_NAME_COL, text: repo.name, style: "text" }] });
-      rows.push({ runs: [{ col: REPO_BLURB_COL, text: repo.blurb, style: "muted" }] });
-    }
+      //
+      // The lane's own line continues down past the description, because the branch is not over
+      // until the next name; under the LAST repo there is nothing left to continue to, and that
+      // blank column is what the eye reads as the end of the lane.
+      const blurb: Run[] = last ? [] : [{ col: REPO_TREE_COL, text: TREE_CONTINUE, style: "muted" }];
+      blurb.push({ col: REPO_BLURB_COL, text: repo.blurb, style: "muted" });
+      rows.push({ runs: blurb });
+    });
   }
   rows.push(blank());
 
   command("/stack");
-  // Largest first, on a copy: the caller's activity is not reordered.
-  const shares = languageShares([...a.languages].sort((x, y) => y.bytes - x.bytes));
-  const pctCol = LIST_COL + Math.max(0, ...shares.map((s) => cells(s.name))) + SPACING;
-  for (const s of shares) {
-    rows.push({ runs: [
-      { col: LIST_COL, text: s.name, style: "text" },
-      { col: pctCol, text: `${s.pct}%`, style: "muted" },
-    ] });
-  }
+  // Largest first, on a copy: the caller's activity is not reordered. The sorted list is kept
+  // beside the shares, because the `<1%` rule needs to know whether a share that rounded away had
+  // any bytes behind it at all.
+  const sorted = [...a.languages].sort((x, y) => y.bytes - x.bytes);
+  const shares = languageShares(sorted);
+  const barCol = LIST_COL + Math.max(0, ...shares.map((s) => cells(s.name))) + SPACING;
+  // The figure is right-aligned at the far end of the bar's own field, so every `%` lands in one
+  // column whatever the digits before it, and `<1%` ends where `90%` does instead of starting there.
+  const pctEnd = barCol + BAR_COLS + SPACING + PCT_COLS;
+  shares.forEach((s, i) => {
+    const bar = languageBar(s.pct);
+    const pct = pctLabel(s.pct, sorted[i].bytes);
+    const runs: Run[] = [{ col: LIST_COL, text: s.name, style: "text" }];
+    // A share that rounds away draws no bar rather than an empty run: an element with nothing in
+    // it is still an element, and the blank beside `<1%` is the whole point of keeping the row.
+    if (bar !== "") runs.push({ col: barCol, text: bar, style: "accent" });
+    runs.push({ col: pctEnd - cells(pct), text: pct, style: "muted" });
+    rows.push({ runs });
+  });
   const itemsCol = LIST_COL + Math.max(0, ...c.stackRows.map((r) => cells(r.label))) + SPACING;
   for (const row of c.stackRows) {
     const runs: Run[] = [];
+    // A continuation row keeps its blank label and its items stay in the one column, so a row that
+    // ran on reads as the row above it carrying on rather than as a row of its own.
     if (row.label !== "") runs.push({ col: LIST_COL, text: row.label, style: "muted" });
-    runs.push({ col: itemsCol, text: row.items.join(" ".repeat(SPACING)), style: "text" });
+    // Bracketed, so a row of tools reads as a set of discrete things. Two words separated by spaces
+    // read as prose, and `peass-ng pspy` is then one tool or two depending on the reader.
+    runs.push({ col: itemsCol, text: row.items.map((i) => `${TAG_OPEN}${i}${TAG_CLOSE}`).join(TAG_GAP), style: "text" });
     rows.push({ runs });
   }
   rows.push(blank());
