@@ -50,8 +50,21 @@ export type ReadmeCopy = { imageAlt: string; transcriptSummary: string };
  * because it is the `login` with a `~/` in front of it.
  */
 export type Prompt = { host: string; command: string };
+/**
+ * The three lines printed beside the Mascot, mirroring an agent CLI's startup block.
+ *
+ * Labelled fragments, not a template (docs/spec.md 4.1), and the split in the middle line is the
+ * reason: `colourWord` is drawn in the colour it NAMES, so it has to be its own run, and the
+ * generator supplies only the space between the two halves.
+ *
+ * - `version` sits after the Handle on the first line.
+ * - `colourWord` plus `model` is the second, which parodies an agent CLI's model-effort-plan line
+ *   slot for slot.
+ * - `status` is the third.
+ */
+export type Startup = { version: string; colourWord: string; model: string; status: string };
 export type Content = {
-  handle: string; login: string; prompt: Prompt; role: string; whoami: string[];
+  handle: string; login: string; prompt: Prompt; startup: Startup; role: string; whoami: string[];
   lanes: Lane[]; stackRows: StackRow[]; verbs: Verbs;
   activityLine: ActivityLine; statusline: Statusline; readme: ReadmeCopy;
 };
@@ -161,6 +174,13 @@ function assertShape(c: unknown): asserts c is Content {
   if (!isObj(c.prompt)) fail("prompt must be an object");
   text(c.prompt.host, "prompt.host");
   text(c.prompt.command, "prompt.command");
+  // The startup block beside the Mascot. Four fields rather than three lines, because the word that
+  // is drawn in the colour it names has to be a fragment of its own.
+  if (!isObj(c.startup)) fail("startup must be an object");
+  text(c.startup.version, "startup.version");
+  text(c.startup.colourWord, "startup.colourWord");
+  text(c.startup.model, "startup.model");
+  text(c.startup.status, "startup.status");
   text(c.role, "role");
 
   if (!Array.isArray(c.whoami) || c.whoami.length < 1 || c.whoami.length > 3) fail("whoami must have 1 to 3 lines");

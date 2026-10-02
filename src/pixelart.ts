@@ -80,6 +80,21 @@ export function inkLeft(rows: string[]): number {
 }
 
 /**
+ * The rightmost pixel these rows paint.
+ *
+ * The counterpart of `inkLeft`, and deliberately NOT a shared edge: anything placed beside the
+ * scene has to clear its WIDEST frame, so the caller takes a maximum across the poses rather than
+ * demanding they agree. The left edge must agree because the scene is placed by it and would slide
+ * sideways otherwise; the right edge is only ever a clearance, and a tail that reaches further in
+ * one pose than another is the art working as intended.
+ */
+export function inkRight(rows: string[]): number {
+  const xs = rows.map((row) => row.replace(/ +$/, "").length - 1).filter((x) => x >= 0);
+  if (xs.length === 0) throw new Error("these rows paint nothing, so they have no right edge to measure");
+  return Math.max(...xs);
+}
+
+/**
  * The one left edge a set of grids share, for artwork drawn as several frames of the same scene.
  *
  * A caller that places a scene by its ink needs a single edge for the whole set: placing it by one

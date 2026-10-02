@@ -21,7 +21,9 @@ github.com/saltless-bruh
 │  │ ┌─(HANDLE@host)-[~/login]                                                    │ │
 │  │ └─$ <the command whose output the Mascot is>                                 │ │
 │  │                                                                              │ │
-│  │     [Mascot: cat asleep on rack]   rack LEDs blink -> Finding                │ │
+│  │     [Mascot: cat asleep on rack]  HANDLE  vVERSION                           │ │
+│  │      rack LEDs blink -> Finding   <colour word> <model line>                 │ │
+│  │                                   <status line>                              │ │
 │  │                                                                              │ │
 │  │     role line                                                                │ │
 │  │ ───────────────────────────────────────────────────────────────────────────  │ │
@@ -243,6 +245,19 @@ Everforest Hard with an aqua-green Accent. Every text role is at least 4.5:1 on 
 
 Rules: one Accent everywhere; the same hue in both variants with only lightness shifted; opaque window background with a 1px frame; status colours only inside command output and always paired with a glyph or word, never used as decoration.
 
+**One word in the Header breaks that last rule on purpose, and it is the only one.** The startup
+block's model line begins with the word `red`, drawn in the `error` token. `red cat` puns on `red
+hat`, which puns on `red team`, which is what the owner does, so drawing the word in the actual red
+makes the pun visual as well as verbal. The usual objection does not bite here because the word IS
+"red": a reader parses it as a colour being named, not as a fault state, which is the thing
+`tui-design`'s one-colour-one-meaning rule is protecting against. Measured: `error` is **5.16:1 on
+the dark window and 4.77:1 on the light one**, which is the same 4.5:1 every other text role clears.
+What it does NOT do is separate from the `muted` text beside it by lightness: that pair measures
+**1.10:1 in dark and 1.00:1 in light**, so the word is told from its line by hue alone and a protan
+or deutan reader will see one muted line. Nothing is lost when that happens except the pun's visual
+half, which is why it ships; the sentence reads the same either way. A second word in the `error`
+token would not be covered by any of this, and a test pins that there is exactly one.
+
 **The frame carries the window.** Everforest's own border colours are too faint against GitHub's canvases: the dark window body is only 1.08:1 from the dark-dimmed canvas and the light body is 1.03:1 from white, so without a visible edge the window simply dissolves into the page. The two border values above are hue-preserving lightenings of the Everforest borders, chosen to clear 3:1 against the worst canvas each one faces (dark `#677279` is 3.02:1 on dimmed and 3.84:1 on dark; light `#8d9978` is 3.02:1 on white).
 
 **Those three figures are the TOKENS. What renders is less, and at 308px the frame is not there at all.**
@@ -313,11 +328,18 @@ quoted that one length as though it were the rule, and a 58-row one measured 1.6
 
 **1.92s is the closest this has come to the ceiling, and it is worth saying out loud rather than
 discovering later.** The Statusline became a panel (eight rows) and the Header became a shell prompt (two),
-so ten rows arrived in one day and each one costs 26ms. Four more rows reach two seconds. The lever when
-that happens is the 26ms stagger, which is a design constant and not a measurement, NOT the row budget:
-cutting content to protect an animation would be the wrong trade, and the gap between a 1.9s reveal and a
-2.0s one is not something a reader can perceive anyway. The ceiling exists because tens of seconds is
-intolerable, not because two is a cliff.
+so ten rows arrived in one day and each one costs 26ms. Four more rows reach two seconds.
+
+> **THE NEXT ROWS ADDED TO THE SESSION MUST COME WITH A REDUCTION IN THE 26ms STAGGER.** That is the
+> lever, and it is the only one: the stagger is a design constant rather than a measurement, so it can
+> be retuned, while the row budget is the content and cutting content to protect an animation would be
+> the wrong trade. Nobody can perceive the difference between a 1.9s reveal and a 2.0s one; the ceiling
+> exists because tens of seconds is intolerable, not because two is a cliff. This is written as an
+> instruction rather than as an observation so that whoever adds row 69 finds the constraint here
+> instead of discovering it in a render.
+
+The startup block beside the Mascot cost nothing, because it prints into rows the sprite had already
+reserved. That is the shape to prefer when there is a choice.
 
 **There is no Banner reveal any more.** It resolved the wordmark letter by letter over 0.45s and was the
 Session's one moment of spectacle; the wordmark was retired with the Header (3.3), so the spectacle went
@@ -389,6 +411,7 @@ is the same for every value it decorates belongs to the generator (the spinner's
 | `handle` | The nickname the prompt spells, in the Accent |
 | `login` | The GitHub account name the API is queried by, e.g. `saltless-bruh`. It is a different value from `handle`, which is the nickname (CONTEXT.md: the Handle is both). The prompt's path is this with a `~/` in front of it, which is why **there is no `cwd` key**: a path kept in a second field is a path that can disagree with the account the figures came from, and printed in the prompt and again on its own row it is the same fact twice |
 | `prompt` | `host`, the machine the Handle is logged in to, and `command`, the one whose output the Mascot is. The prompt's own marks are Session Grammar and stay in the generator |
+| `startup` | The three lines printed beside the Mascot, as labelled fragments: `version` (after the Handle on the first line), `colourWord` and `model` (the second), and `status` (the third). The split in the middle line is not decoration: `colourWord` is DRAWN IN THE COLOUR IT NAMES, so it has to be a run of its own, and the generator supplies only the space between the two halves. The block's column is measured from the Mascot's own ink, so retouching the art moves the text instead of colliding with it |
 | `role` | The one-line role under the Mascot |
 | `whoami` | Up to 3 lines of copy |
 | `lanes[]` | Each has a `label` and `repos[]`, each repo a `name` and a one-line `blurb` |

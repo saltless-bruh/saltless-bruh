@@ -1,5 +1,5 @@
 import { CELL_H, CELL_W, PAD, colX } from "./grid.ts";
-import { inkLeft, loadGlyphs, loadGrid, parseGrid, runsOf, runsToPath, sharedInkLeft } from "./pixelart.ts";
+import { inkLeft, inkRight, loadGlyphs, loadGrid, parseGrid, runsOf, runsToPath, sharedInkLeft } from "./pixelart.ts";
 import type { Box, Grid, Run } from "./pixelart.ts";
 import { DREAMING, MASCOT_TIMELINE, MASTER_SECONDS } from "./timeline.ts";
 import type { PoseName } from "./timeline.ts";
@@ -102,6 +102,18 @@ for (const [name, grid] of Object.entries(POSES)) {
  * what `sharedInkLeft` holds, so a retouched pose fails the build rather than the eye.
  */
 export const MASCOT_INK_LEFT = sharedInkLeft(Object.values(POSES));
+
+/**
+ * How many COLUMNS of ink the scene actually occupies, from its shared left edge to the right edge
+ * of its widest pose. Measured from the artwork for the same reason `MASCOT_INK_LEFT` is: anything
+ * placed beside the Mascot has to clear it, and a hand-typed clearance silently stops being true
+ * the first time the art is retouched.
+ *
+ * It comes out fractional, because an art pixel is half a column wide and the ink is an odd number
+ * of pixels. A caller placing text beside it rounds UP, since half a column of overlap is overlap.
+ */
+export const MASCOT_INK_COLS =
+  (Math.max(...Object.values(POSES).map((g) => inkRight(g.rows))) - MASCOT_INK_LEFT + 1) * PX / CELL_W;
 
 // In each region a character is either painted or deliberately the window (`bg`); a table entry nothing uses is a mistake.
 const charsIn = (rows: string[]): Set<string> => new Set([...rows.join("")].filter((c) => c !== " "));

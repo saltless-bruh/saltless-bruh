@@ -1947,6 +1947,51 @@
     "replace": "  // The Mascot, as the command's output."
   },
   {
+    "id": "S18 session: the startup block is placed by the sprite's grid rather than by its ink, so it overlaps the art",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const blockCol = OUTPUT_COL + Math.ceil(MASCOT_INK_COLS) + MASCOT_GAP;",
+    "replace": "  const blockCol = OUTPUT_COL + Math.floor(MASCOT_INK_COLS) - 4;"
+  },
+  {
+    "id": "S19 session: the startup block loses the one word drawn in the colour it names",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "      { col: blockCol, text: c.startup.colourWord, style: \"error\" },",
+    "replace": "      { col: blockCol, text: c.startup.colourWord, style: \"muted\" },"
+  },
+  {
+    "id": "S20 session: the whole model line is drawn in the status token, not just the colour word",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "      { col: blockCol + cells(c.startup.colourWord) + 1, text: c.startup.model, style: \"muted\" },",
+    "replace": "      { col: blockCol + cells(c.startup.colourWord) + 1, text: c.startup.model, style: \"error\" },"
+  },
+  {
+    "id": "S21 session: the startup block starts at the top of the Mascot's band instead of centring on it",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const blockRow = mascotRow + Math.floor((MASCOT_ROWS - block.length) / 2);",
+    "replace": "  const blockRow = mascotRow;"
+  },
+  {
+    "id": "S22 session: the handle in the startup block stops wearing the Accent",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "      { col: blockCol, text: c.handle, style: \"accent\" },\n      // v0x7A69 is 31337 in decimal.",
+    "replace": "      { col: blockCol, text: c.handle, style: \"muted\" },\n      // v0x7A69 is 31337 in decimal."
+  },
+  {
     "id": "C1 ramp: the toggle's gradient is interpolated in sRGB instead of OKLab",
     "file": "src/ramp.ts",
     "tests": [

@@ -2,7 +2,7 @@ import { COLS } from "./grid.ts";
 import type { Content } from "./content.ts";
 import { assertFits } from "./rows.ts";
 import type { Row, Run } from "./rows.ts";
-import { MASCOT_ROWS } from "./mascot.ts";
+import { MASCOT_INK_COLS, MASCOT_ROWS } from "./mascot.ts";
 import { MASCOT_TIMELINE } from "./timeline.ts";
 // The window belongs to the module that trims the calendar to it. A second copy of it here
 // could drift from that one with no test noticing, which is the BREATHS_PER_LOOP mistake exactly.
@@ -97,6 +97,8 @@ export const VERB_SUFFIX = "…";
  * what makes the Mascot read as something the command printed rather than as a picture placed there.
  */
 const OUTPUT_COL = [...PROMPT_SIGIL].length + 1;
+/** Free columns between the Mascot's ink and the startup block printed beside it. */
+const MASCOT_GAP = 2;
 /** Columns where the body text starts, after the prompt glyph and a space. */
 const BODY_COL = 2;
 /** Where a language name or a tool label starts, under the result glyph. */
@@ -274,11 +276,43 @@ export function composeSession(c: Content, a: Activity): Session {
   ] });
   rows.push(blank());
 
-  // The Mascot, as the command's output. Nothing is drawn as glyphs over its rows: it is geometry,
-  // and `mascotDefs` is told the same row and column. It lines up with the COMMAND and not with the
-  // prompt's own column, because that is where a shell's output lines up with what produced it.
+  // The Mascot, as the command's output. It lines up with the COMMAND and not with the prompt's own
+  // column, because that is where a shell's output lines up with what produced it. `mascotDefs` is
+  // told the same row and column.
   const mascotRow = rows.length;
   for (let r = 0; r < MASCOT_ROWS; r++) rows.push(blank());
+
+  // THE STARTUP BLOCK, beside the Mascot, the way an agent CLI prints its own: sprite at the left
+  // and three lines at its right. It is what fills the fifty columns the sprite leaves empty, and it
+  // is voice rather than fact, which is why the role row below it stays.
+  //
+  // Its column is MEASURED, not chosen: the sprite's ink is `MASCOT_INK_COLS` wide, rounded up
+  // because half a column of overlap is overlap, plus the same two-column gap the Session already
+  // uses beside the artwork. Retouching the art moves the text instead of quietly colliding with it.
+  const blockCol = OUTPUT_COL + Math.ceil(MASCOT_INK_COLS) + MASCOT_GAP;
+  const block: Run[][] = [
+    [
+      { col: blockCol, text: c.handle, style: "accent" },
+      // v0x7A69 is 31337 in decimal. It is that number for that reason and not a round one, so it
+      // is not a version string to tidy into v1.0.0.
+      { col: blockCol + cells(c.handle) + SPACING, text: c.startup.version, style: "muted" },
+    ],
+    [
+      // `red` IS THE ONE PLACE A STATUS TOKEN IS SPENT ON A JOKE, and it is deliberate. `red cat`
+      // puns on `red hat`, which puns on `red team`, which is what the owner does, so drawing the
+      // word in the actual red makes the pun visual as well as verbal. The usual objection, that
+      // `error` means a fault everywhere else here, does not bite: the word IS "red", so a reader
+      // parses it as the colour being named and not as a state. Measured against both windows, it
+      // clears the same 4.5:1 every other text role does. Do not "correct" this to `muted`.
+      { col: blockCol, text: c.startup.colourWord, style: "error" },
+      { col: blockCol + cells(c.startup.colourWord) + 1, text: c.startup.model, style: "muted" },
+    ],
+    [{ col: blockCol, text: c.startup.status, style: "muted" }],
+  ];
+  // Centred on the Mascot's band, so the sprite and the text read as one block rather than as a
+  // caption that happens to start at the top of the art.
+  const blockRow = mascotRow + Math.floor((MASCOT_ROWS - block.length) / 2);
+  block.forEach((runs, i) => rows[blockRow + i].runs.push(...runs));
   // The artwork fills its band to the last pixel: its ink reaches the bottom of the seventh row
   // with no margin of its own, and the role line's cap height starts a couple of units under that,
   // so the rack reads as glued to the text. One blank row is the margin the art does not carry.

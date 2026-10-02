@@ -2,6 +2,12 @@
   "handle": "LAZIE",
   "login": "saltless-bruh",
   "prompt": { "host": "root", "command": "napping &" },
+  "startup": {
+    "version": "v0x7A69",
+    "colourWord": "red",
+    "model": "cat with lazy effort · self hosted",
+    "status": "agents working · operator horizontal"
+  },
   "role": "Offensive Security · Agentic AI Systems",
   "whoami": [
     "offensive security. agentic ai systems.",

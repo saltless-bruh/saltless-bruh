@@ -45,12 +45,16 @@ One slash-command invocation and its rendered output; the unit of content inside
 _Avoid_: section, card, block, widget
 
 **Header**:
-The opening of the Session: a shell prompt naming the Handle, the host and the path, the Mascot as that prompt's command output, and the role line.
+The opening of the Session: a shell prompt naming the Handle, the host and the path; the Mascot as that prompt's command output, with the Startup Block printed beside it; and the role line.
 _Avoid_: hero, welcome screen
 
 **Shell Prompt**:
 The two rows that open the Header, borrowed from Kali Linux: the Handle, the host and the path in a bracketed first row, and the command the Mascot is the output of in the second. It names the Handle in the one place a shell puts a name, and the Kali shape says what the owner does without a word about it.
 _Avoid_: banner, header line, title bar
+
+**Startup Block**:
+The three lines printed to the right of the Mascot, in the shape an agent CLI prints at startup: the Handle and a version, a model line parodying one, and a status line. It is voice, where the role line below it is fact; both are kept, because a visitor who reads only one line should still learn what the owner does.
+_Avoid_: tagline, strapline, subtitle
 
 **Banner**:
 The Handle spelled out in terminal block-art lettering. **No longer drawn by the Session**: it and the Mascot were the same visual language and competed, so the Shell Prompt replaced it. The alphabet is kept in `src/banner.ts`, with its tests, for the Landing Page.

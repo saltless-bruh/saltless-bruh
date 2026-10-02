@@ -148,8 +148,9 @@ test("the handle is drawn as text, once, inside the shell prompt", async () => {
   for (const [name, svg] of await svgsOf()) {
     const text = [...svg.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)].map((m) => m[1]).join("");
     // It used to be block art, which is why it needed a text-only run to reach the transcript at
-    // all. The prompt draws it, so one run does both jobs and that special case is gone.
-    assert.equal(text.split(content.handle).length - 1, 1, `${name} draws the handle ${text.split(content.handle).length - 1} times`);
+    // all. The prompt draws it, so one run does both jobs and that special case is gone. Twice,
+    // because the startup block beside the Mascot names it as well as the prompt does.
+    assert.equal(text.split(content.handle).length - 1, 2, `${name} draws the handle ${text.split(content.handle).length - 1} times`);
     // Right after the prompt's opening bracket: PAD + 3 cells, read off the grid rather than typed.
     const x = 16 + [..."┌─("].length * 12;
     assert.ok(svg.includes(`<tspan x="${x}" class="accent">${content.handle}</tspan>`), `${name} does not draw the handle in the Accent at the prompt's column`);

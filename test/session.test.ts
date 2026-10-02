@@ -8,7 +8,7 @@ import type { Activity } from "../src/session.ts";
 import { assertFits, rowsToText, renderRows, charsUsed } from "../src/rows.ts";
 import type { Row, Run } from "../src/rows.ts";
 import { BASELINE_IN_ROW, CELL_H, CELL_W, COLS, FONT_SIZE, PAD } from "../src/grid.ts";
-import { MASCOT_COLS, MASCOT_ROWS, mascotDefs } from "../src/mascot.ts";
+import { MASCOT_COLS, MASCOT_INK_COLS, MASCOT_ROWS, mascotDefs } from "../src/mascot.ts";
 import { MASCOT_TIMELINE as POSES_TIMELINE } from "../src/timeline.ts";
 import { BANNER_ROWS, bannerLetters, bannerWidthCols } from "../src/banner.ts";
 import { assertCovered } from "../src/font.ts";
@@ -315,8 +315,13 @@ test("the header is the shell prompt, a blank, the Mascot's band, a blank and th
   assert.equal(headerRows, HEADER_ROWS);
   assert.equal(mascotRow, 3, "the Mascot's band starts under the prompt and the blank row after it");
   assert.deepEqual(rows[2].runs, [], "a blank row between the command and what it printed");
+  // The Mascot's band carries the startup block beside the sprite, and nothing over the sprite.
   const band = rows.slice(mascotRow, mascotRow + MASCOT_ROWS);
-  assert.deepEqual(band.map((r) => r.runs.length), Array(MASCOT_ROWS).fill(0), "no glyph may be drawn over the Mascot");
+  const clear = Math.ceil(MASCOT_INK_COLS) + 4;
+  for (const [i, row] of band.entries()) {
+    for (const run of row.runs) assert.ok(run.col >= clear, `band row ${i}: ${JSON.stringify(run.text)} is drawn over the sprite`);
+  }
+  assert.equal(band.filter((r) => r.runs.length > 0).length, 3, "the startup block is three rows");
   assert.deepEqual(rows[mascotRow + MASCOT_ROWS].runs, [], "a blank row separates the artwork from the role line");
   assert.equal(rows[headerRows].runs.length, 1);
   assert.equal(rowsToText([rows[headerRows]]), "─".repeat(COLS), "a full-width rule closes the header");
@@ -348,12 +353,14 @@ for (const [label, make] of CONTENTS) {
     assert.ok([...rows[0].runs, ...rows[1].runs].every((r) => r.piece === "shell-prompt"));
   });
 
-  test(`the handle reads exactly once in the transcript, in the prompt (${label})`, () => {
+  test(`the handle reads in the prompt and in the startup block, and nowhere else (${label})`, () => {
     const c = make();
-    const lines = linesOf(composeSession(c, activity).rows);
-    const carrying = lines.filter((l) => l.includes(c.handle));
-    assert.equal(carrying.length, 1, `the handle appears on ${carrying.length} lines`);
-    assert.equal(carrying[0], lines[0]);
+    const { rows, mascotRow } = composeSession(c, activity);
+    const lines = linesOf(rows);
+    const carrying = lines.map((l, i) => [i, l] as const).filter(([, l]) => l.includes(c.handle));
+    // Twice, and both are the owner's: the shell prompt names who is logged in, and the startup
+    // block names what is starting up. It is the one word this Session repeats on purpose.
+    assert.deepEqual(carrying.map(([i]) => i), [0, mascotRow + 2], `the handle appears on lines ${carrying.map(([i]) => i)}`);
   });
 }
 
@@ -384,6 +391,55 @@ test("a prompt too wide for the Session is rejected rather than drawn off the ed
   const d = loadContent();
   d.prompt = { host: "root", command: "c".repeat(COLS) };
   assert.throws(() => composeSession(d, activity), /needs \d+ columns/);
+});
+
+for (const [label, make] of CONTENTS) {
+  test(`the startup block prints three lines beside the Mascot, clear of its ink (${label})`, () => {
+    const c = make();
+    const { rows, mascotRow, mascotCol } = composeSession(c, activity);
+    const s = c.startup;
+    // The column is MEASURED from the art, not chosen: the ink rounded up, plus the gap. Half a
+    // column of overlap is overlap, which is why this rounds up rather than to nearest.
+    const blockCol = mascotCol + Math.ceil(MASCOT_INK_COLS) + 2;
+    const band = rows.slice(mascotRow, mascotRow + MASCOT_ROWS);
+    const printed = band.map((r, i) => [i, rowsToText([r])] as const).filter(([, line]) => line.trim() !== "");
+    assert.equal(printed.length, 3, "the block is three lines");
+    // Centred on the band, so the sprite and the text read as one block.
+    assert.deepEqual(printed.map(([i]) => i), [2, 3, 4]);
+    assert.deepEqual(printed.map(([, line]) => line), [
+      " ".repeat(blockCol) + `${c.handle}  ${s.version}`,
+      " ".repeat(blockCol) + `${s.colourWord} ${s.model}`,
+      " ".repeat(blockCol) + s.status,
+    ]);
+    // Nothing of it reaches past the Session's own width, with the sprite's clearance taken first.
+    for (const [, line] of printed) assert.ok([...line].length <= COLS, line);
+  });
+
+  test(`the startup block's words are the owner's, and only the colour word is the colour (${label})`, () => {
+    const c = make();
+    const { rows, mascotRow } = composeSession(c, activity);
+    const s = c.startup;
+    const runs = rows.slice(mascotRow, mascotRow + MASCOT_ROWS).flatMap((r) => r.runs);
+    const styleOf = (text: string): string | undefined => runs.find((r) => r.text === text)?.style;
+    assert.equal(styleOf(c.handle), "accent", "the Handle wears the Accent");
+    assert.equal(styleOf(s.version), "muted");
+    assert.equal(styleOf(s.model), "muted");
+    assert.equal(styleOf(s.status), "muted");
+    // THE ONE PLACE A STATUS TOKEN IS SPENT ON A JOKE. The word IS the colour it is drawn in, so a
+    // reader parses it as a colour being named rather than as a fault; `red cat` puns on `red hat`
+    // puns on `red team`. Nothing ELSE in the block may wear it, which is what this pins.
+    assert.equal(styleOf(s.colourWord), "error", "the colour word is not drawn in the colour it names");
+    assert.equal(runs.filter((r) => r.style === "error").length, 1, "a second word wears the status token");
+  });
+}
+
+test("the startup block's version is the owner's joke and not a version string to tidy", () => {
+  const shipped = JSON.parse(readFileSync(new URL("../content.json", import.meta.url), "utf8"));
+  // 0x7A69 is 31337. Pinned with the arithmetic in the test rather than as a literal, so that
+  // "fixing" it to v1.0.0 fails with the reason on screen.
+  const hex = /^v0x([0-9A-Fa-f]+)$/.exec(shipped.startup.version);
+  assert.ok(hex, `the version is ${JSON.stringify(shipped.startup.version)}, which spells no number`);
+  assert.equal(parseInt(hex[1], 16), 31337, "the version must spell 31337, which is the whole joke");
 });
 
 test("the Session draws no block-art wordmark any more, and the alphabet is still sound", () => {
