@@ -258,6 +258,10 @@ test("the workflow's own secrets reference is not read as the secret itself", ()
   // fail on the workflow that exists to keep the token out of the tree.
   assert.deepEqual(findSecretShapes(`          ${TOKEN_ENV}: \${{ secrets.${TOKEN_ENV} }}\n`), []);
   assert.deepEqual(findSecretShapes(`${TOKEN_ENV}=\n`), [], "an empty value in .env.example is not a secret");
+  // The blank value must not reach past the end of its line for a character to match, which is
+  // why the whitespace around the `=` is horizontal only. `\s*` would read the next setting's
+  // name as this variable's value, and `.env.example` has a blank value by design.
+  assert.deepEqual(findSecretShapes(`${TOKEN_ENV}=\nOTHER_SETTING=value\n`), [], "a blank value reached forward into the next line");
   assert.deepEqual(findSecretShapes(`if [ -z "\${${TOKEN_ENV}}" ]; then\n`), []);
 });
 

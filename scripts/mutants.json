@@ -955,5 +955,482 @@
   ],
   "find": "  if (!isObj(c.readme)) fail(\"readme must be an object\");\n",
   "replace": ""
+ },
+ {
+  "id": "G1  gates: the name match made case-sensitive, so a lowercase spelling escapes",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    const hay = body.toLowerCase();",
+  "replace": "    const hay = body;"
+ },
+ {
+  "id": "G2  gates: the fallback walk stops at the top level",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    if (entry.isDirectory()) out.push(...walk(full, base));",
+  "replace": "    if (entry.isDirectory()) continue;"
+ },
+ {
+  "id": "G3  gates: only tracked files listed, so a new untracked file is never scanned",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    return git(\"ls-files\", \"-z\", \"--cached\", \"--others\", \"--exclude-standard\")",
+  "replace": "    return git(\"ls-files\", \"-z\", \"--cached\")"
+ },
+ {
+  "id": "G4  gates: git's ignore rules dropped, so the local credential file is scanned",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": ", \"--exclude-standard\")\n      .split(\"\\0\")",
+  "replace": ")\n      .split(\"\\0\")"
+ },
+ {
+  "id": "G5  gates: an empty needle list passes instead of being refused",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    throw new Error(\"the forbidden-name list is empty, so this scan would pass for every tree there is (ADR 0001)\");",
+  "replace": "    return [];"
+ },
+ {
+  "id": "G6  gates: an unconfigured name list reported as clean rather than unchecked",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "      gate: \"forbidden names\",\n      status: \"absent\",",
+  "replace": "      gate: \"forbidden names\",\n      status: \"pass\","
+ },
+ {
+  "id": "G7  gates: the GitHub token shape removed from the secret gate",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  { label: \"a GitHub token (gh?_ prefix)\", pattern: /\\bgh[pousr]_[A-Za-z0-9]{36,}/ },\n",
+  "replace": ""
+ },
+ {
+  "id": "G8  gates: nothing counts as credential-shaped, so an assigned secret escapes",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "const credentialShaped = (s: string): boolean =>\n  (/[a-z]/.test(s) && /[A-Z]/.test(s) && /[0-9]/.test(s)) || /^[0-9a-f]{32,}$/i.test(s);",
+  "replace": "const credentialShaped = (s: string): boolean => s === \"\";"
+ },
+ {
+  "id": "G9  gates: the hex arm dropped, so a legacy lowercase-hex token escapes",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": " || /^[0-9a-f]{32,}$/i.test(s);",
+  "replace": ";"
+ },
+ {
+  "id": "G10 gates: the keyword boundary back to \\b, which misses my_token =",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "const ASSIGNED_SECRET = /(?:^|[^A-Za-z0-9])(?:token|secret",
+  "replace": "const ASSIGNED_SECRET = /\\b(?:token|secret"
+ },
+ {
+  "id": "G11 gates: $ allowed as a value, so the workflow's own secrets reference reads as a secret",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "[^\\\\s\"'#,}$]`),",
+  "replace": "[^\\\\s\"'#,}]`),"
+ },
+ {
+  "id": "G12 gates: the whitespace widened, so a blank value reaches into the next line",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "`${TOKEN_ENV}[^\\\\S\\\\n]*[=:][^\\\\S\\\\n]*[\"']?[^\\\\s\"'#,}$]`",
+  "replace": "`${TOKEN_ENV}\\\\s*[=:]\\\\s*[\"']?[^\\\\s\"'#,}$]`"
+ },
+ {
+  "id": "G13 gates: the en-dash dropped from the dash gate",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "const DASHES: [string, string][] = [[\"\\u2014\", \"an em-dash\"], [\"\\u2013\", \"an en-dash\"]];",
+  "replace": "const DASHES: [string, string][] = [[\"\\u2014\", \"an em-dash\"]];"
+ },
+ {
+  "id": "G14 gates: the dash finding reports the index instead of the line",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "      if (line.includes(ch)) out.push(`line ${i + 1} carries ${name}`);",
+  "replace": "      if (line.includes(ch)) out.push(`line ${i} carries ${name}`);"
+ },
+ {
+  "id": "G15 gates: the control range narrowed, so a tab and a carriage return pass",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "const CONTROL = /[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f\\ufeff]/;",
+  "replace": "const CONTROL = /[\\u0000-\\u0008\\u000e-\\u001f]/;"
+ },
+ {
+  "id": "G16 gates: DEL, the C1 block and the byte order mark dropped",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "\\u007f-\\u009f\\ufeff]/;",
+  "replace": "]/;"
+ },
+ {
+  "id": "G17 gates: only the first absent glyph is looked for",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  for (const ch of FORBIDDEN_GLYPHS) {",
+  "replace": "  for (const ch of [...FORBIDDEN_GLYPHS].slice(0, 1)) {"
+ },
+ {
+  "id": "G18 gates: the reduced-motion check weakened to the media query alone",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "const REDUCED_MOTION = /@media\\s*\\(\\s*prefers-reduced-motion\\s*:\\s*reduce\\s*\\)\\s*\\{\\s*\\*\\s*\\{\\s*animation\\s*:\\s*none\\s*!\\s*important\\s*;?\\s*\\}/;",
+  "replace": "const REDUCED_MOTION = /@media\\s*\\(\\s*prefers-reduced-motion\\s*:\\s*reduce\\s*\\)/;"
+ },
+ {
+  "id": "G19 gates: the SMIL check removed, so motion that ignores the rule passes",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  const smil = SMIL.exec(svg);",
+  "replace": "  const smil = null as RegExpExecArray | null;"
+ },
+ {
+  "id": "G20 gates: dangling references compared against themselves, so none are ever dangling",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  const dangling = [...refs].filter((r) => !known.has(r)).sort();",
+  "replace": "  const dangling = [...refs].filter((r) => !refs.has(r)).sort();"
+ },
+ {
+  "id": "G21 gates: ids deduplicated before the duplicate check, which then finds none",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  const ids = [...svg.matchAll(/\\sid=\"([^\"]*)\"/g)].map((m) => m[1]);",
+  "replace": "  const ids = [...new Set([...svg.matchAll(/\\sid=\"([^\"]*)\"/g)].map((m) => m[1]))];"
+ },
+ {
+  "id": "G22 gates: the missing-viewBox check removed",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    out.push(\"no viewBox, so the picture cannot scale with the README column\");\n",
+  "replace": "\n"
+ },
+ {
+  "id": "G23 gates: the aspect-ratio tolerance widened, so letterboxing passes",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "        if (Math.abs(w / h - want) / want > 0.01) {",
+  "replace": "        if (Math.abs(w / h - want) / want > 100) {"
+ },
+ {
+  "id": "G24 gates: the size budget counted in characters instead of bytes",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  const bytes = Buffer.byteLength(svg, \"utf8\");",
+  "replace": "  const bytes = svg.length;"
+ },
+ {
+  "id": "G25 gates: the size budget raised tenfold",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "export const SIZE_BUDGET_BYTES = 250_000;",
+  "replace": "export const SIZE_BUDGET_BYTES = 2_500_000;"
+ },
+ {
+  "id": "G26 gates: a stripped <style> element no longer refused in the README",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  [/<style/i, \"a <style> element\"],\n",
+  "replace": ""
+ },
+ {
+  "id": "G27 gates: a stripped inline style attribute no longer refused in the README",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  [/style=/i, \"an inline style attribute\"],\n",
+  "replace": ""
+ },
+ {
+  "id": "G28 gates: the asset check reads the README instead of the filesystem",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    if (src !== null && !exists(src)) out.push(`references ${src}, which is not there`);",
+  "replace": "    if (src !== null && !readme.includes(src)) out.push(`references ${src}, which is not there`);"
+ },
+ {
+  "id": "G29 gates: a README with no transcript block passes",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    out.push(\"no <details> transcript block, so the Session's words reach no screen reader, search engine or copy-paste (ADR 0004)\");\n",
+  "replace": ""
+ },
+ {
+  "id": "G30 gates: a transcript outside a fence passes, so the column grid can collapse",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    out.push(\"the transcript is not inside a fenced code block, so its column grid collapses into prose\");\n",
+  "replace": ""
+ },
+ {
+  "id": "G31 gates: absent folded into pass, so an unbuilt output reports success",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  if (results.some((r) => r.status === \"absent\")) return 3;\n",
+  "replace": ""
+ },
+ {
+  "id": "G32 gates: absent outranks fail, so a failure is reported as not-built",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  if (results.some((r) => r.status === \"fail\")) return 1;\n  if (results.some((r) => r.status === \"absent\")) return 3;",
+  "replace": "  if (results.some((r) => r.status === \"absent\")) return 3;\n  if (results.some((r) => r.status === \"fail\")) return 1;"
+ },
+ {
+  "id": "G33 gates: the type check's exit status ignored",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    results.push(tsc.ok ? pass(\"typecheck\", \"npm run typecheck exited 0\") : fail(\"typecheck\", \"npm run typecheck\", [tsc.output]));",
+  "replace": "    results.push(pass(\"typecheck\", \"npm run typecheck exited 0\"));"
+ },
+ {
+  "id": "G34 gates: a cache with no timestamp passes, so stale figures read as fresh",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "        problems.push(\"carries no fetchedAt timestamp, so the age of the figures would read as zero\");\n",
+  "replace": ""
+ },
+ {
+  "id": "G35 gates: an empty calendar passes, so the Scan Sweep has nothing real to draw",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "      if (!Array.isArray(file.activity?.calendar) || file.activity.calendar.length === 0) {",
+  "replace": "      if (!Array.isArray(file.activity?.calendar)) {"
+ },
+ {
+  "id": "G36 gates: the placeholder gate removed, so it can leak into a published surface",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  results.push(visible.length === 0\n    ? absent(\"placeholder names\", [GENERATED.readme, \"content.json\"])\n    : verdict(\"placeholder names\", visible.join(\", \"), placeholders));\n",
+  "replace": ""
+ },
+ {
+  "id": "G37 gates: the generated assets dropped from the dash gate's scope",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    results.push(verdict(\"dashes in the assets\", svgPaths.join(\", \"), over(findDashes)));\n",
+  "replace": ""
+ },
+ {
+  "id": "G38 gates: the owner's copy dropped from the dash gate's scope",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    results.push(verdict(\"dashes in content.json\", \"content.json\", findDashes(read(\"content.json\")).map((d) => `content.json ${d}`)));\n",
+  "replace": ""
+ },
+ {
+  "id": "G39 gates: an absence no longer says which path is missing",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  ({ gate, status: \"absent\", detail: `not built yet: ${missing.join(\", \")}`, problems: [] });",
+  "replace": "  ({ gate, status: \"absent\", detail: \"not built yet\", problems: [] });"
+ },
+ {
+  "id": "G40 gates: a failure reported in the words of an absence",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    ? \"\\nGATES FAILED. Each line above says what is wrong and in which file.\"",
+  "replace": "    ? \"\\nNOT BUILT YET.\""
+ },
+ {
+  "id": "W1  refresh: the fetch handed the built-in GITHUB_TOKEN",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "          PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run build",
+  "replace": "          PROFILE_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run build"
+ },
+ {
+  "id": "W2  refresh: the cache dropped from the commit, so it is discarded every day",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "          git add -- assets cache README.md",
+  "replace": "          git add -- assets README.md"
+ },
+ {
+  "id": "W3  refresh: the change guard watches fewer paths than the commit adds",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "git status --porcelain -- assets cache README.md",
+  "replace": "git status --porcelain -- assets README.md"
+ },
+ {
+  "id": "W4  refresh: the gates step removed, so the publish is ungated",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "      - name: Gate the result before any of it is published\n        env:\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run gates\n\n",
+  "replace": ""
+ },
+ {
+  "id": "W5  refresh: the change guard removed, so it commits on every run",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "          if [ -z \"$(git status --porcelain -- assets cache README.md)\" ]; then\n            echo \"assets, cache and README.md are all unchanged; nothing to commit\"\n            exit 0\n          fi\n",
+  "replace": ""
+ },
+ {
+  "id": "W6  refresh: the permissions widened past what a push needs",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "permissions:\n  contents: write",
+  "replace": "permissions:\n  contents: write\n  issues: write"
+ },
+ {
+  "id": "W7  refresh: the cron moved onto the hour, where every schedule is queued",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "    - cron: \"17 4 * * *\"",
+  "replace": "    - cron: \"0 4 * * *\""
+ },
+ {
+  "id": "W8  refresh: the manual trigger removed, so the first run waits a day",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "  workflow_dispatch:\n",
+  "replace": ""
+ },
+ {
+  "id": "W9  refresh: a run can be cancelled between its commit and its push",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "  cancel-in-progress: false",
+  "replace": "  cancel-in-progress: true"
+ },
+ {
+  "id": "W10 refresh: the token promoted to the job, so every step carries it",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "  refresh:\n    runs-on: ubuntu-latest",
+  "replace": "  refresh:\n    runs-on: ubuntu-latest\n    env:\n      PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}"
+ },
+ {
+  "id": "W11 refresh: the gates handed a credential they do not read",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "        env:\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run gates",
+  "replace": "        env:\n          PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run gates"
+ },
+ {
+  "id": "W12 refresh: an action unpinned to a moving branch",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "      - uses: actions/checkout@v7",
+  "replace": "      - uses: actions/checkout@main"
+ },
+ {
+  "id": "W13 refresh: the suite runs after the publish instead of before it",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "      - run: npm test\n",
+  "replace": ""
  }
 ]
