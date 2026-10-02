@@ -5,6 +5,14 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { inspect } from "node:util";
+
+/**
+ * Everything a thrown value would show a person who printed it: the message, the stack, the
+ * cause chain and any property hung off it. A leak check that reads only `message` misses a
+ * credential riding along as a `cause`, which is exactly how one escapes in practice.
+ */
+const everythingIn = (e: unknown): string => inspect(e, { depth: 10 });
 import { ACTIVITY_QUERY, CACHE_PATH, fetchActivity, githubTransport, loadActivity, MAX_LANGUAGES, TOKEN_ENV, trimToWindow, WINDOW_DAYS } from "../src/activity.ts";
 import type { Transport } from "../src/activity.ts";
 import { languageShares } from "../src/session.ts";
@@ -223,8 +231,7 @@ test("the forbidden-name failure does not repeat the name it is protecting", asy
   await assert.rejects(
     () => fetchActivity({ handle: "x", transport }),
     (e: Error) => {
-      const said = `${e.message}\n${e.stack ?? ""}`.toLowerCase();
-      assert.ok(!said.includes(forbidden.toLowerCase()), "the error echoes the name it is protecting");
+      assert.ok(!everythingIn(e).toLowerCase().includes(forbidden.toLowerCase()), "the error echoes the name it is protecting");
       return true;
     },
   );
@@ -347,7 +354,7 @@ test("no failure path lets the token escape into an error", async () => {
     for (const p of paths) {
       const e = await p.run().then(() => null, (err: Error) => err);
       assert.ok(e !== null, `${p.what} did not fail at all`);
-      assert.ok(!`${e.message}\n${e.stack ?? ""}`.includes(FAKE_TOKEN), `${p.what} leaked the token`);
+      assert.ok(!everythingIn(e).includes(FAKE_TOKEN), `${p.what} leaked the token`);
     }
   });
 });
