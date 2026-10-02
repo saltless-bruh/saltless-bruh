@@ -37,7 +37,59 @@ github.com/saltless-bruh
 └───────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Transcript block.** ADR 0004 accepted that an image exposes text only through `alt`. This spec improves on that: the generator also emits the Session as plain text inside a `<details>` block under the image. Screen readers, search and copy-paste then get real text, and `alt` stays a short description. ADR 0004 should be amended to record this.
+**Transcript block.** ADR 0004 accepted that an image exposes text only through `alt`. This spec improves on that: the generator also emits the Session as plain text inside a `<details>` block under the image. Screen readers, search and copy-paste then get real text, and `alt` stays a short description. ADR 0004 is amended to record this.
+
+### 1.1 The delivery mechanism, measured
+
+Everything in this section was measured against live GitHub on **2026-10-02**, before the README
+generator was built on it. It is recorded here rather than in `docs/research/`, which is gitignored
+so that third-party content and screenshots carrying the real name stay out of the repository.
+None of this is either of those, and the first fact below is one the whole animated profile
+depends on.
+
+**The method, because it is what makes these re-checkable.** Each claim comes from POSTing the
+real generated README to `https://api.github.com/markdown`, which is GitHub's own renderer behind
+its own sanitiser, and reading what came back; and from fetching live response headers. Nothing
+here comes from a secondary source, a blog post or a memory of how GitHub used to behave.
+
+**The documentation page is now a weaker source than the renderer itself, and it moves fast.**
+GitHub's `basic-writing-and-formatting-syntax` page has **dropped its entire "Specifying the theme
+an image is shown to" section**; `prefers-color-scheme` no longer appears anywhere on it. What
+survives is one line, *"The `<picture>` HTML element is supported"*, and the canonical dark/light
+snippet now exists only in the 2022-08-15 GA changelog. The research notes written on 2026-10-01
+stated that the page carries the snippet, and one day later it did not. So: verify against the
+renderer, and treat the docs page as a statement of support rather than a specification.
+
+| What was measured | Result |
+|---|---|
+| **The raw asset response** (`raw.githubusercontent.com`, an SVG) | `content-type: image/svg+xml`, `cache-control: max-age=300`, `content-security-policy: default-src 'none'; style-src 'unsafe-inline'; sandbox` |
+| **Repo-relative image paths** | Rewritten to `raw.githubusercontent.com/<owner>/<repo>/<branch>/<path>`. Both `srcset` and `src`. **Not camo** |
+| **Camo, for contrast** | A camo-served SVG whose origin sends `cache-control: no-cache, must-revalidate` returned `age: 13130` (3.6 hours), `x-cache: HIT` |
+| **`<picture>` through the sanitiser** | Both `<source media srcset>` elements survive verbatim, wrapped in `<themed-picture data-catalyst-inline="true">` |
+| **`<img src alt width="100%">`** | Survives. GitHub appends its own `style="max-width: 100%;"` and wraps the image in `<a target="_blank" rel="noopener noreferrer" href="<src>">` |
+| **`<details>` / `<summary>` with a fence inside** | Survive; the fence becomes `<pre><code>` with the column grid and the box-drawing glyphs intact. The blank line after `</summary>` is **required**: without it the fence renders as literal text |
+| **An HTML comment** | Removed from the output entirely, so a generated-file notice at the top of the README costs a reader nothing |
+| **`<script>` inside the fence** | Returned escaped as `&lt;script&gt;`. Nothing the transcript carries can climb out of the code block and become markup |
+
+**`style-src 'unsafe-inline'` in that first row is the single fact the animated profile rests on.**
+It is what permits the SVG's own `<style>` block, and therefore its `@keyframes`, to run at all
+inside an `<img>`. If that policy ever tightens, every animation in section 3.5 stops and the
+Session becomes the still frame. That is a survivable failure, because reduced motion already
+requires the still frame to be the correct resting state, but it is the thing to check first if
+the profile ever looks dead.
+
+**Why the assets are repo-relative and not absolute.** The 5-minute `max-age` above is what makes
+a refreshed Session appear promptly. An absolute URL to a third-party host would be rewritten to
+camo instead, whose cache was measured serving a copy 3.6 hours old of an image whose own origin
+asked for `no-cache`. `src/readme.ts` therefore emits `assets/...` and a test asserts every
+declared path is relative and under `assets/`.
+
+**The `<img>` fallback is the dark variant.** With both media queries present the `src` is only
+reached by a client that does not implement `<picture>` at all. Readability does not decide it:
+`src/svg.ts` paints a full-size opaque background rect plus a border stroke, so each variant
+carries its own panel and is legible on any canvas. Consistency decides it, and `CONTEXT.md`
+records dark as the fallback. GitHub's own GA example happens to use light; this is a deliberate
+local departure, not an oversight.
 
 ## 2. Build pipeline
 
@@ -60,7 +112,11 @@ Assets are committed to `main` and referenced by relative path, so GitHub serves
 
 ## 3. Hard constraints
 
-Measured; sources in [`docs/research/`](research/).
+Measured. The working notes are in `docs/research/`, which is **gitignored**, so a clone does not
+have them: anything from there that the build actually depends on is restated in this file. For
+the README's delivery mechanism, including the content-security policy that lets the SVG animate
+at all, see [1.1](#11-the-delivery-mechanism-measured), which carries both the findings and the
+method for re-checking them.
 
 ### 3.1 Platform
 

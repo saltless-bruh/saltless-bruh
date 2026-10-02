@@ -268,8 +268,10 @@ test("the generated README uses no markup GitHub strips", async () => {
 
 test("the README carries no em-dash and no forbidden name", async () => {
   const { readme } = await built();
-  assert.ok(!readme.includes("—"), "contains an em-dash, which the copy rules forbid everywhere visible");
-  assert.ok(!readme.includes("–"), "contains an en-dash");
+  // Written as escapes on purpose: a gate that scans every committed file for an em-dash
+  // must not trip over the test that forbids one.
+  assert.ok(!readme.includes("\u2014"), "contains an em-dash, which the copy rules forbid everywhere visible");
+  assert.ok(!readme.includes("\u2013"), "contains an en-dash");
   // The gate itself runs inside `build`, before the file is written. This asserts the committed
   // copy clears it, so the name check cannot be satisfied by a README nobody generated.
   const content = loadContent();
