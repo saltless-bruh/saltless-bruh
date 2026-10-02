@@ -784,5 +784,176 @@
     "to": "3"
    }
   ]
+ },
+ {
+  "id": "R1  readme: the dark source points at the light variant",
+  "file": "src/readme.ts",
+  "tests": [
+   "test/readme.test.ts"
+  ],
+  "find": "<source media=\"(prefers-color-scheme: dark)\" srcset=\"${DARK_SRC}\">",
+  "replace": "<source media=\"(prefers-color-scheme: dark)\" srcset=\"${LIGHT_SRC}\">"
+ },
+ {
+  "id": "R2  readme: the light source dropped, so one file serves both themes",
+  "file": "src/readme.ts",
+  "tests": [
+   "test/readme.test.ts"
+  ],
+  "find": "  <source media=\"(prefers-color-scheme: light)\" srcset=\"${LIGHT_SRC}\">\n",
+  "replace": ""
+ },
+ {
+  "id": "R3  readme: the fallback image becomes the light variant",
+  "file": "src/readme.ts",
+  "tests": [
+   "test/readme.test.ts"
+  ],
+  "find": "  <img src=\"${DARK_SRC}\" alt=",
+  "replace": "  <img src=\"${LIGHT_SRC}\" alt="
+ },
+ {
+  "id": "R4  readme: the alt text recites the Session instead of describing the picture",
+  "file": "src/readme.ts",
+  "tests": [
+   "test/readme.test.ts"
+  ],
+  "find": "  const { imageAlt, transcriptSummary } = o.content.readme;",
+  "replace": "  const transcriptSummary = o.content.readme.transcriptSummary;\n  const imageAlt = o.content.role;"
+ },
+ {
+  "id": "R5  readme: the alt text emptied, so the picture is nameless",
+  "file": "src/readme.ts",
+  "tests": [
+   "test/readme.test.ts"
+  ],
+  "find": "alt=\"${esc(imageAlt)}\" width",
+  "replace": "alt=\"\" width"
+ },
+ {
+  "id": "R6  readme: the alt text unescaped, so a quote in it ends the attribute",
+  "file": "src/readme.ts",
+  "tests": [
+   "test/readme.test.ts"
+  ],
+  "find": "alt=\"${esc(imageAlt)}\"",
+  "replace": "alt=\"${imageAlt}\""
+ },
+ {
+  "id": "R7  readme: the transcript label unescaped, so the owner's words become markup",
+  "file": "src/readme.ts",
+  "tests": [
+   "test/readme.test.ts"
+  ],
+  "find": "<summary>${esc(transcriptSummary)}</summary>",
+  "replace": "<summary>${transcriptSummary}</summary>"
+ },
+ {
+  "id": "R8  readme: the image pinned to a pixel width, so the phone render overflows",
+  "file": "src/readme.ts",
+  "tests": [
+   "test/readme.test.ts"
+  ],
+  "find": "width=\"100%\">\n</picture>",
+  "replace": "width=\"846\">\n</picture>"
+ },
+ {
+  "id": "R9  readme: the fence fixed at three, so a backtick run inside closes it early",
+  "file": "src/readme.ts",
+  "tests": [
+   "test/readme.test.ts"
+  ],
+  "find": "return \"`\".repeat(Math.max(3, longest + 1));",
+  "replace": "return \"`\".repeat(3);"
+ },
+ {
+  "id": "R10 readme: the blank line after the summary dropped, so the fence is literal text",
+  "file": "src/readme.ts",
+  "tests": [
+   "test/readme.test.ts"
+  ],
+  "find": "<summary>${esc(transcriptSummary)}</summary>\n\n${f}",
+  "replace": "<summary>${esc(transcriptSummary)}</summary>\n${f}"
+ },
+ {
+  "id": "R11 readme: the transcript emitted with no fence at all, so the grid collapses",
+  "file": "src/readme.ts",
+  "tests": [
+   "test/readme.test.ts"
+  ],
+  "find": "${f}\n${o.transcript}\n${f}",
+  "replace": "${o.transcript}"
+ },
+ {
+  "id": "R12 readme: the dark path renamed, so the README names a file nothing writes",
+  "file": "src/readme.ts",
+  "tests": [
+   "test/readme.test.ts"
+  ],
+  "find": "export const DARK_SRC = \"assets/session-dark.svg\";",
+  "replace": "export const DARK_SRC = \"assets/session.svg\";"
+ },
+ {
+  "id": "R13 readme: the light path made absolute, so GitHub serves it through camo",
+  "file": "src/readme.ts",
+  "tests": [
+   "test/readme.test.ts"
+  ],
+  "find": "export const LIGHT_SRC = \"assets/session-light.svg\";",
+  "replace": "export const LIGHT_SRC = \"https://raw.githubusercontent.com/saltless-bruh/saltless-bruh/main/assets/session-light.svg\";"
+ },
+ {
+  "id": "R14 build: the README composed but never written",
+  "file": "src/build.ts",
+  "tests": [
+   "test/readme.test.ts"
+  ],
+  "find": "  writeFileSync(new URL(\"../README.md\", outDir), readme);",
+  "replace": ""
+ },
+ {
+  "id": "R15 build: the README written inside assets/, below where its paths resolve from",
+  "file": "src/build.ts",
+  "tests": [
+   "test/readme.test.ts"
+  ],
+  "find": "writeFileSync(new URL(\"../README.md\", outDir), readme);",
+  "replace": "writeFileSync(new URL(\"README.md\", outDir), readme);"
+ },
+ {
+  "id": "R16 build: the name gate over the assembled README removed",
+  "file": "src/build.ts",
+  "tests": [
+   "test/readme.test.ts"
+  ],
+  "find": "  assertNoForbiddenNames(readme, \"the generated README\");\n",
+  "replace": ""
+ },
+ {
+  "id": "R17 build: the transcript truncated to its first rows before it reaches the README",
+  "file": "src/build.ts",
+  "tests": [
+   "test/readme.test.ts"
+  ],
+  "find": "  const readme = renderReadme({ content, transcript });",
+  "replace": "  const readme = renderReadme({ content, transcript: transcript.split(\"\\n\").slice(0, 10).join(\"\\n\") });"
+ },
+ {
+  "id": "R18 content: the picture's accessible name no longer validated",
+  "file": "src/content.ts",
+  "tests": [
+   "test/content.test.ts"
+  ],
+  "find": "  text(c.readme.imageAlt, \"readme.imageAlt\");\n",
+  "replace": ""
+ },
+ {
+  "id": "R19 content: the README copy block no longer required to be there",
+  "file": "src/content.ts",
+  "tests": [
+   "test/content.test.ts"
+  ],
+  "find": "  if (!isObj(c.readme)) fail(\"readme must be an object\");\n",
+  "replace": ""
  }
 ]
