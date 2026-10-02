@@ -45,11 +45,15 @@ One slash-command invocation and its rendered output; the unit of content inside
 _Avoid_: section, card, block, widget
 
 **Header**:
-The opening of the Session: the Mascot beside the Banner, the role line and the working directory.
+The opening of the Session: a shell prompt naming the Handle, the host and the path, the Mascot as that prompt's command output, and the role line.
 _Avoid_: hero, welcome screen
 
+**Shell Prompt**:
+The two rows that open the Header, borrowed from Kali Linux: the Handle, the host and the path in a bracketed first row, and the command the Mascot is the output of in the second. It names the Handle in the one place a shell puts a name, and the Kali shape says what the owner does without a word about it.
+_Avoid_: banner, header line, title bar
+
 **Banner**:
-The Handle spelled out in terminal block-art lettering.
+The Handle spelled out in terminal block-art lettering. **No longer drawn by the Session**: it and the Mascot were the same visual language and competed, so the Shell Prompt replaced it. The alphabet is kept in `src/banner.ts`, with its tests, for the Landing Page.
 _Avoid_: logo, title, wordmark
 
 **Lane**:
@@ -79,5 +83,5 @@ One of the two renders of the Session, dark or light, picked by the viewer's Git
 _Avoid_: mode, skin, light/dark version
 
 **Accent**:
-The single Everforest aqua-green used for the Banner, prompt and bullets in both Theme Variants. Status colours appear only inside command output, never as decoration.
+The single Everforest aqua-green used for the Handle, the prompt and bullets in both Theme Variants. Status colours appear only inside command output, never as decoration.
 _Avoid_: brand colour, highlight, primary

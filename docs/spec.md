@@ -18,9 +18,12 @@ github.com/saltless-bruh
 │            <img> fallback = session-dark.svg,  alt = one-line description         │
 │                                                                                   │
 │  ┌─ the Session, 72 cols ───────────────────────────────────────────────────────┐ │
-│  │ [Mascot: cat asleep on rack]   B A N N E R                                   │ │
-│  │  rack LEDs blink -> Finding    role line                                     │ │
-│  │                                ~/saltless-bruh                               │ │
+│  │ ┌─(HANDLE@host)-[~/login]                                                    │ │
+│  │ └─$ <the command whose output the Mascot is>                                 │ │
+│  │                                                                              │ │
+│  │     [Mascot: cat asleep on rack]   rack LEDs blink -> Finding                │ │
+│  │                                                                              │ │
+│  │     role line                                                                │ │
 │  │ ───────────────────────────────────────────────────────────────────────────  │ │
 │  │ > /whoami     three lines of copy                                            │ │
 │  │ > /ops        three Lanes, seven repos, one line each                        │ │
@@ -204,7 +207,20 @@ checked; a glyph used but unlisted is indistinguishable from one nobody checked.
 
 Verified **absent**, and therefore forbidden: `⎿ ✻ ✢ ✽ ✔ ✘ ◼ ◻ ⏵ ⏸`. The substitutes above replace them.
 
-Text is rendered as `<text>`. The Banner, the Mascot and the Scan Sweep are **geometry**, not glyphs: block art compiled to merged paths per colour, with `shape-rendering="crispEdges"`, which avoids seam hairlines at fractional scale and gives the Mascot per-part groups to animate.
+Text is rendered as `<text>`. The Mascot and the Scan Sweep are **geometry**, not glyphs: block art compiled to merged paths per colour, with `shape-rendering="crispEdges"`, which avoids seam hairlines at fractional scale and gives the Mascot per-part groups to animate.
+
+**The Banner was geometry too, and it is no longer drawn.** The Header was a block-art wordmark
+beside the Mascot, and looked at live the two competed: the same blocks, the same Accent, the same
+weight, so the Header read as two drawings rather than as one picture. It is now a Kali-style shell
+prompt, `┌─(HANDLE@host)-[~/login]` over `└─$ <command>`, with the Mascot as that command's output.
+A prompt is terminal rather than decoration dressed as terminal, so the name stops being an object
+that has to justify itself and takes the one place a name structurally belongs in a shell, and the
+cat finally has a reason to be there. `src/banner.ts` is retained with its tests for the Landing
+Page and carries a note at the top saying so; nothing in the Session calls it.
+
+A consequence worth recording, because it removed a special case rather than adding one: the Handle
+used to need a `textOnly` run shimmed onto the Banner's row to reach the transcript at all, since
+block art carries no text. In the prompt it is real text, so one run draws it and transcribes it.
 
 **Weight.** Both Regular and Bold are vendored and subset, and each gets its own `@font-face`. A single face with `font-weight: 400 700` would make the browser synthesise fake bold, which smears a monospace grid. Emphasis otherwise comes from the Accent, not from weight.
 
@@ -266,8 +282,7 @@ Every animation must justify itself in one sentence. Anything that cannot is cut
 
 | Element | Behaviour | Why it earns its place |
 |---|---|---|
-| Playback | Once on load, 1.66s measured against the owner's content: rows arrive 26ms apart, each settling over 180ms | Storytelling: establishes that this is a session being run, not a poster |
-| Banner | Resolves letter by letter over 0.45s, each letter cutting through one flicker frame | Hierarchy: it is the one moment of spectacle, spent on the name |
+| Playback | Once on load, 1.92s measured against the owner's content: rows arrive 26ms apart, each settling over 180ms | Storytelling: establishes that this is a session being run, not a poster |
 | Spinner | After playback, one spinner loops. Its verb names whatever the Mascot is doing right now, on the same 36s clock | State: it is a readout of the Mascot, not decoration, which is why it may loop at all |
 | Mascot | 36s master loop: breathing at 3.0s, with a yawn, a stretch, a settle, a one-second peek at the viewer, and an alarm she wakes to | Storytelling: the operator naps while the agents work, which is the whole metaphor |
 | Mascot micro-layers | Ear 17s, tail 23s. Co-prime periods mean the combined pattern does not visibly repeat | Keeps the loop from reading as a loop |
@@ -291,17 +306,23 @@ fires on every page load and stands between a reader and the content, so the uni
 character: the Session carries about 2,600 characters, and a per-character typewriter at any readable rate
 is tens of seconds of a visitor looking at a page that is not there. Rows arrive 26ms apart and settle over
 180ms, so the figure is `26ms x (rows - 1) + 180ms` and it moves when the content does. **Against the
-owner's real content it is 1.66s**: 58 rows, of which 57 are the playback's (the `/activity` result line
-belongs to the Scan Sweep), measured 2026-10-02 in headless Chrome **and Firefox** at both 846px and 308px
-rather than computed, and printed by `npm run build` on every run so it cannot go stale again. The ceiling
-is what matters and it is unchanged; an earlier 57-row Session measured 1.64s and this section quoted that
-one length as though it were the rule. The Banner resolves inside that window rather than strictly before it, because
-holding the body back until the name had finished would push the total past two seconds; the name is
-nonetheless complete at 0.45s, while the Session is still printing its `/whoami`.
+owner's real content it is 1.92s**: 68 rows, measured in headless Chrome **and Firefox** at both 846px and
+308px rather than computed, and printed by `npm run build` on every run so it cannot go stale again. The
+ceiling is what matters and it is unchanged; an earlier 57-row Session measured 1.64s and this section
+quoted that one length as though it were the rule, and a 58-row one measured 1.66s.
 
-The Banner's reveal is a per-letter stepped reveal and not the glyph scramble an earlier draft asked for.
-The Banner is geometry rather than text (3.3), so there are no glyphs to scramble through; the reasoning is
-recorded in `docs/design-contract.md`.
+**1.92s is the closest this has come to the ceiling, and it is worth saying out loud rather than
+discovering later.** The Statusline became a panel (eight rows) and the Header became a shell prompt (two),
+so ten rows arrived in one day and each one costs 26ms. Four more rows reach two seconds. The lever when
+that happens is the 26ms stagger, which is a design constant and not a measurement, NOT the row budget:
+cutting content to protect an animation would be the wrong trade, and the gap between a 1.9s reveal and a
+2.0s one is not something a reader can perceive anyway. The ceiling exists because tens of seconds is
+intolerable, not because two is a cliff.
+
+**There is no Banner reveal any more.** It resolved the wordmark letter by letter over 0.45s and was the
+Session's one moment of spectacle; the wordmark was retired with the Header (3.3), so the spectacle went
+with it. Nothing replaced it, and the motion budget is one loop lighter for it. The reveal's code is
+retained in `src/playback.ts` with the alphabet it drove, unused, for the Landing Page.
 
 **The loop is 36 seconds, and the gaps are what got cut.** An earlier 60-second version put the first event 15 seconds in, past the point most visitors look away, while only about 12 of those 60 seconds contained any event at all. Shortening the gesture durations would have been the wrong fix: a 3.4-second yawn is a yawn, a 1-second one is a twitch. So every gesture kept its length and the waiting between them was halved. The first event now lands at 7.5s and the longest wait is 11.25s.
 
@@ -352,6 +373,7 @@ The rule, so the copy self-audit applies a definition instead of making a judgem
 | The gloss on the toggle, its hint, and each key hint | The `·` between two key hints, and the `▲` on the effort track |
 | Every spinner verb | The command names `/whoami /ops /stack /activity`, which are the borrowed CLI shape, not the owner's prose |
 | The mode badge and the not-affiliated note | The order of the fragments in a sentence, and the columns they land on |
+| The prompt's host, and the command whose output the Mascot is | The prompt's own marks, `┌─( @ )-[ ] └─$`, and the `~/` in front of the path |
 
 A sentence assembled from several of these is built from **labelled fragments, never a template
 with placeholders**. Each fragment is then validated on its own like every other visible string,
@@ -364,9 +386,10 @@ is the same for every value it decorates belongs to the generator (the spinner's
 
 | Key | Meaning |
 |---|---|
-| `handle`, `cwd` | Identity line |
-| `login` | The GitHub account name the API is queried by, e.g. `saltless-bruh`. Nothing draws it, and it is a different value from `handle`, which is the nickname (CONTEXT.md: the Handle is both). It is validated like every other string here, so a wrong one fails the build instead of returning no user from the API |
-| `role` | The one-line role under the Banner |
+| `handle` | The nickname the prompt spells, in the Accent |
+| `login` | The GitHub account name the API is queried by, e.g. `saltless-bruh`. It is a different value from `handle`, which is the nickname (CONTEXT.md: the Handle is both). The prompt's path is this with a `~/` in front of it, which is why **there is no `cwd` key**: a path kept in a second field is a path that can disagree with the account the figures came from, and printed in the prompt and again on its own row it is the same fact twice |
+| `prompt` | `host`, the machine the Handle is logged in to, and `command`, the one whose output the Mascot is. The prompt's own marks are Session Grammar and stay in the generator |
+| `role` | The one-line role under the Mascot |
 | `whoami` | Up to 3 lines of copy |
 | `lanes[]` | Each has a `label` and `repos[]`, each repo a `name` and a one-line `blurb` |
 | `stackRows[]` | Each has a `label` and `items[]`, printed as plain text |

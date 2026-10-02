@@ -11,7 +11,7 @@ Using the right term keeps the implementation honest, because each name implies 
 | Element | Correct name | What that implies |
 |---|---|---|
 | Commands appearing on load | **Typewriter**, driven by a **stagger** | Characters or rows arrive in sequence, not a fade of the whole block |
-| Banner resolving | **Stepped reveal**, per letter, driven by a **stagger** | Letters resolve in sequence, left to right, each cutting through one flicker frame before it settles |
+| ~~Banner resolving~~ | **Stepped reveal**, per letter, driven by a **stagger** | RETIRED 2026-10-02 with the wordmark itself. Kept in the vocabulary because the code is kept: the Landing Page may want it |
 | Pose swaps | **Stepped animation** | Frames cut. `step-end`, never interpolation |
 | Breathing, ear, tail | **Idle animation** | Subtle motion while nothing is happening. 1 to 2 pixels, never more |
 | `Ultrachill` | **Shimmer** | A sheen travels across; it does not blink or pulse |
@@ -112,7 +112,7 @@ Two standing weaknesses, both accepted for now and recorded so they are not disc
   not text. If body-text colour is ever retuned, the cat changes with it. The clean fix is art-role tokens
   (`art-body`, `art-panel`) that alias today's values. Low value while the palette is locked; worth doing before any
   palette change.
-- **The accent carries many jobs**: prompt, tool bullet, banner, rack LEDs, cat speckles, scan hits, and success. In a
+- **The accent carries many jobs**: the shell prompt's Handle, the command glyph, tool bullet, rack LEDs, cat speckles, scan hits, the effort marker and success. In a
   terminal this largely reads as "the system's colour" and is coherent, but the decorative cat speckles are the
   weakest use and the first thing to drop if the accent starts feeling noisy.
 

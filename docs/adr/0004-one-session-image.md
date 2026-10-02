@@ -1,6 +1,6 @@
 # The whole Session is one image
 
-The Profile README renders the entire Session, from Header to Statusline, as a single SVG per Theme Variant rather than one image per Command or real Markdown text. GitHub strips all CSS, so stacked images always get gaps between them, which would break the single-terminal illusion. One image also allows one choreographed timeline (playback, the Banner's reveal, the spinner, the Mascot) and embeds the font once. What this costs:
+The Profile README renders the entire Session, from Header to Statusline, as a single SVG per Theme Variant rather than one image per Command or real Markdown text. GitHub strips all CSS, so stacked images always get gaps between them, which would break the single-terminal illusion. One image also allows one choreographed timeline (playback, the spinner, the Mascot, the Scan Sweep) and embeds the font once. What this costs:
 
 - Repo names inside the Session can't be clicked. GitHub's native pinned repos under the README cover that.
 - The whole file is regenerated whenever Activity refreshes.
@@ -15,9 +15,15 @@ reader, a search engine, a copy-paste and any client that will not render an SVG
 text. The `alt` attribute is therefore a short description of what the picture **is**, because
 reciting what it contains would mean hearing the whole Session twice.
 
-This is why the handle and the spinner's resting verb carry `textOnly` runs in `src/rows.ts`: the
-Banner is geometry and the drawn verbs are one-at-a-time alternatives, so neither reaches a reader
-except through that block.
+This is why the spinner's resting verb carries a `textOnly` run in `src/rows.ts`: the drawn verbs are
+one-at-a-time alternatives, so none of them reaches a reader except through that block.
+
+**The handle used to need one too, and no longer does.** It was spelled by the Banner, which is block
+art with no text in it, so a `textOnly` run was shimmed onto the Banner's middle row to put the owner's
+name into the transcript and in front of the ADR 0001 scan. The Header is a shell prompt now
+(`docs/spec.md` 3.3), where the handle is real text: one run draws it and transcribes it, and the
+special case is gone. That is the direction this kind of change is supposed to go and it is recorded
+because it went that way by luck rather than by design.
 
 ## Amendment, 2026-10-02: two words in the opening paragraph
 
@@ -30,6 +36,12 @@ through one dim flicker frame and settles, left to right, over 0.45s. The correc
 reasoning are in `docs/design-contract.md`; this record is the last place that still named the old
 behaviour, and the point of the paragraph is unchanged, because one timeline is still what one image
 buys.
+
+**Second amendment, the same day: the Banner is no longer drawn at all**, so neither the decrypt nor
+the stepped reveal runs. The Header became a shell prompt because the wordmark and the pixel cat were
+the same visual language and competed (`docs/spec.md` 3.3). The paragraph above is left standing
+rather than deleted: it records what the reveal actually was, and `src/banner.ts` and the reveal are
+both retained for the Landing Page, so the correction still has a subject.
 
 **"spinners" was plural and there is one.** `docs/spec.md` 3.5 budgets perpetual motion deliberately:
 exactly one spinner loops, and its verb is derived from `MASCOT_TIMELINE` so the word names the pose

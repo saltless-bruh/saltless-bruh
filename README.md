@@ -9,16 +9,18 @@
 <summary>Session transcript</summary>
 
 ```
+┌─(LAZIE@root)-[~/saltless-bruh]
+└─$ napping &
 
 
 
 
-                                  LAZIE
 
 
 
-Offensive Security · Agentic AI Systems
-~/saltless-bruh
+
+
+    Offensive Security · Agentic AI Systems
 ────────────────────────────────────────────────────────────────────────
 ❯ /whoami
 ● offensive security. agentic ai systems.
