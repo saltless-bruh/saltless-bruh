@@ -1,1796 +1,1968 @@
 [
- {
-  "id": "M1  timeline: drop the second swat so there is one strike",
-  "file": "src/timeline.ts",
-  "tests": [
-   "test/timeline.test.ts"
-  ],
-  "find": "  { state: \"swat-up\",   from: 29.4,  to: 29.8 },\n  { state: \"swat-down\", from: 29.8,  to: 30.2 },",
-  "replace": "  { state: \"glare\",     from: 29.4,  to: 30.2 },"
- },
- {
-  "id": "M2  timeline: the peek removed from the nap",
-  "file": "src/timeline.ts",
-  "tests": [
-   "test/timeline.test.ts"
-  ],
-  "find": "  { state: \"sleep\",     from: 18.75, to: 25 },\n  { state: \"peek\",      from: 25,    to: 26 },\n  { state: \"sleep\",     from: 26,    to: 28 },",
-  "replace": "  { state: \"sleep\",     from: 18.75, to: 28 },"
- },
- {
-  "id": "M3  timeline: a blow retimed to 200ms, with no gap left behind",
-  "file": "src/timeline.ts",
-  "tests": [
-   "test/timeline.test.ts"
-  ],
-  "find": "  { state: \"butt-down\", from: 31.2,  to: 31.6 },\n  { state: \"recover\",   from: 31.6,  to: 32.4 },",
-  "replace": "  { state: \"butt-down\", from: 31.2,  to: 31.4 },\n  { state: \"recover\",   from: 31.4,  to: 32.4 },"
- },
- {
-  "id": "M4  timeline: the glare removed, so nothing says the paw failed",
-  "file": "src/timeline.ts",
-  "tests": [
-   "test/timeline.test.ts"
-  ],
-  "find": "  { state: \"glare\",     from: 30.2,  to: 30.8 },\n  { state: \"butt-up\",   from: 30.8,  to: 31.2 },",
-  "replace": "  { state: \"butt-up\",   from: 30.2,  to: 31.2 },"
- },
- {
-  "id": "M5  timeline: DREAMING forgets the peek",
-  "file": "src/timeline.ts",
-  "tests": [
-   "test/mascot.test.ts",
-   "test/timeline.test.ts"
-  ],
-  "find": "export const DREAMING: PoseName[] = [\"sleep\", \"peek\"];",
-  "replace": "export const DREAMING: PoseName[] = [\"sleep\"];"
- },
- {
-  "id": "M6  mascot: bubble inflates in the window before the pop, not the nap",
-  "file": "src/mascot.ts",
-  "tests": [
-   "test/mascot.test.ts"
-  ],
-  "find": "  const grow = napBefore(i);",
-  "replace": "  const grow = MASCOT_TIMELINE[i - 1];"
- },
- {
-  "id": "M7  mascot: fault flashes twice as fast, 5 a second",
-  "file": "src/mascot.ts",
-  "tests": [
-   "test/mascot.test.ts"
-  ],
-  "find": "const FAULT_FLASH = { onMs: 200, dim: 0.5 };",
-  "replace": "const FAULT_FLASH = { onMs: 100, dim: 0.5 };"
- },
- {
-  "id": "M8  mascot: fault dims back to the healthy floor",
-  "file": "src/mascot.ts",
-  "tests": [
-   "test/mascot.test.ts"
-  ],
-  "find": "const FAULT_FLASH = { onMs: 200, dim: 0.5 };",
-  "replace": "const FAULT_FLASH = { onMs: 200, dim: 0.25 };"
- },
- {
-  "id": "M9  mascot: fault ends with the alert, so the glare is green",
-  "file": "src/mascot.ts",
-  "tests": [
-   "test/mascot.test.ts"
-  ],
-  "find": "  return { fault: [fault.from, hold.from], hold: [hold.from, hold.to] };",
-  "replace": "  return { fault: [fault.from, fault.to], hold: [hold.from, hold.to] };"
- },
- {
-  "id": "M10 mascot: healthy bank uncovered during the steady hold",
-  "file": "src/mascot.ts",
-  "tests": [
-   "test/mascot.test.ts"
-  ],
-  "find": "${showExcept(\"leds-live\", [[fault[0], hold[1]]])}",
-  "replace": "${showExcept(\"leds-live\", [[fault[0], hold[0]]])}"
- },
- {
-  "id": "M11 mascot: fault painted in accent, like the healthy state",
-  "file": "src/mascot.ts",
-  "tests": [
-   "test/mascot.test.ts"
-  ],
-  "find": "const FAULT_TOKEN: keyof Palette = \"error\";",
-  "replace": "const FAULT_TOKEN: keyof Palette = \"accent\";"
- },
- {
-  "id": "M12 mascot: fault bank moved inside .rack",
-  "file": "src/mascot.ts",
-  "tests": [
-   "test/mascot.test.ts"
-  ],
-  "find": "</g>\n<g class=\"leds-hold\">${path(\"led-steady\", allLit, RECOLOUR[LIT])}</g>\n<g class=\"leds-fault\">${path(\"led-fault\", allLit, FAULT_TOKEN)}</g>",
-  "replace": "<g class=\"leds-hold\">${path(\"led-steady\", allLit, RECOLOUR[LIT])}</g>\n<g class=\"leds-fault\">${path(\"led-fault\", allLit, FAULT_TOKEN)}</g>\n</g>"
- },
- {
-  "id": "M13 mascot: fault split per unit, so the three can drift apart",
-  "file": "src/mascot.ts",
-  "tests": [
-   "test/mascot.test.ts"
-  ],
-  "find": "<g class=\"leds-fault\">${path(\"led-fault\", allLit, FAULT_TOKEN)}</g>",
-  "replace": "<g class=\"leds-fault\">${UNITS.map((u, k) => path(`led-fault-${k}`, runsOf(rackRows, LIT, u), FAULT_TOKEN)).join(\"\")}</g>"
- },
- {
-  "id": "M14 mascot: steady hold held for the whole alarm",
-  "file": "src/mascot.ts",
-  "tests": [
-   "test/mascot.test.ts"
-  ],
-  "find": "${showDuring(\"leds-hold\", [hold])}",
-  "replace": "${showDuring(\"leds-hold\", [[fault[0], hold[1]]])}"
- },
- {
-  "id": "M15 mascot: ear slab cut out of the static pass",
-  "file": "src/mascot.ts",
-  "tests": [
-   "test/mascot.test.ts"
-  ],
-  "find": "${foot(rows)}${paints(cutOut(rows, TAIL), CAT, CAT_ROWS)}",
-  "replace": "${foot(rows)}${paints(cutOut(cutOut(rows, TAIL), earBox(POSES[name])), CAT, CAT_ROWS)}"
- },
- {
-  "id": "M16 mascot: steady bank repaints the dim LEDs too",
-  "file": "src/mascot.ts",
-  "tests": [
-   "test/mascot.test.ts"
-  ],
-  "find": "  const allLit = runsOf(rackRows, LIT, RACK_ROWS);",
-  "replace": "  const allLit = runsOf(rackRows, LIT + \"7\", RACK_ROWS);"
- },
- {
-  "id": "M17 mascot: the fault bank loses its own clock and follows a unit's",
-  "file": "src/mascot.ts",
-  "tests": [
-   "test/mascot.test.ts"
-  ],
-  "find": "${onClock(\"leds-fault\", \"leds-fault\")}",
-  "replace": ".leds-fault { animation: leds-fault 7s step-end infinite }"
- },
- {
-  "id": "M18 mascot: the healthy units are driven by the master loop instead",
-  "file": "src/mascot.ts",
-  "tests": [
-   "test/mascot.test.ts"
-  ],
-  "find": "${LED_PERIODS.map((s, i) => `.led-${i} { animation: ${ledName(i)} ${s}s step-end infinite }`).join(\"\\n\")}",
-  "replace": "${LED_PERIODS.map((s, i) => `.led-${i} { animation: ${ledName(i)} ${MASTER_SECONDS}s step-end infinite }`).join(\"\\n\")}"
- },
- {
-  "id": "M19 mascot: the steady hold flickers instead of holding",
-  "file": "src/mascot.ts",
-  "tests": [
-   "test/mascot.test.ts"
-  ],
-  "find": "${showDuring(\"leds-hold\", [hold])}",
-  "replace": "${faultFlash(\"leds-hold\", hold)}"
- },
- {
-  "id": "M20 mascot: the fault bank is visible in the still frame",
-  "file": "src/mascot.ts",
-  "tests": [
-   "test/mascot.test.ts"
-  ],
-  "find": ".leds-fault, .leds-hold { opacity: 0 }",
-  "replace": ".leds-hold { opacity: 0 }"
- },
- {
-  "id": "M21 mascot: the burst no longer owns its length",
-  "file": "src/mascot.ts",
-  "tests": [
-   "test/mascot.test.ts"
-  ],
-  "find": "    burst: [pop.from, pop.from + burstFor],",
-  "replace": "    burst: [pop.from, pop.to],"
- },
- {
-  "id": "A1  peek: the other eye opens as well",
-  "file": "art/peek.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 25,
-    "y": 6,
-    "from": "2",
-    "to": "3"
-   },
-   {
-    "x": 26,
-    "y": 6,
-    "from": "2",
-    "to": "3"
-   }
-  ]
- },
- {
-  "id": "A2  peek: the zZz is dropped",
-  "file": "art/peek.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 50,
-    "y": 0,
-    "from": "1",
-    "to": " "
-   },
-   {
-    "x": 50,
-    "y": 1,
-    "from": "1",
-    "to": " "
-   },
-   {
-    "x": 51,
-    "y": 1,
-    "from": "1",
-    "to": " "
-   },
-   {
-    "x": 45,
-    "y": 2,
-    "from": "1",
-    "to": " "
-   },
-   {
-    "x": 46,
-    "y": 2,
-    "from": "1",
-    "to": " "
-   },
-   {
-    "x": 47,
-    "y": 2,
-    "from": "1",
-    "to": " "
-   },
-   {
-    "x": 46,
-    "y": 3,
-    "from": "1",
-    "to": " "
-   },
-   {
-    "x": 45,
-    "y": 4,
-    "from": "1",
-    "to": " "
-   },
-   {
-    "x": 46,
-    "y": 4,
-    "from": "1",
-    "to": " "
-   },
-   {
-    "x": 47,
-    "y": 4,
-    "from": "1",
-    "to": " "
-   }
-  ]
- },
- {
-  "id": "A3  alert: the ears stay up",
-  "file": "art/alert.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 23,
-    "y": 5,
-    "from": "2",
-    "to": " "
-   },
-   {
-    "x": 31,
-    "y": 5,
-    "from": "2",
-    "to": " "
-   },
-   {
-    "x": 24,
-    "y": 4,
-    "from": " ",
-    "to": "2"
-   },
-   {
-    "x": 30,
-    "y": 4,
-    "from": " ",
-    "to": "2"
-   }
-  ]
- },
- {
-  "id": "A4  swat-up: the raised paw loses its accent",
-  "file": "art/swat-up.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 21,
-    "y": 4,
-    "from": "4",
-    "to": "2"
-   },
-   {
-    "x": 22,
-    "y": 4,
-    "from": "4",
-    "to": "2"
-   }
-  ]
- },
- {
-  "id": "A5  swat-down: the impact sparks are removed",
-  "file": "art/swat-down.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 17,
-    "y": 8,
-    "from": "1",
-    "to": " "
-   },
-   {
-    "x": 16,
-    "y": 9,
-    "from": "1",
-    "to": " "
-   }
-  ]
- },
- {
-  "id": "A6  swat-down: the blow reaches no further than the stretch",
-  "file": "art/swat-down.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 18,
-    "y": 10,
-    "from": "4",
-    "to": " "
-   },
-   {
-    "x": 19,
-    "y": 10,
-    "from": "4",
-    "to": " "
-   },
-   {
-    "x": 20,
-    "y": 10,
-    "from": "2",
-    "to": "4"
-   },
-   {
-    "x": 21,
-    "y": 10,
-    "from": "2",
-    "to": "4"
-   }
-  ]
- },
- {
-  "id": "A7  swat-down: the face changes too, so the blow is not one limb",
-  "file": "art/swat-down.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 29,
-    "y": 6,
-    "from": "3",
-    "to": "2"
-   },
-   {
-    "x": 30,
-    "y": 6,
-    "from": "3",
-    "to": "2"
-   }
-  ]
- },
- {
-  "id": "A8  butt-up: the head rears one row instead of two",
-  "file": "art/butt-up.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 23,
-    "y": 3,
-    "from": "2",
-    "to": " "
-   },
-   {
-    "x": 24,
-    "y": 3,
-    "from": "2",
-    "to": " "
-   },
-   {
-    "x": 25,
-    "y": 3,
-    "from": "2",
-    "to": " "
-   },
-   {
-    "x": 26,
-    "y": 3,
-    "from": "2",
-    "to": " "
-   },
-   {
-    "x": 27,
-    "y": 3,
-    "from": "2",
-    "to": " "
-   },
-   {
-    "x": 28,
-    "y": 3,
-    "from": "2",
-    "to": " "
-   },
-   {
-    "x": 29,
-    "y": 3,
-    "from": "2",
-    "to": " "
-   },
-   {
-    "x": 30,
-    "y": 3,
-    "from": "2",
-    "to": " "
-   },
-   {
-    "x": 31,
-    "y": 3,
-    "from": "2",
-    "to": " "
-   }
-  ]
- },
- {
-  "id": "A9  butt-down: the head is not driven down",
-  "file": "art/butt-down.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 24,
-    "y": 5,
-    "from": " ",
-    "to": "2"
-   },
-   {
-    "x": 25,
-    "y": 5,
-    "from": " ",
-    "to": "2"
-   },
-   {
-    "x": 26,
-    "y": 5,
-    "from": " ",
-    "to": "2"
-   },
-   {
-    "x": 27,
-    "y": 5,
-    "from": " ",
-    "to": "2"
-   },
-   {
-    "x": 28,
-    "y": 5,
-    "from": " ",
-    "to": "2"
-   },
-   {
-    "x": 29,
-    "y": 5,
-    "from": " ",
-    "to": "2"
-   },
-   {
-    "x": 30,
-    "y": 5,
-    "from": " ",
-    "to": "2"
-   }
-  ]
- },
- {
-  "id": "A10 recover: the ears stay pinned back",
-  "file": "art/recover.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 24,
-    "y": 4,
-    "from": "2",
-    "to": " "
-   },
-   {
-    "x": 30,
-    "y": 4,
-    "from": "2",
-    "to": " "
-   },
-   {
-    "x": 23,
-    "y": 5,
-    "from": " ",
-    "to": "2"
-   },
-   {
-    "x": 31,
-    "y": 5,
-    "from": " ",
-    "to": "2"
-   }
-  ]
- },
- {
-  "id": "A11 glare: the eyes go back to the sleeping slit",
-  "file": "art/glare.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 25,
-    "y": 6,
-    "from": "3",
-    "to": "2"
-   },
-   {
-    "x": 26,
-    "y": 6,
-    "from": "3",
-    "to": "2"
-   },
-   {
-    "x": 29,
-    "y": 6,
-    "from": "3",
-    "to": "2"
-   },
-   {
-    "x": 30,
-    "y": 6,
-    "from": "3",
-    "to": "2"
-   },
-   {
-    "x": 25,
-    "y": 7,
-    "from": "2",
-    "to": "3"
-   },
-   {
-    "x": 26,
-    "y": 7,
-    "from": "2",
-    "to": "3"
-   },
-   {
-    "x": 29,
-    "y": 7,
-    "from": "2",
-    "to": "3"
-   },
-   {
-    "x": 30,
-    "y": 7,
-    "from": "2",
-    "to": "3"
-   }
-  ]
- },
- {
-  "id": "A12 glare: one rack pixel differs from sleep's",
-  "file": "art/glare.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 16,
-    "y": 13,
-    "from": "5",
-    "to": "6"
-   }
-  ]
- },
- {
-  "id": "P1  peek: catchlight moved to the eye's lower row, costing a third pixel",
-  "file": "art/peek.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 29,
-    "y": 6,
-    "from": "4",
-    "to": "3"
-   },
-   {
-    "x": 29,
-    "y": 7,
-    "from": "3",
-    "to": "4"
-   }
-  ]
- },
- {
-  "id": "P2  peek: catchlight painted in text instead of accent",
-  "file": "art/peek.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 29,
-    "y": 6,
-    "from": "4",
-    "to": "2"
-   }
-  ]
- },
- {
-  "id": "P3  peek: catchlight removed, back to a flat open hole",
-  "file": "art/peek.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 29,
-    "y": 6,
-    "from": "4",
-    "to": "3"
-   }
-  ]
- },
- {
-  "id": "P4  peek: a second catchlight added, in the other eye",
-  "file": "art/peek.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 25,
-    "y": 6,
-    "from": "2",
-    "to": "4"
-   }
-  ]
- },
- {
-  "id": "P5  peek: catchlight moved to the upper RIGHT corner",
-  "file": "art/peek.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 29,
-    "y": 6,
-    "from": "4",
-    "to": "3"
-   },
-   {
-    "x": 30,
-    "y": 6,
-    "from": "3",
-    "to": "4"
-   }
-  ]
- },
- {
-  "id": "P6  peek: body ink left inside the open socket",
-  "file": "art/peek.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 30,
-    "y": 7,
-    "from": "3",
-    "to": "2"
-   }
-  ]
- },
- {
-  "id": "P7  alert: the catchlight given to another pose's face",
-  "file": "art/alert.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 29,
-    "y": 6,
-    "from": "3",
-    "to": "4"
-   }
-  ]
- },
- {
-  "id": "P8  peek: the left eye opened too, so both eyes peek",
-  "file": "art/peek.grid.txt",
-  "tests": [
-   "test/art.test.ts",
-   "test/mascot.test.ts"
-  ],
-  "pixels": [
-   {
-    "x": 25,
-    "y": 6,
-    "from": "2",
-    "to": "3"
-   },
-   {
-    "x": 26,
-    "y": 6,
-    "from": "2",
-    "to": "3"
-   }
-  ]
- },
- {
-  "id": "R1  readme: the dark source points at the light variant",
-  "file": "src/readme.ts",
-  "tests": [
-   "test/readme.test.ts"
-  ],
-  "find": "<source media=\"(prefers-color-scheme: dark)\" srcset=\"${DARK_SRC}\">",
-  "replace": "<source media=\"(prefers-color-scheme: dark)\" srcset=\"${LIGHT_SRC}\">"
- },
- {
-  "id": "R2  readme: the light source dropped, so one file serves both themes",
-  "file": "src/readme.ts",
-  "tests": [
-   "test/readme.test.ts"
-  ],
-  "find": "  <source media=\"(prefers-color-scheme: light)\" srcset=\"${LIGHT_SRC}\">\n",
-  "replace": ""
- },
- {
-  "id": "R3  readme: the fallback image becomes the light variant",
-  "file": "src/readme.ts",
-  "tests": [
-   "test/readme.test.ts"
-  ],
-  "find": "  <img src=\"${DARK_SRC}\" alt=",
-  "replace": "  <img src=\"${LIGHT_SRC}\" alt="
- },
- {
-  "id": "R4  readme: the alt text recites the Session instead of describing the picture",
-  "file": "src/readme.ts",
-  "tests": [
-   "test/readme.test.ts"
-  ],
-  "find": "  const { imageAlt, transcriptSummary } = o.content.readme;",
-  "replace": "  const transcriptSummary = o.content.readme.transcriptSummary;\n  const imageAlt = o.content.role;"
- },
- {
-  "id": "R5  readme: the alt text emptied, so the picture is nameless",
-  "file": "src/readme.ts",
-  "tests": [
-   "test/readme.test.ts"
-  ],
-  "find": "alt=\"${esc(imageAlt)}\" width",
-  "replace": "alt=\"\" width"
- },
- {
-  "id": "R6  readme: the alt text unescaped, so a quote in it ends the attribute",
-  "file": "src/readme.ts",
-  "tests": [
-   "test/readme.test.ts"
-  ],
-  "find": "alt=\"${esc(imageAlt)}\"",
-  "replace": "alt=\"${imageAlt}\""
- },
- {
-  "id": "R7  readme: the transcript label unescaped, so the owner's words become markup",
-  "file": "src/readme.ts",
-  "tests": [
-   "test/readme.test.ts"
-  ],
-  "find": "<summary>${esc(transcriptSummary)}</summary>",
-  "replace": "<summary>${transcriptSummary}</summary>"
- },
- {
-  "id": "R8  readme: the image pinned to a pixel width, so the phone render overflows",
-  "file": "src/readme.ts",
-  "tests": [
-   "test/readme.test.ts"
-  ],
-  "find": "width=\"100%\">\n</picture>",
-  "replace": "width=\"846\">\n</picture>"
- },
- {
-  "id": "R9  readme: the fence fixed at three, so a backtick run inside closes it early",
-  "file": "src/readme.ts",
-  "tests": [
-   "test/readme.test.ts"
-  ],
-  "find": "return \"`\".repeat(Math.max(3, longest + 1));",
-  "replace": "return \"`\".repeat(3);"
- },
- {
-  "id": "R10 readme: the blank line after the summary dropped, so the fence is literal text",
-  "file": "src/readme.ts",
-  "tests": [
-   "test/readme.test.ts"
-  ],
-  "find": "<summary>${esc(transcriptSummary)}</summary>\n\n${f}",
-  "replace": "<summary>${esc(transcriptSummary)}</summary>\n${f}"
- },
- {
-  "id": "R11 readme: the transcript emitted with no fence at all, so the grid collapses",
-  "file": "src/readme.ts",
-  "tests": [
-   "test/readme.test.ts"
-  ],
-  "find": "${f}\n${o.transcript}\n${f}",
-  "replace": "${o.transcript}"
- },
- {
-  "id": "R12 readme: the dark path renamed, so the README names a file nothing writes",
-  "file": "src/readme.ts",
-  "tests": [
-   "test/readme.test.ts"
-  ],
-  "find": "export const DARK_SRC = \"assets/session-dark.svg\";",
-  "replace": "export const DARK_SRC = \"assets/session.svg\";"
- },
- {
-  "id": "R13 readme: the light path made absolute, so GitHub serves it through camo",
-  "file": "src/readme.ts",
-  "tests": [
-   "test/readme.test.ts"
-  ],
-  "find": "export const LIGHT_SRC = \"assets/session-light.svg\";",
-  "replace": "export const LIGHT_SRC = \"https://raw.githubusercontent.com/saltless-bruh/saltless-bruh/main/assets/session-light.svg\";"
- },
- {
-  "id": "R14 build: the README composed but never written",
-  "file": "src/build.ts",
-  "tests": [
-   "test/readme.test.ts"
-  ],
-  "find": "  writeFileSync(new URL(\"../README.md\", outDir), readme);",
-  "replace": ""
- },
- {
-  "id": "R15 build: the README written inside assets/, below where its paths resolve from",
-  "file": "src/build.ts",
-  "tests": [
-   "test/readme.test.ts"
-  ],
-  "find": "writeFileSync(new URL(\"../README.md\", outDir), readme);",
-  "replace": "writeFileSync(new URL(\"README.md\", outDir), readme);"
- },
- {
-  "id": "R16 build: the name gate over the assembled README removed",
-  "file": "src/build.ts",
-  "tests": [
-   "test/readme.test.ts"
-  ],
-  "find": "  assertNoForbiddenNames(readme, \"the generated README\");\n",
-  "replace": ""
- },
- {
-  "id": "R17 build: the transcript truncated to its first rows before it reaches the README",
-  "file": "src/build.ts",
-  "tests": [
-   "test/readme.test.ts"
-  ],
-  "find": "  const readme = renderReadme({ content, transcript });",
-  "replace": "  const readme = renderReadme({ content, transcript: transcript.split(\"\\n\").slice(0, 10).join(\"\\n\") });"
- },
- {
-  "id": "R18 content: the picture's accessible name no longer validated",
-  "file": "src/content.ts",
-  "tests": [
-   "test/content.test.ts"
-  ],
-  "find": "  text(c.readme.imageAlt, \"readme.imageAlt\");\n",
-  "replace": ""
- },
- {
-  "id": "R19 content: the README copy block no longer required to be there",
-  "file": "src/content.ts",
-  "tests": [
-   "test/content.test.ts"
-  ],
-  "find": "  if (!isObj(c.readme)) fail(\"readme must be an object\");\n",
-  "replace": ""
- },
- {
-  "id": "G1  gates: the name match made case-sensitive, so a lowercase spelling escapes",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    const hay = body.toLowerCase();",
-  "replace": "    const hay = body;"
- },
- {
-  "id": "G2  gates: the fallback walk stops at the top level",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    if (entry.isDirectory()) out.push(...walk(full, base));",
-  "replace": "    if (entry.isDirectory()) continue;"
- },
- {
-  "id": "G3  gates: only tracked files listed, so a new untracked file is never scanned",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    return git(\"ls-files\", \"-z\", \"--cached\", \"--others\", \"--exclude-standard\")",
-  "replace": "    return git(\"ls-files\", \"-z\", \"--cached\")"
- },
- {
-  "id": "G4  gates: git's ignore rules dropped, so the local credential file is scanned",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": ", \"--exclude-standard\")\n      .split(\"\\0\")",
-  "replace": ")\n      .split(\"\\0\")"
- },
- {
-  "id": "G5  gates: an empty needle list passes instead of being refused",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    throw new Error(\"the forbidden-name list is empty, so this scan would pass for every tree there is (ADR 0001)\");",
-  "replace": "    return [];"
- },
- {
-  "id": "G7  gates: the GitHub token shape removed from the secret gate",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  { label: \"a GitHub token (gh?_ prefix)\", pattern: /\\bgh[pousr]_[A-Za-z0-9]{36,}/ },\n",
-  "replace": ""
- },
- {
-  "id": "G13 gates: the en-dash dropped from the dash gate",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "const DASHES: [string, string][] = [[\"\\u2014\", \"an em-dash\"], [\"\\u2013\", \"an en-dash\"]];",
-  "replace": "const DASHES: [string, string][] = [[\"\\u2014\", \"an em-dash\"]];"
- },
- {
-  "id": "G14 gates: the dash finding reports the index instead of the line",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "      if (line.includes(ch)) out.push(`line ${i + 1} carries ${name}`);",
-  "replace": "      if (line.includes(ch)) out.push(`line ${i} carries ${name}`);"
- },
- {
-  "id": "G15 gates: the control range narrowed, so a tab and a carriage return pass",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "const CONTROL = /[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f\\ufeff]/;",
-  "replace": "const CONTROL = /[\\u0000-\\u0008\\u000e-\\u001f]/;"
- },
- {
-  "id": "G16 gates: DEL, the C1 block and the byte order mark dropped",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "\\u007f-\\u009f\\ufeff]/;",
-  "replace": "]/;"
- },
- {
-  "id": "G17 gates: only the first absent glyph is looked for",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  for (const ch of FORBIDDEN_GLYPHS) {",
-  "replace": "  for (const ch of [...FORBIDDEN_GLYPHS].slice(0, 1)) {"
- },
- {
-  "id": "G18 gates: the reduced-motion check weakened to the media query alone",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "const REDUCED_MOTION = /@media\\s*\\(\\s*prefers-reduced-motion\\s*:\\s*reduce\\s*\\)\\s*\\{\\s*\\*\\s*\\{\\s*animation\\s*:\\s*none\\s*!\\s*important\\s*;?\\s*\\}/;",
-  "replace": "const REDUCED_MOTION = /@media\\s*\\(\\s*prefers-reduced-motion\\s*:\\s*reduce\\s*\\)/;"
- },
- {
-  "id": "G19 gates: the SMIL check removed, so motion that ignores the rule passes",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  const smil = SMIL.exec(svg);",
-  "replace": "  const smil = null as RegExpExecArray | null;"
- },
- {
-  "id": "G20 gates: dangling references compared against themselves, so none are ever dangling",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  const dangling = [...refs].filter((r) => !known.has(r)).sort();",
-  "replace": "  const dangling = [...refs].filter((r) => !refs.has(r)).sort();"
- },
- {
-  "id": "G21 gates: ids deduplicated before the duplicate check, which then finds none",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  const ids = [...svg.matchAll(/\\sid=\"([^\"]*)\"/g)].map((m) => m[1]);",
-  "replace": "  const ids = [...new Set([...svg.matchAll(/\\sid=\"([^\"]*)\"/g)].map((m) => m[1]))];"
- },
- {
-  "id": "G22 gates: the missing-viewBox check removed",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    out.push(\"no viewBox, so the picture cannot scale with the README column\");\n",
-  "replace": "\n"
- },
- {
-  "id": "G23 gates: the aspect-ratio tolerance widened, so letterboxing passes",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "        if (Math.abs(w / h - want) / want > 0.01) {",
-  "replace": "        if (Math.abs(w / h - want) / want > 100) {"
- },
- {
-  "id": "G24 gates: the size budget counted in characters instead of bytes",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  const bytes = Buffer.byteLength(svg, \"utf8\");",
-  "replace": "  const bytes = svg.length;"
- },
- {
-  "id": "G25 gates: the size budget raised tenfold",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "export const SIZE_BUDGET_BYTES = 250_000;",
-  "replace": "export const SIZE_BUDGET_BYTES = 2_500_000;"
- },
- {
-  "id": "G26 gates: a stripped <style> element no longer refused in the README",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  [/<style/i, \"a <style> element\"],\n",
-  "replace": ""
- },
- {
-  "id": "G27 gates: a stripped inline style attribute no longer refused in the README",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  [/style=/i, \"an inline style attribute\"],\n",
-  "replace": ""
- },
- {
-  "id": "G28 gates: the asset check reads the README instead of the filesystem",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    if (src !== null && !exists(src)) out.push(`references ${src}, which is not there`);",
-  "replace": "    if (src !== null && !readme.includes(src)) out.push(`references ${src}, which is not there`);"
- },
- {
-  "id": "G29 gates: a README with no transcript block passes",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    out.push(\"no <details> transcript block, so the Session's words reach no screen reader, search engine or copy-paste (ADR 0004)\");\n",
-  "replace": ""
- },
- {
-  "id": "G30 gates: a transcript outside a fence passes, so the column grid can collapse",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    out.push(\"the transcript is not inside a fenced code block, so its column grid collapses into prose\");\n",
-  "replace": ""
- },
- {
-  "id": "G31 gates: absent folded into pass, so an unbuilt output reports success",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  if (results.some((r) => r.status === \"absent\")) return 3;\n",
-  "replace": ""
- },
- {
-  "id": "G32 gates: absent outranks fail, so a failure is reported as not-built",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  if (results.some((r) => r.status === \"fail\")) return 1;\n  if (results.some((r) => r.status === \"absent\")) return 3;",
-  "replace": "  if (results.some((r) => r.status === \"absent\")) return 3;\n  if (results.some((r) => r.status === \"fail\")) return 1;"
- },
- {
-  "id": "G33 gates: the type check's exit status ignored",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    results.push(tsc.ok ? pass(\"typecheck\", \"npm run typecheck exited 0\") : fail(\"typecheck\", \"npm run typecheck\", [tsc.output]));",
-  "replace": "    results.push(pass(\"typecheck\", \"npm run typecheck exited 0\"));"
- },
- {
-  "id": "G34 gates: a cache with no timestamp passes, so stale figures read as fresh",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "        problems.push(\"carries no fetchedAt timestamp, so the age of the figures would read as zero\");\n",
-  "replace": ""
- },
- {
-  "id": "G35 gates: an empty calendar passes, so the Scan Sweep has nothing real to draw",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "      if (!Array.isArray(file.activity?.calendar) || file.activity.calendar.length === 0) {",
-  "replace": "      if (!Array.isArray(file.activity?.calendar)) {"
- },
- {
-  "id": "G36 gates: the placeholder gate removed, so it can leak into a published surface",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  results.push(visible.length === 0\n    ? absent(\"placeholder names\", [GENERATED.dark, GENERATED.light, GENERATED.readme])\n    : verdict(\"placeholder names\", visible.join(\", \"), placeholders));\n",
-  "replace": ""
- },
- {
-  "id": "G37 gates: the generated assets dropped from the dash gate's scope",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    results.push(verdict(\"dashes in the assets\", svgPaths.join(\", \"), over(findDashes)));\n",
-  "replace": ""
- },
- {
-  "id": "G38 gates: the owner's copy dropped from the dash gate's scope",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    results.push(verdict(\"dashes in content.json\", \"content.json\", findDashes(read(\"content.json\")).map((d) => `content.json ${d}`)));\n",
-  "replace": ""
- },
- {
-  "id": "G39 gates: an absence no longer says which path is missing",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  ({ gate, status: \"absent\", detail: `not built yet: ${missing.join(\", \")}`, problems: [], reason: \"unbuilt\", missing });",
-  "replace": "  ({ gate, status: \"absent\", detail: \"not built yet\", problems: [], reason: \"unbuilt\" });"
- },
- {
-  "id": "G40 gates: a failure reported in the words of an absence",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    ? \"\\nGATES FAILED. Each line above says what is wrong and in which file.\"",
-  "replace": "    ? \"\\nNOT BUILT YET.\""
- },
- {
-  "id": "W1  refresh: the fetch handed the built-in GITHUB_TOKEN",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "          PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run build",
-  "replace": "          PROFILE_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run build"
- },
- {
-  "id": "W2  refresh: the cache dropped from the commit, so it is discarded every day",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "          git add -- assets cache README.md",
-  "replace": "          git add -- assets README.md"
- },
- {
-  "id": "W3  refresh: the change guard watches fewer paths than the commit adds",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "git status --porcelain -- assets cache README.md",
-  "replace": "git status --porcelain -- assets README.md"
- },
- {
-  "id": "W4  refresh: the gates step removed, so the publish is ungated",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "      - name: Gate the result before any of it is published\n        env:\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run gates\n\n",
-  "replace": ""
- },
- {
-  "id": "W5  refresh: the change guard removed, so it commits on every run",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "          if [ -z \"$(git status --porcelain -- assets cache README.md)\" ]; then\n            echo \"assets, cache and README.md are all unchanged; nothing to commit\"\n            exit 0\n          fi\n",
-  "replace": ""
- },
- {
-  "id": "W6  refresh: the permissions widened past what a push needs",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "permissions:\n  contents: write",
-  "replace": "permissions:\n  contents: write\n  issues: write"
- },
- {
-  "id": "W7  refresh: the cron moved onto the hour, where every schedule is queued",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "    - cron: \"17 4 * * *\"",
-  "replace": "    - cron: \"0 4 * * *\""
- },
- {
-  "id": "W8  refresh: the manual trigger removed, so the first run waits a day",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "  workflow_dispatch:\n",
-  "replace": ""
- },
- {
-  "id": "W9  refresh: a run can be cancelled between its commit and its push",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "  cancel-in-progress: false",
-  "replace": "  cancel-in-progress: true"
- },
- {
-  "id": "W10 refresh: the token promoted to the job, so every step carries it",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "  refresh:\n    runs-on: ubuntu-latest",
-  "replace": "  refresh:\n    runs-on: ubuntu-latest\n    env:\n      PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}"
- },
- {
-  "id": "W11 refresh: the gates handed a credential they do not read",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "        env:\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run gates",
-  "replace": "        env:\n          PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run gates"
- },
- {
-  "id": "W12 refresh: an action unpinned to a moving branch",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "      - uses: actions/checkout@v7",
-  "replace": "      - uses: actions/checkout@main"
- },
- {
-  "id": "W13 refresh: the suite runs after the publish instead of before it",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "      - run: npm test\n",
-  "replace": ""
- },
- {
-  "id": "G41 gates: the README dropped from the glyph gate, so a blank box ships in the transcript",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "        ...(there(GENERATED.readme) ? findAbsentGlyphs(read(GENERATED.readme)).map((m) => `${GENERATED.readme} ${m}`) : []),\n",
-  "replace": ""
- },
- {
-  "id": "G42 gates: the glyph gate removed from a built tree's run",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    results.push(verdict(\n      \"glyphs\",\n",
-  "replace": "    if (false) results.push(verdict(\n      \"glyphs\",\n"
- },
- {
-  "id": "G45 gates: a file that ships with the repository reported as something a build would write",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  ({ gate, status: \"absent\", detail: `missing from the checkout: ${missing.join(\", \")}`, problems: [], reason: \"missing\", missing });",
-  "replace": "  ({ gate, status: \"absent\", detail: `missing from the checkout: ${missing.join(\", \")}`, problems: [], reason: \"unbuilt\", missing });"
- },
- {
-  "id": "G47 gates: the missing-from-the-checkout block dropped from the summary",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  const missing = of(\"missing\");\n  if (missing.length > 0) {",
-  "replace": "  const missing = of(\"missing\");\n  if (false) {"
- },
- {
-  "id": "G48 gates: an absence stops saying why, so the summary is back to assuming",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    results.filter((r) => r.status === \"absent\" && (r.reason ?? \"unbuilt\") === reason);",
-  "replace": "    results.filter((r) => r.status === \"absent\" && \"unbuilt\" === reason);"
- },
- {
-  "id": "G49 gates: the summary names a variable nothing reads",
-  "file": "src/content.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "export const FORBIDDEN_NAMES_ENV = \"PROFILE_FORBIDDEN_NAMES\";",
-  "replace": "export const FORBIDDEN_NAMES_ENV = \"PROFILE_FORBIDDEN_NAME\";"
- },
- {
-  "id": "AC1 activity: the unset-token failure demands read:user again, which the API does not need",
-  "file": "src/activity.ts",
-  "tests": [
-   "test/activity.test.ts"
-  ],
-  "find": "A user token with the repo scope is enough for your own figures; read:user is only needed to read another user's contributions.",
-  "replace": "The token needs the read:user scope."
- },
- {
-  "id": "AC2 activity: the 401 hint blames the scope that was measured unnecessary",
-  "file": "src/activity.ts",
-  "tests": [
-   "test/activity.test.ts"
-  ],
-  "find": "is either invalid or missing the repo scope",
-  "replace": "is either invalid or missing the read:user scope"
- },
- {
-  "id": "W15 refresh: the GITHUB_TOKEN claim stated as measured when it was never tested",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "echo \"GITHUB_TOKEN is still assumed not to do, unverified: it is an installation token\" >&2",
-  "replace": "echo \"GITHUB_TOKEN will not do, measured: it is an installation token\" >&2"
- },
- {
-  "id": "W16 refresh: the name list passed under a name nothing reads",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run gates",
-  "replace": "          PROFILE_FORBIDDEN_NAME: ${{ secrets.PROFILE_FORBIDDEN_NAME }}\n        run: npm run gates"
- },
- {
-  "id": "G57 gates: the placeholder predicate ignores its argument, so every assigned secret escapes",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "      if (looksIllustrative(m[1])) continue;",
-  "replace": "      if (m[1] !== undefined) continue;"
- },
- {
-  "id": "G58 gates: placeholders not recognised, so a document explaining the setting blocks a build",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "      if (looksIllustrative(m[1])) continue;",
-  "replace": "      if (false) continue;"
- },
- {
-  "id": "G59 gates: placeholder detection widened until a real credential reads as a placeholder",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "const looksIllustrative = (s: string): boolean =>\n  !/[0-9]/.test(s) && /^[A-Za-z]+(?:[-_.][A-Za-z]+)*$/.test(s);",
-  "replace": "const looksIllustrative = (s: string): boolean => /^[A-Za-z0-9_\\-+/]+$/.test(s);"
- },
- {
-  "id": "G60 gates: the digit test dropped, so a generated value reads as illustrative",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  !/[0-9]/.test(s) && /^[A-Za-z]+(?:[-_.][A-Za-z]+)*$/.test(s);",
-  "replace": "  /^[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)*$/.test(s);"
- },
- {
-  "id": "G61 gates: the minimum credential length dropped, so a two-character value is a secret",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "const MIN_CREDENTIAL_LENGTH = 8;",
-  "replace": "const MIN_CREDENTIAL_LENGTH = 1;"
- },
- {
-  "id": "G62 gates: the assigned-credential value narrowed to letters, so a real token escapes",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    pattern: /(?:^|[^A-Za-z0-9])(?:token|secret|passwd|password|api[_-]?key|access[_-]?key|private[_-]?key|credentials?)[\"']?[^\\S\\n]*[=:][^\\S\\n]*[\"']?([A-Za-z0-9_\\-+/]{20,})/gi,",
-  "replace": "    pattern: /(?:^|[^A-Za-z0-9])(?:token|secret|passwd|password|api[_-]?key|access[_-]?key|private[_-]?key|credentials?)[\"']?[^\\S\\n]*[=:][^\\S\\n]*[\"']?([A-Za-z]{20,})/gi,"
- },
- {
-  "id": "G63 gates: the keyword boundary back to \\b, which misses my_token =",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    pattern: /(?:^|[^A-Za-z0-9])(?:token|secret",
-  "replace": "    pattern: /\\b(?:token|secret"
- },
- {
-  "id": "G64 gates: a .env that sets nothing is indistinguishable from having no .env",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  if (statSync(path, { throwIfNoEntry: false })?.isFile() !== true) return \"no-file\";",
-  "replace": "  if (statSync(path, { throwIfNoEntry: false })?.isFile() !== true) return \"absent\";"
- },
- {
-  "id": "G65 gates: any line in .env counts, so a name written as a key reads as configured",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    if (key !== name) continue;",
-  "replace": "    if (key === \"\") continue;"
- },
- {
-  "id": "G66 gates: a blank value in .env reads as set",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    found = value === \"\" ? \"blank\" : \"set\";",
-  "replace": "    found = \"set\";"
- },
- {
-  "id": "G67 gates: the unloaded-file case loses its own advice, the one nobody can guess",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    case \"set\":\n      return `${NOT_SCANNED}, yet a .env here sets ${FORBIDDEN_NAMES_ENV}: this process did not load it, so run it as \\`npm run gates\\`, which passes --env-file-if-exists=.env`;",
-  "replace": "    case \"set\":\n      return NOT_SCANNED;"
- },
- {
-  "id": "G68 gates: the .env diagnosis quotes the file, which is how the name got out in the first place",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "      return `${NOT_SCANNED}, and a .env here does not set ${FORBIDDEN_NAMES_ENV}: if you meant to configure it, check that every line reads NAME=value, with the name on the LEFT of the = (a name written as a key sets nothing)`;",
-  "replace": "      return `${NOT_SCANNED}, and a .env here does not set ${FORBIDDEN_NAMES_ENV}: its first line is ${readFileSync(join(dirOf(root), \".env\"), \"utf8\").split(\"\\n\")[0]}`;"
- },
- {
-  "id": "G69 gates: the unconfigured note reads as a clean tree",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "const NOT_SCANNED = \"no private names configured, so nothing was scanned for\";",
-  "replace": "const NOT_SCANNED = \"the tree is clean\";"
- },
- {
-  "id": "G70 gates: the pass that enforced nothing stops saying so",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    results.push({ ...pass(\"forbidden names\", nameListNote(root)), unenforced: true });",
-  "replace": "    results.push(pass(\"forbidden names\", nameListNote(root)));"
- },
- {
-  "id": "G71 gates: the summary stops flagging a pass that checked nothing",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  const note = unenforced.length === 0 ? \"\" : `\\n\\nNOTE: ${unenforced.map((r) => r.gate).join(\", \")} passed without checking anything.\\nRead its line above for why. That is not the same claim as the tree having been checked.`;",
-  "replace": "  const note = \"\";"
- },
- {
-  "id": "G72 gates: configured names are no longer scanned, so opt-out becomes removal",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    const hits = collisions.length > 0 ? collisions : scanTreeForForbiddenNames(root, names).map((h) => `${h} carries a forbidden name (ADR 0001)`);",
-  "replace": "    const hits: string[] = collisions;"
- },
- {
-  "id": "G73 gates: a configured name the profile shows is reported as file hits, not as the contradiction",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "    const collisions = identityCollisions(root, names);",
-  "replace": "    const collisions: string[] = [];"
- },
- {
-  "id": "G74 gates: the mixed-cause summary reports whichever cause it looked at first",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "  const missing = of(\"missing\");",
-  "replace": "  const missing = unbuilt.length > 0 ? [] : of(\"missing\");"
- },
- {
-  "id": "AC3 activity: the scan over fetched data removed, so a name can arrive and be published",
-  "file": "src/activity.ts",
-  "tests": [
-   "test/activity.test.ts"
-  ],
-  "find": "      assertNoForbiddenNames(raw, \"data fetched from the GitHub API\");",
-  "replace": "      if (false) assertNoForbiddenNames(raw, \"data fetched from the GitHub API\");"
- },
- {
-  "id": "W17 refresh: the preflight sends the owner to mint a read:user token",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "echo \"It is a user token. Measured 2026-10-02: the repo scope is enough\" >&2",
-  "replace": "echo \"It is a personal access token with the read:user scope.\" >&2"
- },
- {
-  "id": "W18 refresh: the name list required again, so the refresh stops without it",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "          echo \"the token is present\"",
-  "replace": "          if [ -z \"${PROFILE_FORBIDDEN_NAMES}\" ]; then\n            echo \"missing PROFILE_FORBIDDEN_NAMES\" >&2\n            exit 1\n          fi\n          echo \"the token is present\""
- },
- {
-  "id": "W19 refresh: the optional secret no longer reaches the build, so setting it would change nothing",
-  "file": ".github/workflows/refresh.yml",
-  "tests": [
-   "test/workflow.test.ts"
-  ],
-  "find": "          PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run build",
-  "replace": "          PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}\n        run: npm run build"
- },
- {
-  "id": "E1  package: npm run gates stops loading .env, so a configured name list is read by nobody",
-  "file": "package.json",
-  "tests": [
-   "test/env-file.test.ts"
-  ],
-  "find": "\"gates\": \"node --env-file-if-exists=.env scripts/gates.ts\"",
-  "replace": "\"gates\": \"node scripts/gates.ts\""
- },
- {
-  "id": "E2  package: npm run build stops loading .env, so the token is read by nobody",
-  "file": "package.json",
-  "tests": [
-   "test/env-file.test.ts"
-  ],
-  "find": "\"build\": \"node --env-file-if-exists=.env src/build.ts\"",
-  "replace": "\"build\": \"node src/build.ts\""
- },
- {
-  "id": "E3  package: gates downgraded to the strict --env-file, which exits 9 wherever there is no .env",
-  "file": "package.json",
-  "tests": [
-   "test/env-file.test.ts"
-  ],
-  "find": "\"gates\": \"node --env-file-if-exists=.env",
-  "replace": "\"gates\": \"node --env-file=.env"
- },
- {
-  "id": "E4  package: build downgraded to the strict --env-file, which breaks every CI run",
-  "file": "package.json",
-  "tests": [
-   "test/env-file.test.ts"
-  ],
-  "find": "\"build\": \"node --env-file-if-exists=.env",
-  "replace": "\"build\": \"node --env-file=.env"
- },
- {
-  "id": "E5  package: the flag points at the example instead of the real file",
-  "file": "package.json",
-  "tests": [
-   "test/env-file.test.ts"
-  ],
-  "find": "\"gates\": \"node --env-file-if-exists=.env scripts/gates.ts\"",
-  "replace": "\"gates\": \"node --env-file-if-exists=.env.example scripts/gates.ts\""
- },
- {
-  "id": "E6  package: npm test given .env, so a local file can change a test result",
-  "file": "package.json",
-  "tests": [
-   "test/env-file.test.ts"
-  ],
-  "find": "\"test\": \"node --test\"",
-  "replace": "\"test\": \"node --env-file-if-exists=.env --test\""
- },
- {
-  "id": "V1  render-check: an unknown engine falls back to Chrome instead of being refused",
-  "file": "scripts/render-check.ts",
-  "tests": [
-   "test/render-check.test.ts"
-  ],
-  "find": "  if (!(ENGINES as readonly string[]).includes(named)) {\n    throw new Error(`unknown engine ${JSON.stringify(named)}; expected one of ${ENGINES.join(\", \")}`);\n  }\n  return named as Engine;",
-  "replace": "  if (!(ENGINES as readonly string[]).includes(named)) return \"chrome\";\n  return named as Engine;"
- },
- {
-  "id": "V2  render-check: command() drives Chrome whatever engine was asked for",
-  "file": "scripts/render-check.ts",
-  "tests": [
-   "test/render-check.test.ts"
-  ],
-  "find": "  return s.engine === \"firefox\"\n    ? { bin: \"firefox\", args: firefoxArgs(s, firefoxProfile(profileDir, s.reduced)) }\n    : { bin: \"google-chrome-stable\", args: chromeArgs(s) };",
-  "replace": "  return { bin: \"google-chrome-stable\", args: chromeArgs(s) };"
- },
- {
-  "id": "V3  render-check: Firefox always asked for reduced motion, whatever the run wanted",
-  "file": "scripts/render-check.ts",
-  "tests": [
-   "test/render-check.test.ts"
-  ],
-  "find": "  `user_pref(\"ui.prefersReducedMotion\", ${reduced ? 1 : 0});\\n`;",
-  "replace": "  `user_pref(\"ui.prefersReducedMotion\", ${reduced ? 1 : 1});\\n`;"
- },
- {
-  "id": "V4  render-check: Chrome stops being told about reduced motion",
-  "file": "scripts/render-check.ts",
-  "tests": [
-   "test/render-check.test.ts"
-  ],
-  "find": "  ...(s.reduced ? [\"--force-prefers-reduced-motion\"] : []),",
-  "replace": "  ...(s.reduced ? [] : []),"
- },
- {
-  "id": "V5  render-check: the freeze reads the animation duration where the delay belongs",
-  "file": "scripts/render-check.ts",
-  "tests": [
-   "test/render-check.test.ts"
-  ],
-  "find": "    const delay = explicit !== null ? Number(explicit[1]) : times.length >= 2 ? times[1] : null;",
-  "replace": "    const delay = explicit !== null ? Number(explicit[1]) : times.length >= 2 ? times[0] : null;"
- },
- {
-  "id": "V6  render-check: the per-rule shift emitted before the blanket rule, which then wins",
-  "file": "scripts/render-check.ts",
-  "tests": [
-   "test/render-check.test.ts"
-  ],
-  "find": "    `*{animation-delay:-${at}s!important;animation-play-state:paused!important}${shiftDelays(style[1], at)}</style>`,",
-  "replace": "    `${shiftDelays(style[1], at)}*{animation-delay:-${at}s!important;animation-play-state:paused!important}</style>`,"
- },
- {
-  "id": "V7  render-check: an unanimated document is frozen silently instead of refused",
-  "file": "scripts/render-check.ts",
-  "tests": [
-   "test/render-check.test.ts"
-  ],
-  "find": "  if (!svg.includes(\"</style>\")) throw new Error(`${label} has no <style> to freeze; nothing in it is animated`);",
-  "replace": "  if (!svg.includes(\"</style>\")) return svg;"
- },
- {
-  "id": "V8  render-check: Firefox sized to the image, so its window clips what Chrome shows",
-  "file": "scripts/render-check.ts",
-  "tests": [
-   "test/render-check.test.ts"
-  ],
-  "find": "  \"--headless\", \"--profile\", profile,\n  `--window-size=${s.width + 40},2400`,",
-  "replace": "  \"--headless\", \"--profile\", profile,\n  `--window-size=${s.width},2400`,"
- }
+  {
+    "id": "M1  timeline: drop the second swat so there is one strike",
+    "file": "src/timeline.ts",
+    "tests": [
+      "test/timeline.test.ts"
+    ],
+    "find": "  { state: \"swat-up\",   from: 29.4,  to: 29.8 },\n  { state: \"swat-down\", from: 29.8,  to: 30.2 },",
+    "replace": "  { state: \"glare\",     from: 29.4,  to: 30.2 },"
+  },
+  {
+    "id": "M2  timeline: the peek removed from the nap",
+    "file": "src/timeline.ts",
+    "tests": [
+      "test/timeline.test.ts"
+    ],
+    "find": "  { state: \"sleep\",     from: 18.75, to: 25 },\n  { state: \"peek\",      from: 25,    to: 26 },\n  { state: \"sleep\",     from: 26,    to: 28 },",
+    "replace": "  { state: \"sleep\",     from: 18.75, to: 28 },"
+  },
+  {
+    "id": "M3  timeline: a blow retimed to 200ms, with no gap left behind",
+    "file": "src/timeline.ts",
+    "tests": [
+      "test/timeline.test.ts"
+    ],
+    "find": "  { state: \"butt-down\", from: 31.2,  to: 31.6 },\n  { state: \"recover\",   from: 31.6,  to: 32.4 },",
+    "replace": "  { state: \"butt-down\", from: 31.2,  to: 31.4 },\n  { state: \"recover\",   from: 31.4,  to: 32.4 },"
+  },
+  {
+    "id": "M4  timeline: the glare removed, so nothing says the paw failed",
+    "file": "src/timeline.ts",
+    "tests": [
+      "test/timeline.test.ts"
+    ],
+    "find": "  { state: \"glare\",     from: 30.2,  to: 30.8 },\n  { state: \"butt-up\",   from: 30.8,  to: 31.2 },",
+    "replace": "  { state: \"butt-up\",   from: 30.2,  to: 31.2 },"
+  },
+  {
+    "id": "M5  timeline: DREAMING forgets the peek",
+    "file": "src/timeline.ts",
+    "tests": [
+      "test/mascot.test.ts",
+      "test/timeline.test.ts"
+    ],
+    "find": "export const DREAMING: PoseName[] = [\"sleep\", \"peek\"];",
+    "replace": "export const DREAMING: PoseName[] = [\"sleep\"];"
+  },
+  {
+    "id": "M6  mascot: bubble inflates in the window before the pop, not the nap",
+    "file": "src/mascot.ts",
+    "tests": [
+      "test/mascot.test.ts"
+    ],
+    "find": "  const grow = napBefore(i);",
+    "replace": "  const grow = MASCOT_TIMELINE[i - 1];"
+  },
+  {
+    "id": "M7  mascot: fault flashes twice as fast, 5 a second",
+    "file": "src/mascot.ts",
+    "tests": [
+      "test/mascot.test.ts"
+    ],
+    "find": "const FAULT_FLASH = { onMs: 200, dim: 0.5 };",
+    "replace": "const FAULT_FLASH = { onMs: 100, dim: 0.5 };"
+  },
+  {
+    "id": "M8  mascot: fault dims back to the healthy floor",
+    "file": "src/mascot.ts",
+    "tests": [
+      "test/mascot.test.ts"
+    ],
+    "find": "const FAULT_FLASH = { onMs: 200, dim: 0.5 };",
+    "replace": "const FAULT_FLASH = { onMs: 200, dim: 0.25 };"
+  },
+  {
+    "id": "M9  mascot: fault ends with the alert, so the glare is green",
+    "file": "src/mascot.ts",
+    "tests": [
+      "test/mascot.test.ts"
+    ],
+    "find": "  return { fault: [fault.from, hold.from], hold: [hold.from, hold.to] };",
+    "replace": "  return { fault: [fault.from, fault.to], hold: [hold.from, hold.to] };"
+  },
+  {
+    "id": "M10 mascot: healthy bank uncovered during the steady hold",
+    "file": "src/mascot.ts",
+    "tests": [
+      "test/mascot.test.ts"
+    ],
+    "find": "${showExcept(\"leds-live\", [[fault[0], hold[1]]])}",
+    "replace": "${showExcept(\"leds-live\", [[fault[0], hold[0]]])}"
+  },
+  {
+    "id": "M11 mascot: fault painted in accent, like the healthy state",
+    "file": "src/mascot.ts",
+    "tests": [
+      "test/mascot.test.ts"
+    ],
+    "find": "const FAULT_TOKEN: keyof Palette = \"error\";",
+    "replace": "const FAULT_TOKEN: keyof Palette = \"accent\";"
+  },
+  {
+    "id": "M12 mascot: fault bank moved inside .rack",
+    "file": "src/mascot.ts",
+    "tests": [
+      "test/mascot.test.ts"
+    ],
+    "find": "</g>\n<g class=\"leds-hold\">${path(\"led-steady\", allLit, RECOLOUR[LIT])}</g>\n<g class=\"leds-fault\">${path(\"led-fault\", allLit, FAULT_TOKEN)}</g>",
+    "replace": "<g class=\"leds-hold\">${path(\"led-steady\", allLit, RECOLOUR[LIT])}</g>\n<g class=\"leds-fault\">${path(\"led-fault\", allLit, FAULT_TOKEN)}</g>\n</g>"
+  },
+  {
+    "id": "M13 mascot: fault split per unit, so the three can drift apart",
+    "file": "src/mascot.ts",
+    "tests": [
+      "test/mascot.test.ts"
+    ],
+    "find": "<g class=\"leds-fault\">${path(\"led-fault\", allLit, FAULT_TOKEN)}</g>",
+    "replace": "<g class=\"leds-fault\">${UNITS.map((u, k) => path(`led-fault-${k}`, runsOf(rackRows, LIT, u), FAULT_TOKEN)).join(\"\")}</g>"
+  },
+  {
+    "id": "M14 mascot: steady hold held for the whole alarm",
+    "file": "src/mascot.ts",
+    "tests": [
+      "test/mascot.test.ts"
+    ],
+    "find": "${showDuring(\"leds-hold\", [hold])}",
+    "replace": "${showDuring(\"leds-hold\", [[fault[0], hold[1]]])}"
+  },
+  {
+    "id": "M15 mascot: ear slab cut out of the static pass",
+    "file": "src/mascot.ts",
+    "tests": [
+      "test/mascot.test.ts"
+    ],
+    "find": "${foot(rows)}${paints(cutOut(rows, TAIL), CAT, CAT_ROWS)}",
+    "replace": "${foot(rows)}${paints(cutOut(cutOut(rows, TAIL), earBox(POSES[name])), CAT, CAT_ROWS)}"
+  },
+  {
+    "id": "M16 mascot: steady bank repaints the dim LEDs too",
+    "file": "src/mascot.ts",
+    "tests": [
+      "test/mascot.test.ts"
+    ],
+    "find": "  const allLit = runsOf(rackRows, LIT, RACK_ROWS);",
+    "replace": "  const allLit = runsOf(rackRows, LIT + \"7\", RACK_ROWS);"
+  },
+  {
+    "id": "M17 mascot: the fault bank loses its own clock and follows a unit's",
+    "file": "src/mascot.ts",
+    "tests": [
+      "test/mascot.test.ts"
+    ],
+    "find": "${onClock(\"leds-fault\", \"leds-fault\")}",
+    "replace": ".leds-fault { animation: leds-fault 7s step-end infinite }"
+  },
+  {
+    "id": "M18 mascot: the healthy units are driven by the master loop instead",
+    "file": "src/mascot.ts",
+    "tests": [
+      "test/mascot.test.ts"
+    ],
+    "find": "${LED_PERIODS.map((s, i) => `.led-${i} { animation: ${ledName(i)} ${s}s step-end infinite }`).join(\"\\n\")}",
+    "replace": "${LED_PERIODS.map((s, i) => `.led-${i} { animation: ${ledName(i)} ${MASTER_SECONDS}s step-end infinite }`).join(\"\\n\")}"
+  },
+  {
+    "id": "M19 mascot: the steady hold flickers instead of holding",
+    "file": "src/mascot.ts",
+    "tests": [
+      "test/mascot.test.ts"
+    ],
+    "find": "${showDuring(\"leds-hold\", [hold])}",
+    "replace": "${faultFlash(\"leds-hold\", hold)}"
+  },
+  {
+    "id": "M20 mascot: the fault bank is visible in the still frame",
+    "file": "src/mascot.ts",
+    "tests": [
+      "test/mascot.test.ts"
+    ],
+    "find": ".leds-fault, .leds-hold { opacity: 0 }",
+    "replace": ".leds-hold { opacity: 0 }"
+  },
+  {
+    "id": "M21 mascot: the burst no longer owns its length",
+    "file": "src/mascot.ts",
+    "tests": [
+      "test/mascot.test.ts"
+    ],
+    "find": "    burst: [pop.from, pop.from + burstFor],",
+    "replace": "    burst: [pop.from, pop.to],"
+  },
+  {
+    "id": "A1  peek: the other eye opens as well",
+    "file": "art/peek.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 25,
+        "y": 6,
+        "from": "2",
+        "to": "3"
+      },
+      {
+        "x": 26,
+        "y": 6,
+        "from": "2",
+        "to": "3"
+      }
+    ]
+  },
+  {
+    "id": "A2  peek: the zZz is dropped",
+    "file": "art/peek.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 50,
+        "y": 0,
+        "from": "1",
+        "to": " "
+      },
+      {
+        "x": 50,
+        "y": 1,
+        "from": "1",
+        "to": " "
+      },
+      {
+        "x": 51,
+        "y": 1,
+        "from": "1",
+        "to": " "
+      },
+      {
+        "x": 45,
+        "y": 2,
+        "from": "1",
+        "to": " "
+      },
+      {
+        "x": 46,
+        "y": 2,
+        "from": "1",
+        "to": " "
+      },
+      {
+        "x": 47,
+        "y": 2,
+        "from": "1",
+        "to": " "
+      },
+      {
+        "x": 46,
+        "y": 3,
+        "from": "1",
+        "to": " "
+      },
+      {
+        "x": 45,
+        "y": 4,
+        "from": "1",
+        "to": " "
+      },
+      {
+        "x": 46,
+        "y": 4,
+        "from": "1",
+        "to": " "
+      },
+      {
+        "x": 47,
+        "y": 4,
+        "from": "1",
+        "to": " "
+      }
+    ]
+  },
+  {
+    "id": "A3  alert: the ears stay up",
+    "file": "art/alert.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 23,
+        "y": 5,
+        "from": "2",
+        "to": " "
+      },
+      {
+        "x": 31,
+        "y": 5,
+        "from": "2",
+        "to": " "
+      },
+      {
+        "x": 24,
+        "y": 4,
+        "from": " ",
+        "to": "2"
+      },
+      {
+        "x": 30,
+        "y": 4,
+        "from": " ",
+        "to": "2"
+      }
+    ]
+  },
+  {
+    "id": "A4  swat-up: the raised paw loses its accent",
+    "file": "art/swat-up.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 21,
+        "y": 4,
+        "from": "4",
+        "to": "2"
+      },
+      {
+        "x": 22,
+        "y": 4,
+        "from": "4",
+        "to": "2"
+      }
+    ]
+  },
+  {
+    "id": "A5  swat-down: the impact sparks are removed",
+    "file": "art/swat-down.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 17,
+        "y": 8,
+        "from": "1",
+        "to": " "
+      },
+      {
+        "x": 16,
+        "y": 9,
+        "from": "1",
+        "to": " "
+      }
+    ]
+  },
+  {
+    "id": "A6  swat-down: the blow reaches no further than the stretch",
+    "file": "art/swat-down.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 18,
+        "y": 10,
+        "from": "4",
+        "to": " "
+      },
+      {
+        "x": 19,
+        "y": 10,
+        "from": "4",
+        "to": " "
+      },
+      {
+        "x": 20,
+        "y": 10,
+        "from": "2",
+        "to": "4"
+      },
+      {
+        "x": 21,
+        "y": 10,
+        "from": "2",
+        "to": "4"
+      }
+    ]
+  },
+  {
+    "id": "A7  swat-down: the face changes too, so the blow is not one limb",
+    "file": "art/swat-down.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 29,
+        "y": 6,
+        "from": "3",
+        "to": "2"
+      },
+      {
+        "x": 30,
+        "y": 6,
+        "from": "3",
+        "to": "2"
+      }
+    ]
+  },
+  {
+    "id": "A8  butt-up: the head rears one row instead of two",
+    "file": "art/butt-up.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 23,
+        "y": 3,
+        "from": "2",
+        "to": " "
+      },
+      {
+        "x": 24,
+        "y": 3,
+        "from": "2",
+        "to": " "
+      },
+      {
+        "x": 25,
+        "y": 3,
+        "from": "2",
+        "to": " "
+      },
+      {
+        "x": 26,
+        "y": 3,
+        "from": "2",
+        "to": " "
+      },
+      {
+        "x": 27,
+        "y": 3,
+        "from": "2",
+        "to": " "
+      },
+      {
+        "x": 28,
+        "y": 3,
+        "from": "2",
+        "to": " "
+      },
+      {
+        "x": 29,
+        "y": 3,
+        "from": "2",
+        "to": " "
+      },
+      {
+        "x": 30,
+        "y": 3,
+        "from": "2",
+        "to": " "
+      },
+      {
+        "x": 31,
+        "y": 3,
+        "from": "2",
+        "to": " "
+      }
+    ]
+  },
+  {
+    "id": "A9  butt-down: the head is not driven down",
+    "file": "art/butt-down.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 24,
+        "y": 5,
+        "from": " ",
+        "to": "2"
+      },
+      {
+        "x": 25,
+        "y": 5,
+        "from": " ",
+        "to": "2"
+      },
+      {
+        "x": 26,
+        "y": 5,
+        "from": " ",
+        "to": "2"
+      },
+      {
+        "x": 27,
+        "y": 5,
+        "from": " ",
+        "to": "2"
+      },
+      {
+        "x": 28,
+        "y": 5,
+        "from": " ",
+        "to": "2"
+      },
+      {
+        "x": 29,
+        "y": 5,
+        "from": " ",
+        "to": "2"
+      },
+      {
+        "x": 30,
+        "y": 5,
+        "from": " ",
+        "to": "2"
+      }
+    ]
+  },
+  {
+    "id": "A10 recover: the ears stay pinned back",
+    "file": "art/recover.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 24,
+        "y": 4,
+        "from": "2",
+        "to": " "
+      },
+      {
+        "x": 30,
+        "y": 4,
+        "from": "2",
+        "to": " "
+      },
+      {
+        "x": 23,
+        "y": 5,
+        "from": " ",
+        "to": "2"
+      },
+      {
+        "x": 31,
+        "y": 5,
+        "from": " ",
+        "to": "2"
+      }
+    ]
+  },
+  {
+    "id": "A11 glare: the eyes go back to the sleeping slit",
+    "file": "art/glare.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 25,
+        "y": 6,
+        "from": "3",
+        "to": "2"
+      },
+      {
+        "x": 26,
+        "y": 6,
+        "from": "3",
+        "to": "2"
+      },
+      {
+        "x": 29,
+        "y": 6,
+        "from": "3",
+        "to": "2"
+      },
+      {
+        "x": 30,
+        "y": 6,
+        "from": "3",
+        "to": "2"
+      },
+      {
+        "x": 25,
+        "y": 7,
+        "from": "2",
+        "to": "3"
+      },
+      {
+        "x": 26,
+        "y": 7,
+        "from": "2",
+        "to": "3"
+      },
+      {
+        "x": 29,
+        "y": 7,
+        "from": "2",
+        "to": "3"
+      },
+      {
+        "x": 30,
+        "y": 7,
+        "from": "2",
+        "to": "3"
+      }
+    ]
+  },
+  {
+    "id": "A12 glare: one rack pixel differs from sleep's",
+    "file": "art/glare.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 16,
+        "y": 13,
+        "from": "5",
+        "to": "6"
+      }
+    ]
+  },
+  {
+    "id": "P1  peek: catchlight moved to the eye's lower row, costing a third pixel",
+    "file": "art/peek.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 29,
+        "y": 6,
+        "from": "4",
+        "to": "3"
+      },
+      {
+        "x": 29,
+        "y": 7,
+        "from": "3",
+        "to": "4"
+      }
+    ]
+  },
+  {
+    "id": "P2  peek: catchlight painted in text instead of accent",
+    "file": "art/peek.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 29,
+        "y": 6,
+        "from": "4",
+        "to": "2"
+      }
+    ]
+  },
+  {
+    "id": "P3  peek: catchlight removed, back to a flat open hole",
+    "file": "art/peek.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 29,
+        "y": 6,
+        "from": "4",
+        "to": "3"
+      }
+    ]
+  },
+  {
+    "id": "P4  peek: a second catchlight added, in the other eye",
+    "file": "art/peek.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 25,
+        "y": 6,
+        "from": "2",
+        "to": "4"
+      }
+    ]
+  },
+  {
+    "id": "P5  peek: catchlight moved to the upper RIGHT corner",
+    "file": "art/peek.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 29,
+        "y": 6,
+        "from": "4",
+        "to": "3"
+      },
+      {
+        "x": 30,
+        "y": 6,
+        "from": "3",
+        "to": "4"
+      }
+    ]
+  },
+  {
+    "id": "P6  peek: body ink left inside the open socket",
+    "file": "art/peek.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 30,
+        "y": 7,
+        "from": "3",
+        "to": "2"
+      }
+    ]
+  },
+  {
+    "id": "P7  alert: the catchlight given to another pose's face",
+    "file": "art/alert.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 29,
+        "y": 6,
+        "from": "3",
+        "to": "4"
+      }
+    ]
+  },
+  {
+    "id": "P8  peek: the left eye opened too, so both eyes peek",
+    "file": "art/peek.grid.txt",
+    "tests": [
+      "test/art.test.ts",
+      "test/mascot.test.ts"
+    ],
+    "pixels": [
+      {
+        "x": 25,
+        "y": 6,
+        "from": "2",
+        "to": "3"
+      },
+      {
+        "x": 26,
+        "y": 6,
+        "from": "2",
+        "to": "3"
+      }
+    ]
+  },
+  {
+    "id": "R1  readme: the dark source points at the light variant",
+    "file": "src/readme.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "<source media=\"(prefers-color-scheme: dark)\" srcset=\"${DARK_SRC}\">",
+    "replace": "<source media=\"(prefers-color-scheme: dark)\" srcset=\"${LIGHT_SRC}\">"
+  },
+  {
+    "id": "R2  readme: the light source dropped, so one file serves both themes",
+    "file": "src/readme.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "  <source media=\"(prefers-color-scheme: light)\" srcset=\"${LIGHT_SRC}\">\n",
+    "replace": ""
+  },
+  {
+    "id": "R3  readme: the fallback image becomes the light variant",
+    "file": "src/readme.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "  <img src=\"${DARK_SRC}\" alt=",
+    "replace": "  <img src=\"${LIGHT_SRC}\" alt="
+  },
+  {
+    "id": "R4  readme: the alt text recites the Session instead of describing the picture",
+    "file": "src/readme.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "  const { imageAlt, transcriptSummary } = o.content.readme;",
+    "replace": "  const transcriptSummary = o.content.readme.transcriptSummary;\n  const imageAlt = o.content.role;"
+  },
+  {
+    "id": "R5  readme: the alt text emptied, so the picture is nameless",
+    "file": "src/readme.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "alt=\"${esc(imageAlt)}\" width",
+    "replace": "alt=\"\" width"
+  },
+  {
+    "id": "R6  readme: the alt text unescaped, so a quote in it ends the attribute",
+    "file": "src/readme.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "alt=\"${esc(imageAlt)}\"",
+    "replace": "alt=\"${imageAlt}\""
+  },
+  {
+    "id": "R7  readme: the transcript label unescaped, so the owner's words become markup",
+    "file": "src/readme.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "<summary>${esc(transcriptSummary)}</summary>",
+    "replace": "<summary>${transcriptSummary}</summary>"
+  },
+  {
+    "id": "R8  readme: the image pinned to a pixel width, so the phone render overflows",
+    "file": "src/readme.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "width=\"100%\">\n</picture>",
+    "replace": "width=\"846\">\n</picture>"
+  },
+  {
+    "id": "R9  readme: the fence fixed at three, so a backtick run inside closes it early",
+    "file": "src/readme.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "return \"`\".repeat(Math.max(3, longest + 1));",
+    "replace": "return \"`\".repeat(3);"
+  },
+  {
+    "id": "R10 readme: the blank line after the summary dropped, so the fence is literal text",
+    "file": "src/readme.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "<summary>${esc(transcriptSummary)}</summary>\n\n${f}",
+    "replace": "<summary>${esc(transcriptSummary)}</summary>\n${f}"
+  },
+  {
+    "id": "R11 readme: the transcript emitted with no fence at all, so the grid collapses",
+    "file": "src/readme.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "${f}\n${o.transcript}\n${f}",
+    "replace": "${o.transcript}"
+  },
+  {
+    "id": "R12 readme: the dark path renamed, so the README names a file nothing writes",
+    "file": "src/readme.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "export const DARK_SRC = \"assets/session-dark.svg\";",
+    "replace": "export const DARK_SRC = \"assets/session.svg\";"
+  },
+  {
+    "id": "R13 readme: the light path made absolute, so GitHub serves it through camo",
+    "file": "src/readme.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "export const LIGHT_SRC = \"assets/session-light.svg\";",
+    "replace": "export const LIGHT_SRC = \"https://raw.githubusercontent.com/saltless-bruh/saltless-bruh/main/assets/session-light.svg\";"
+  },
+  {
+    "id": "R14 build: the README composed but never written",
+    "file": "src/build.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "  writeFileSync(new URL(\"../README.md\", outDir), readme);",
+    "replace": ""
+  },
+  {
+    "id": "R15 build: the README written inside assets/, below where its paths resolve from",
+    "file": "src/build.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "writeFileSync(new URL(\"../README.md\", outDir), readme);",
+    "replace": "writeFileSync(new URL(\"README.md\", outDir), readme);"
+  },
+  {
+    "id": "R16 build: the name gate over the assembled README removed",
+    "file": "src/build.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "  assertNoForbiddenNames(readme, \"the generated README\");\n",
+    "replace": ""
+  },
+  {
+    "id": "R17 build: the transcript truncated to its first rows before it reaches the README",
+    "file": "src/build.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "  const readme = renderReadme({ content, transcript });",
+    "replace": "  const readme = renderReadme({ content, transcript: transcript.split(\"\\n\").slice(0, 10).join(\"\\n\") });"
+  },
+  {
+    "id": "R18 content: the picture's accessible name no longer validated",
+    "file": "src/content.ts",
+    "tests": [
+      "test/content.test.ts"
+    ],
+    "find": "  text(c.readme.imageAlt, \"readme.imageAlt\");\n",
+    "replace": ""
+  },
+  {
+    "id": "R19 content: the README copy block no longer required to be there",
+    "file": "src/content.ts",
+    "tests": [
+      "test/content.test.ts"
+    ],
+    "find": "  if (!isObj(c.readme)) fail(\"readme must be an object\");\n",
+    "replace": ""
+  },
+  {
+    "id": "G1  gates: the name match made case-sensitive, so a lowercase spelling escapes",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    const hay = body.toLowerCase();",
+    "replace": "    const hay = body;"
+  },
+  {
+    "id": "G2  gates: the fallback walk stops at the top level",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    if (entry.isDirectory()) out.push(...walk(full, base));",
+    "replace": "    if (entry.isDirectory()) continue;"
+  },
+  {
+    "id": "G3  gates: only tracked files listed, so a new untracked file is never scanned",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    return git(\"ls-files\", \"-z\", \"--cached\", \"--others\", \"--exclude-standard\")",
+    "replace": "    return git(\"ls-files\", \"-z\", \"--cached\")"
+  },
+  {
+    "id": "G4  gates: git's ignore rules dropped, so the local credential file is scanned",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": ", \"--exclude-standard\")\n      .split(\"\\0\")",
+    "replace": ")\n      .split(\"\\0\")"
+  },
+  {
+    "id": "G5  gates: an empty needle list passes instead of being refused",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    throw new Error(\"the forbidden-name list is empty, so this scan would pass for every tree there is (ADR 0001)\");",
+    "replace": "    return [];"
+  },
+  {
+    "id": "G7  gates: the GitHub token shape removed from the secret gate",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  { label: \"a GitHub token (gh?_ prefix)\", pattern: /\\bgh[pousr]_[A-Za-z0-9]{36,}/ },\n",
+    "replace": ""
+  },
+  {
+    "id": "G13 gates: the en-dash dropped from the dash gate",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "const DASHES: [string, string][] = [[\"\\u2014\", \"an em-dash\"], [\"\\u2013\", \"an en-dash\"]];",
+    "replace": "const DASHES: [string, string][] = [[\"\\u2014\", \"an em-dash\"]];"
+  },
+  {
+    "id": "G14 gates: the dash finding reports the index instead of the line",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "      if (line.includes(ch)) out.push(`line ${i + 1} carries ${name}`);",
+    "replace": "      if (line.includes(ch)) out.push(`line ${i} carries ${name}`);"
+  },
+  {
+    "id": "G15 gates: the control range narrowed, so a tab and a carriage return pass",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "const CONTROL = /[\\u0000-\\u0009\\u000b-\\u001f\\u007f-\\u009f\\ufeff]/;",
+    "replace": "const CONTROL = /[\\u0000-\\u0008\\u000e-\\u001f]/;"
+  },
+  {
+    "id": "G16 gates: DEL, the C1 block and the byte order mark dropped",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "\\u007f-\\u009f\\ufeff]/;",
+    "replace": "]/;"
+  },
+  {
+    "id": "G17 gates: only the first absent glyph is looked for",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  for (const ch of FORBIDDEN_GLYPHS) {",
+    "replace": "  for (const ch of [...FORBIDDEN_GLYPHS].slice(0, 1)) {"
+  },
+  {
+    "id": "G18 gates: the reduced-motion check weakened to the media query alone",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "const REDUCED_MOTION = /@media\\s*\\(\\s*prefers-reduced-motion\\s*:\\s*reduce\\s*\\)\\s*\\{\\s*\\*\\s*\\{\\s*animation\\s*:\\s*none\\s*!\\s*important\\s*;?\\s*\\}/;",
+    "replace": "const REDUCED_MOTION = /@media\\s*\\(\\s*prefers-reduced-motion\\s*:\\s*reduce\\s*\\)/;"
+  },
+  {
+    "id": "G19 gates: the SMIL check removed, so motion that ignores the rule passes",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  const smil = SMIL.exec(svg);",
+    "replace": "  const smil = null as RegExpExecArray | null;"
+  },
+  {
+    "id": "G20 gates: dangling references compared against themselves, so none are ever dangling",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  const dangling = [...refs].filter((r) => !known.has(r)).sort();",
+    "replace": "  const dangling = [...refs].filter((r) => !refs.has(r)).sort();"
+  },
+  {
+    "id": "G21 gates: ids deduplicated before the duplicate check, which then finds none",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  const ids = [...svg.matchAll(/\\sid=\"([^\"]*)\"/g)].map((m) => m[1]);",
+    "replace": "  const ids = [...new Set([...svg.matchAll(/\\sid=\"([^\"]*)\"/g)].map((m) => m[1]))];"
+  },
+  {
+    "id": "G22 gates: the missing-viewBox check removed",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    out.push(\"no viewBox, so the picture cannot scale with the README column\");\n",
+    "replace": "\n"
+  },
+  {
+    "id": "G23 gates: the aspect-ratio tolerance widened, so letterboxing passes",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "        if (Math.abs(w / h - want) / want > 0.01) {",
+    "replace": "        if (Math.abs(w / h - want) / want > 100) {"
+  },
+  {
+    "id": "G24 gates: the size budget counted in characters instead of bytes",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  const bytes = Buffer.byteLength(svg, \"utf8\");",
+    "replace": "  const bytes = svg.length;"
+  },
+  {
+    "id": "G25 gates: the size budget raised tenfold",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "export const SIZE_BUDGET_BYTES = 250_000;",
+    "replace": "export const SIZE_BUDGET_BYTES = 2_500_000;"
+  },
+  {
+    "id": "G26 gates: a stripped <style> element no longer refused in the README",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  [/<style/i, \"a <style> element\"],\n",
+    "replace": ""
+  },
+  {
+    "id": "G27 gates: a stripped inline style attribute no longer refused in the README",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  [/style=/i, \"an inline style attribute\"],\n",
+    "replace": ""
+  },
+  {
+    "id": "G28 gates: the asset check reads the README instead of the filesystem",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    if (src !== null && !exists(src)) out.push(`references ${src}, which is not there`);",
+    "replace": "    if (src !== null && !readme.includes(src)) out.push(`references ${src}, which is not there`);"
+  },
+  {
+    "id": "G29 gates: a README with no transcript block passes",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    out.push(\"no <details> transcript block, so the Session's words reach no screen reader, search engine or copy-paste (ADR 0004)\");\n",
+    "replace": ""
+  },
+  {
+    "id": "G30 gates: a transcript outside a fence passes, so the column grid can collapse",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    out.push(\"the transcript is not inside a fenced code block, so its column grid collapses into prose\");\n",
+    "replace": ""
+  },
+  {
+    "id": "G31 gates: absent folded into pass, so an unbuilt output reports success",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  if (results.some((r) => r.status === \"absent\")) return 3;\n",
+    "replace": ""
+  },
+  {
+    "id": "G32 gates: absent outranks fail, so a failure is reported as not-built",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  if (results.some((r) => r.status === \"fail\")) return 1;\n  if (results.some((r) => r.status === \"absent\")) return 3;",
+    "replace": "  if (results.some((r) => r.status === \"absent\")) return 3;\n  if (results.some((r) => r.status === \"fail\")) return 1;"
+  },
+  {
+    "id": "G33 gates: the type check's exit status ignored",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    results.push(tsc.ok ? pass(\"typecheck\", \"npm run typecheck exited 0\") : fail(\"typecheck\", \"npm run typecheck\", [tsc.output]));",
+    "replace": "    results.push(pass(\"typecheck\", \"npm run typecheck exited 0\"));"
+  },
+  {
+    "id": "G34 gates: a cache with no timestamp passes, so stale figures read as fresh",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "        problems.push(\"carries no fetchedAt timestamp, so the age of the figures would read as zero\");\n",
+    "replace": ""
+  },
+  {
+    "id": "G35 gates: an empty calendar passes, so the Scan Sweep has nothing real to draw",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "      if (!Array.isArray(file.activity?.calendar) || file.activity.calendar.length === 0) {",
+    "replace": "      if (!Array.isArray(file.activity?.calendar)) {"
+  },
+  {
+    "id": "G36 gates: the placeholder gate removed, so it can leak into a published surface",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  results.push(visible.length === 0\n    ? absent(\"placeholder names\", [GENERATED.dark, GENERATED.light, GENERATED.readme])\n    : verdict(\"placeholder names\", visible.join(\", \"), placeholders));\n",
+    "replace": ""
+  },
+  {
+    "id": "G37 gates: the generated assets dropped from the dash gate's scope",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    results.push(verdict(\"dashes in the assets\", svgPaths.join(\", \"), over(findDashes)));\n",
+    "replace": ""
+  },
+  {
+    "id": "G38 gates: the owner's copy dropped from the dash gate's scope",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    results.push(verdict(\"dashes in content.json\", \"content.json\", findDashes(read(\"content.json\")).map((d) => `content.json ${d}`)));\n",
+    "replace": ""
+  },
+  {
+    "id": "G39 gates: an absence no longer says which path is missing",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  ({ gate, status: \"absent\", detail: `not built yet: ${missing.join(\", \")}`, problems: [], reason: \"unbuilt\", missing });",
+    "replace": "  ({ gate, status: \"absent\", detail: \"not built yet\", problems: [], reason: \"unbuilt\" });"
+  },
+  {
+    "id": "G40 gates: a failure reported in the words of an absence",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    ? \"\\nGATES FAILED. Each line above says what is wrong and in which file.\"",
+    "replace": "    ? \"\\nNOT BUILT YET.\""
+  },
+  {
+    "id": "W1  refresh: the fetch handed the built-in GITHUB_TOKEN",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "          PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run build",
+    "replace": "          PROFILE_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run build"
+  },
+  {
+    "id": "W2  refresh: the cache dropped from the commit, so it is discarded every day",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "          git add -- assets cache README.md",
+    "replace": "          git add -- assets README.md"
+  },
+  {
+    "id": "W3  refresh: the change guard watches fewer paths than the commit adds",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "git status --porcelain -- assets cache README.md",
+    "replace": "git status --porcelain -- assets README.md"
+  },
+  {
+    "id": "W4  refresh: the gates step removed, so the publish is ungated",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "      - name: Gate the result before any of it is published\n        env:\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run gates\n\n",
+    "replace": ""
+  },
+  {
+    "id": "W5  refresh: the change guard removed, so it commits on every run",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "          if [ -z \"$(git status --porcelain -- assets cache README.md)\" ]; then\n            echo \"assets, cache and README.md are all unchanged; nothing to commit\"\n            exit 0\n          fi\n",
+    "replace": ""
+  },
+  {
+    "id": "W6  refresh: the permissions widened past what a push needs",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "permissions:\n  contents: write",
+    "replace": "permissions:\n  contents: write\n  issues: write"
+  },
+  {
+    "id": "W7  refresh: the cron moved onto the hour, where every schedule is queued",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "    - cron: \"17 4 * * *\"",
+    "replace": "    - cron: \"0 4 * * *\""
+  },
+  {
+    "id": "W8  refresh: the manual trigger removed, so the first run waits a day",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "  workflow_dispatch:\n",
+    "replace": ""
+  },
+  {
+    "id": "W9  refresh: a run can be cancelled between its commit and its push",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "  cancel-in-progress: false",
+    "replace": "  cancel-in-progress: true"
+  },
+  {
+    "id": "W10 refresh: the token promoted to the job, so every step carries it",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "  refresh:\n    runs-on: ubuntu-latest",
+    "replace": "  refresh:\n    runs-on: ubuntu-latest\n    env:\n      PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}"
+  },
+  {
+    "id": "W11 refresh: the gates handed a credential they do not read",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "        env:\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run gates",
+    "replace": "        env:\n          PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run gates"
+  },
+  {
+    "id": "W12 refresh: an action unpinned to a moving branch",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "      - uses: actions/checkout@v7",
+    "replace": "      - uses: actions/checkout@main"
+  },
+  {
+    "id": "W13 refresh: the suite runs after the publish instead of before it",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "      - run: npm test\n",
+    "replace": ""
+  },
+  {
+    "id": "G41 gates: the README dropped from the glyph gate, so a blank box ships in the transcript",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "        ...(there(GENERATED.readme) ? findAbsentGlyphs(read(GENERATED.readme)).map((m) => `${GENERATED.readme} ${m}`) : []),\n",
+    "replace": ""
+  },
+  {
+    "id": "G42 gates: the glyph gate removed from a built tree's run",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    results.push(verdict(\n      \"glyphs\",\n",
+    "replace": "    if (false) results.push(verdict(\n      \"glyphs\",\n"
+  },
+  {
+    "id": "G45 gates: a file that ships with the repository reported as something a build would write",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  ({ gate, status: \"absent\", detail: `missing from the checkout: ${missing.join(\", \")}`, problems: [], reason: \"missing\", missing });",
+    "replace": "  ({ gate, status: \"absent\", detail: `missing from the checkout: ${missing.join(\", \")}`, problems: [], reason: \"unbuilt\", missing });"
+  },
+  {
+    "id": "G47 gates: the missing-from-the-checkout block dropped from the summary",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  const missing = of(\"missing\");\n  if (missing.length > 0) {",
+    "replace": "  const missing = of(\"missing\");\n  if (false) {"
+  },
+  {
+    "id": "G48 gates: an absence stops saying why, so the summary is back to assuming",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    results.filter((r) => r.status === \"absent\" && (r.reason ?? \"unbuilt\") === reason);",
+    "replace": "    results.filter((r) => r.status === \"absent\" && \"unbuilt\" === reason);"
+  },
+  {
+    "id": "G49 gates: the summary names a variable nothing reads",
+    "file": "src/content.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "export const FORBIDDEN_NAMES_ENV = \"PROFILE_FORBIDDEN_NAMES\";",
+    "replace": "export const FORBIDDEN_NAMES_ENV = \"PROFILE_FORBIDDEN_NAME\";"
+  },
+  {
+    "id": "AC1 activity: the unset-token failure demands read:user again, which the API does not need",
+    "file": "src/activity.ts",
+    "tests": [
+      "test/activity.test.ts"
+    ],
+    "find": "A user token with the repo scope is enough for your own figures; read:user is only needed to read another user's contributions.",
+    "replace": "The token needs the read:user scope."
+  },
+  {
+    "id": "AC2 activity: the 401 hint blames the scope that was measured unnecessary",
+    "file": "src/activity.ts",
+    "tests": [
+      "test/activity.test.ts"
+    ],
+    "find": "is either invalid or missing the repo scope",
+    "replace": "is either invalid or missing the read:user scope"
+  },
+  {
+    "id": "W15 refresh: the GITHUB_TOKEN claim stated as measured when it was never tested",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "echo \"GITHUB_TOKEN is still assumed not to do, unverified: it is an installation token\" >&2",
+    "replace": "echo \"GITHUB_TOKEN will not do, measured: it is an installation token\" >&2"
+  },
+  {
+    "id": "W16 refresh: the name list passed under a name nothing reads",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run gates",
+    "replace": "          PROFILE_FORBIDDEN_NAME: ${{ secrets.PROFILE_FORBIDDEN_NAME }}\n        run: npm run gates"
+  },
+  {
+    "id": "G57 gates: the placeholder predicate ignores its argument, so every assigned secret escapes",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "      if (looksIllustrative(m[1])) continue;",
+    "replace": "      if (m[1] !== undefined) continue;"
+  },
+  {
+    "id": "G58 gates: placeholders not recognised, so a document explaining the setting blocks a build",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "      if (looksIllustrative(m[1])) continue;",
+    "replace": "      if (false) continue;"
+  },
+  {
+    "id": "G59 gates: placeholder detection widened until a real credential reads as a placeholder",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "const looksIllustrative = (s: string): boolean =>\n  !/[0-9]/.test(s) && /^[A-Za-z]+(?:[-_.][A-Za-z]+)*$/.test(s);",
+    "replace": "const looksIllustrative = (s: string): boolean => /^[A-Za-z0-9_\\-+/]+$/.test(s);"
+  },
+  {
+    "id": "G60 gates: the digit test dropped, so a generated value reads as illustrative",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  !/[0-9]/.test(s) && /^[A-Za-z]+(?:[-_.][A-Za-z]+)*$/.test(s);",
+    "replace": "  /^[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)*$/.test(s);"
+  },
+  {
+    "id": "G61 gates: the minimum credential length dropped, so a two-character value is a secret",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "const MIN_CREDENTIAL_LENGTH = 8;",
+    "replace": "const MIN_CREDENTIAL_LENGTH = 1;"
+  },
+  {
+    "id": "G62 gates: the assigned-credential value narrowed to letters, so a real token escapes",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    pattern: /(?:^|[^A-Za-z0-9])(?:token|secret|passwd|password|api[_-]?key|access[_-]?key|private[_-]?key|credentials?)[\"']?[^\\S\\n]*[=:][^\\S\\n]*[\"']?([A-Za-z0-9_\\-+/]{20,})/gi,",
+    "replace": "    pattern: /(?:^|[^A-Za-z0-9])(?:token|secret|passwd|password|api[_-]?key|access[_-]?key|private[_-]?key|credentials?)[\"']?[^\\S\\n]*[=:][^\\S\\n]*[\"']?([A-Za-z]{20,})/gi,"
+  },
+  {
+    "id": "G63 gates: the keyword boundary back to \\b, which misses my_token =",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    pattern: /(?:^|[^A-Za-z0-9])(?:token|secret",
+    "replace": "    pattern: /\\b(?:token|secret"
+  },
+  {
+    "id": "G64 gates: a .env that sets nothing is indistinguishable from having no .env",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  if (statSync(path, { throwIfNoEntry: false })?.isFile() !== true) return \"no-file\";",
+    "replace": "  if (statSync(path, { throwIfNoEntry: false })?.isFile() !== true) return \"absent\";"
+  },
+  {
+    "id": "G65 gates: any line in .env counts, so a name written as a key reads as configured",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    if (key !== name) continue;",
+    "replace": "    if (key === \"\") continue;"
+  },
+  {
+    "id": "G66 gates: a blank value in .env reads as set",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    found = value === \"\" ? \"blank\" : \"set\";",
+    "replace": "    found = \"set\";"
+  },
+  {
+    "id": "G67 gates: the unloaded-file case loses its own advice, the one nobody can guess",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    case \"set\":\n      return `${NOT_SCANNED}, yet a .env here sets ${FORBIDDEN_NAMES_ENV}: this process did not load it, so run it as \\`npm run gates\\`, which passes --env-file-if-exists=.env`;",
+    "replace": "    case \"set\":\n      return NOT_SCANNED;"
+  },
+  {
+    "id": "G68 gates: the .env diagnosis quotes the file, which is how the name got out in the first place",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "      return `${NOT_SCANNED}, and a .env here does not set ${FORBIDDEN_NAMES_ENV}: if you meant to configure it, check that every line reads NAME=value, with the name on the LEFT of the = (a name written as a key sets nothing)`;",
+    "replace": "      return `${NOT_SCANNED}, and a .env here does not set ${FORBIDDEN_NAMES_ENV}: its first line is ${readFileSync(join(dirOf(root), \".env\"), \"utf8\").split(\"\\n\")[0]}`;"
+  },
+  {
+    "id": "G69 gates: the unconfigured note reads as a clean tree",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "const NOT_SCANNED = \"no private names configured, so nothing was scanned for\";",
+    "replace": "const NOT_SCANNED = \"the tree is clean\";"
+  },
+  {
+    "id": "G70 gates: the pass that enforced nothing stops saying so",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    results.push({ ...pass(\"forbidden names\", nameListNote(root)), unenforced: true });",
+    "replace": "    results.push(pass(\"forbidden names\", nameListNote(root)));"
+  },
+  {
+    "id": "G71 gates: the summary stops flagging a pass that checked nothing",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  const note = unenforced.length === 0 ? \"\" : `\\n\\nNOTE: ${unenforced.map((r) => r.gate).join(\", \")} passed without checking anything.\\nRead its line above for why. That is not the same claim as the tree having been checked.`;",
+    "replace": "  const note = \"\";"
+  },
+  {
+    "id": "G72 gates: configured names are no longer scanned, so opt-out becomes removal",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    const hits = collisions.length > 0 ? collisions : scanTreeForForbiddenNames(root, names).map((h) => `${h} carries a forbidden name (ADR 0001)`);",
+    "replace": "    const hits: string[] = collisions;"
+  },
+  {
+    "id": "G73 gates: a configured name the profile shows is reported as file hits, not as the contradiction",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "    const collisions = identityCollisions(root, names);",
+    "replace": "    const collisions: string[] = [];"
+  },
+  {
+    "id": "G74 gates: the mixed-cause summary reports whichever cause it looked at first",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  const missing = of(\"missing\");",
+    "replace": "  const missing = unbuilt.length > 0 ? [] : of(\"missing\");"
+  },
+  {
+    "id": "AC3 activity: the scan over fetched data removed, so a name can arrive and be published",
+    "file": "src/activity.ts",
+    "tests": [
+      "test/activity.test.ts"
+    ],
+    "find": "      assertNoForbiddenNames(raw, \"data fetched from the GitHub API\");",
+    "replace": "      if (false) assertNoForbiddenNames(raw, \"data fetched from the GitHub API\");"
+  },
+  {
+    "id": "W17 refresh: the preflight sends the owner to mint a read:user token",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "echo \"It is a user token. Measured 2026-10-02: the repo scope is enough\" >&2",
+    "replace": "echo \"It is a personal access token with the read:user scope.\" >&2"
+  },
+  {
+    "id": "W18 refresh: the name list required again, so the refresh stops without it",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "          echo \"the token is present\"",
+    "replace": "          if [ -z \"${PROFILE_FORBIDDEN_NAMES}\" ]; then\n            echo \"missing PROFILE_FORBIDDEN_NAMES\" >&2\n            exit 1\n          fi\n          echo \"the token is present\""
+  },
+  {
+    "id": "W19 refresh: the optional secret no longer reaches the build, so setting it would change nothing",
+    "file": ".github/workflows/refresh.yml",
+    "tests": [
+      "test/workflow.test.ts"
+    ],
+    "find": "          PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run build",
+    "replace": "          PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}\n        run: npm run build"
+  },
+  {
+    "id": "E1  package: npm run gates stops loading .env, so a configured name list is read by nobody",
+    "file": "package.json",
+    "tests": [
+      "test/env-file.test.ts"
+    ],
+    "find": "\"gates\": \"node --env-file-if-exists=.env scripts/gates.ts\"",
+    "replace": "\"gates\": \"node scripts/gates.ts\""
+  },
+  {
+    "id": "E2  package: npm run build stops loading .env, so the token is read by nobody",
+    "file": "package.json",
+    "tests": [
+      "test/env-file.test.ts"
+    ],
+    "find": "\"build\": \"node --env-file-if-exists=.env src/build.ts\"",
+    "replace": "\"build\": \"node src/build.ts\""
+  },
+  {
+    "id": "E3  package: gates downgraded to the strict --env-file, which exits 9 wherever there is no .env",
+    "file": "package.json",
+    "tests": [
+      "test/env-file.test.ts"
+    ],
+    "find": "\"gates\": \"node --env-file-if-exists=.env",
+    "replace": "\"gates\": \"node --env-file=.env"
+  },
+  {
+    "id": "E4  package: build downgraded to the strict --env-file, which breaks every CI run",
+    "file": "package.json",
+    "tests": [
+      "test/env-file.test.ts"
+    ],
+    "find": "\"build\": \"node --env-file-if-exists=.env",
+    "replace": "\"build\": \"node --env-file=.env"
+  },
+  {
+    "id": "E5  package: the flag points at the example instead of the real file",
+    "file": "package.json",
+    "tests": [
+      "test/env-file.test.ts"
+    ],
+    "find": "\"gates\": \"node --env-file-if-exists=.env scripts/gates.ts\"",
+    "replace": "\"gates\": \"node --env-file-if-exists=.env.example scripts/gates.ts\""
+  },
+  {
+    "id": "E6  package: npm test given .env, so a local file can change a test result",
+    "file": "package.json",
+    "tests": [
+      "test/env-file.test.ts"
+    ],
+    "find": "\"test\": \"node --test\"",
+    "replace": "\"test\": \"node --env-file-if-exists=.env --test\""
+  },
+  {
+    "id": "V1  render-check: an unknown engine falls back to Chrome instead of being refused",
+    "file": "scripts/render-check.ts",
+    "tests": [
+      "test/render-check.test.ts"
+    ],
+    "find": "  if (!(ENGINES as readonly string[]).includes(named)) {\n    throw new Error(`unknown engine ${JSON.stringify(named)}; expected one of ${ENGINES.join(\", \")}`);\n  }\n  return named as Engine;",
+    "replace": "  if (!(ENGINES as readonly string[]).includes(named)) return \"chrome\";\n  return named as Engine;"
+  },
+  {
+    "id": "V2  render-check: command() drives Chrome whatever engine was asked for",
+    "file": "scripts/render-check.ts",
+    "tests": [
+      "test/render-check.test.ts"
+    ],
+    "find": "  return s.engine === \"firefox\"\n    ? { bin: \"firefox\", args: firefoxArgs(s, firefoxProfile(profileDir, s.reduced)) }\n    : { bin: \"google-chrome-stable\", args: chromeArgs(s) };",
+    "replace": "  return { bin: \"google-chrome-stable\", args: chromeArgs(s) };"
+  },
+  {
+    "id": "V3  render-check: Firefox always asked for reduced motion, whatever the run wanted",
+    "file": "scripts/render-check.ts",
+    "tests": [
+      "test/render-check.test.ts"
+    ],
+    "find": "  `user_pref(\"ui.prefersReducedMotion\", ${reduced ? 1 : 0});\\n`;",
+    "replace": "  `user_pref(\"ui.prefersReducedMotion\", ${reduced ? 1 : 1});\\n`;"
+  },
+  {
+    "id": "V4  render-check: Chrome stops being told about reduced motion",
+    "file": "scripts/render-check.ts",
+    "tests": [
+      "test/render-check.test.ts"
+    ],
+    "find": "  ...(s.reduced ? [\"--force-prefers-reduced-motion\"] : []),",
+    "replace": "  ...(s.reduced ? [] : []),"
+  },
+  {
+    "id": "V5  render-check: the freeze reads the animation duration where the delay belongs",
+    "file": "scripts/render-check.ts",
+    "tests": [
+      "test/render-check.test.ts"
+    ],
+    "find": "    const delay = explicit !== null ? Number(explicit[1]) : times.length >= 2 ? times[1] : null;",
+    "replace": "    const delay = explicit !== null ? Number(explicit[1]) : times.length >= 2 ? times[0] : null;"
+  },
+  {
+    "id": "V6  render-check: the per-rule shift emitted before the blanket rule, which then wins",
+    "file": "scripts/render-check.ts",
+    "tests": [
+      "test/render-check.test.ts"
+    ],
+    "find": "    `*{animation-delay:-${at}s!important;animation-play-state:paused!important}${shiftDelays(style[1], at)}</style>`,",
+    "replace": "    `${shiftDelays(style[1], at)}*{animation-delay:-${at}s!important;animation-play-state:paused!important}</style>`,"
+  },
+  {
+    "id": "V7  render-check: an unanimated document is frozen silently instead of refused",
+    "file": "scripts/render-check.ts",
+    "tests": [
+      "test/render-check.test.ts"
+    ],
+    "find": "  if (!svg.includes(\"</style>\")) throw new Error(`${label} has no <style> to freeze; nothing in it is animated`);",
+    "replace": "  if (!svg.includes(\"</style>\")) return svg;"
+  },
+  {
+    "id": "V8  render-check: Firefox sized to the image, so its window clips what Chrome shows",
+    "file": "scripts/render-check.ts",
+    "tests": [
+      "test/render-check.test.ts"
+    ],
+    "find": "  \"--headless\", \"--profile\", profile,\n  `--window-size=${s.width + 40},2400`,",
+    "replace": "  \"--headless\", \"--profile\", profile,\n  `--window-size=${s.width},2400`,"
+  },
+  {
+    "id": "S1 session: the wordmark goes back to floating in the middle of the Mascot's band",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const bannerRow = MASCOT_ROWS - BANNER_ROWS;",
+    "replace": "  const bannerRow = Math.floor((MASCOT_ROWS - BANNER_ROWS) / 2);"
+  },
+  {
+    "id": "S2 session: the effort marker goes to the track's midpoint instead of the selection",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const markerCol = centreCol(levelCols[chosen], tiers[chosen]);",
+    "replace": "  const markerCol = Math.round((trackCol + trackEnd - 1) / 2);"
+  },
+  {
+    "id": "S3 session: the effort marker is read off the first level, whatever is selected",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const markerCol = centreCol(levelCols[chosen], tiers[chosen]);",
+    "replace": "  const markerCol = centreCol(levelCols[0], tiers[0]);"
+  },
+  {
+    "id": "S4 session: a level is placed at its slot's left edge rather than centred on it",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  return labels.map((label, i) => Math.round(trackCol + slot * (i + 0.5) - cells(label) / 2));",
+    "replace": "  return labels.map((_, i) => Math.round(trackCol + slot * i));"
+  },
+  {
+    "id": "S5 session: the slot edges are rounded first, so the levels drift along the row",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  return labels.map((label, i) => Math.round(trackCol + slot * (i + 0.5) - cells(label) / 2));",
+    "replace": "  return labels.map((label, i) => Math.round(trackCol + Math.round(slot) * i + (Math.round(slot) - cells(label)) / 2));"
+  },
+  {
+    "id": "S6 session: the marker leans left of an even-width level instead of sitting on its centre",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "export const centreCol = (col: number, text: string): number => col + Math.round((cells(text) - 1) / 2);",
+    "replace": "export const centreCol = (col: number, text: string): number => col + Math.floor((cells(text) - 1) / 2);"
+  },
+  {
+    "id": "S7 session: the selected level keeps its colour but loses its weight",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "      levels.push({ col: levelCols[i], text: label, style: picked ? \"accent-bold\" : \"muted\" });",
+    "replace": "      levels.push({ col: levelCols[i], text: label, style: picked ? \"accent\" : \"muted\" });"
+  },
+  {
+    "id": "S8 session: the rainbow follows the selection rather than marking the top tier",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "    if (i === tiers.length - 1) {",
+    "replace": "    if (picked) {"
+  },
+  {
+    "id": "S9 session: the marker is painted like the track, so nothing but its shape marks the level",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const track: Run[] = [{ col: markerCol, text: \"▲\", style: \"accent\", piece: PIECE_TRACK }];",
+    "replace": "  const track: Run[] = [{ col: markerCol, text: \"▲\", style: \"muted\", piece: PIECE_TRACK }];"
+  },
+  {
+    "id": "S10 session: the panel's top border goes back to being an ordinary rule",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  rows.push(rule(\"accent\"));",
+    "replace": "  rows.push(rule());"
+  },
+  {
+    "id": "S11 session: the right column is sized by the toggle alone, so a longer hint runs off the grid",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const toggleCol = COLS - Math.max(toggleWidth, cells(s.toggleHint));",
+    "replace": "  const toggleCol = COLS - toggleWidth;"
+  },
+  {
+    "id": "S12 session: fragments of one piece are allowed to overlap, not merely to touch",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "          const gap = prev.piece && prev.piece === next.piece ? 0 : 1;",
+    "replace": "          const gap = prev.piece && prev.piece === next.piece ? -1 : 1;"
+  },
+  {
+    "id": "S13 session: every run is allowed to touch its neighbour, not only a piece's own fragments",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "          const gap = prev.piece && prev.piece === next.piece ? 0 : 1;",
+    "replace": "          const gap = 0;"
+  },
+  {
+    "id": "C1 ramp: the toggle's gradient is interpolated in sRGB instead of OKLab",
+    "file": "src/ramp.ts",
+    "tests": [
+      "test/ramp.test.ts",
+      "test/build.test.ts"
+    ],
+    "find": "    return linearToHex(oklabToLinear(from.map((c, k) => c + (to[k] - c) * f) as Oklab));",
+    "replace": "    return linearToHex(hexToLinear(p.muted).map((c, k) => c + (hexToLinear(p.accent)[k] - c) * f) as Rgb);"
+  },
+  {
+    "id": "C2 ramp: the gradient runs from the body text colour rather than from muted",
+    "file": "src/ramp.ts",
+    "tests": [
+      "test/ramp.test.ts"
+    ],
+    "find": "  const from = linearToOklab(hexToLinear(p.muted));",
+    "replace": "  const from = linearToOklab(hexToLinear(p.text));"
+  },
+  {
+    "id": "C3 ramp: the gradient bunches its steps at the bright end",
+    "file": "src/ramp.ts",
+    "tests": [
+      "test/ramp.test.ts"
+    ],
+    "find": "    const f = i / (length - 1);",
+    "replace": "    const f = (i / (length - 1)) ** 2;"
+  },
+  {
+    "id": "C4 ramp: the rainbow holds OKLab's own lightness instead of the measured CIE one",
+    "file": "src/ramp.ts",
+    "tests": [
+      "test/ramp.test.ts"
+    ],
+    "find": "    const L = lightnessFor(hue, chroma, target);",
+    "replace": "    const L = linearToOklab(accent)[0];"
+  },
+  {
+    "id": "C5 ramp: the rainbow sweeps half the wheel, so two characters nearly share a hue",
+    "file": "src/ramp.ts",
+    "tests": [
+      "test/ramp.test.ts"
+    ],
+    "find": "  const hues = Array.from({ length }, (_, i) => Math.atan2(b, a) + (2 * Math.PI * i) / length);",
+    "replace": "  const hues = Array.from({ length }, (_, i) => Math.atan2(b, a) + (Math.PI * i) / length);"
+  },
+  {
+    "id": "C6 ramp: chroma is reduced for the one hue that needs it rather than for all of them",
+    "file": "src/ramp.ts",
+    "tests": [
+      "test/ramp.test.ts"
+    ],
+    "find": "  const fits = (chroma: number): boolean => hues.every((h) => inGamut(colourAt(h, chroma)));",
+    "replace": "  const fits = (chroma: number): boolean => hues.some((h) => inGamut(colourAt(h, chroma)));"
+  }
 ]
