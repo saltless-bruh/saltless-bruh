@@ -16,11 +16,10 @@
 
 
 
-                             LAZIE  v0x7A69
-                             red cat with lazy effort · self hosted
-                             agents working · operator horizontal
+                         LAZIE  v0x7A69
+                         red cat with lazy effort · self hosted
+                         agents working · operator horizontal
 
-    Offensive Security · Agentic AI Systems
 ────────────────────────────────────────────────────────────────────────
 ❯ /whoami
 ● offensive security. agentic ai systems.
@@ -63,20 +62,19 @@
 
 
 
-  ╰  scan complete: 98/365 days up · 1030 contributions
+  ╰  scan complete: 98/365 days up · 1047 contributions
 
 ✶ Loafing…
 ────────────────────────────────────────────────────────────────────────
 
 Effort
-            Faster                           Smarter
-            ────────────────────────────────────▲───
-               low   medium   high    xhigh   lazy
-            Ultrachill: dynamic nap on every task         Ultrachill  on
+            Faster                           Smarter    │
+            ────────────────────────────────────▲───    │
+               low   medium   high    xhigh   lazy      │
+            Ultrachill: dynamic nap on every task       │ Ultrachill  on
                                                           Tab to toggle
 
   ←/→ to adjust · Enter to confirm · Esc to cancel
-▶▶ autopilot on     terminal-style design, not affiliated with Anthropic
 ```
 
 </details>
