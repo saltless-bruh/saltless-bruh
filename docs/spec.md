@@ -217,6 +217,37 @@ Rules: one Accent everywhere; the same hue in both variants with only lightness 
 
 **The frame carries the window.** Everforest's own border colours are too faint against GitHub's canvases: the dark window body is only 1.08:1 from the dark-dimmed canvas and the light body is 1.03:1 from white, so without a visible edge the window simply dissolves into the page. The two border values above are hue-preserving lightenings of the Everforest borders, chosen to clear 3:1 against the worst canvas each one faces (dark `#677279` is 3.02:1 on dimmed and 3.84:1 on dark; light `#8d9978` is 3.02:1 on white).
 
+**Those three figures are the TOKENS. What renders is less, and at 308px the frame is not there at all.**
+Measured from rendered pixels in Task 12, which is the first time this pair was sampled rather than
+computed. The frame is `stroke-width="1"` in a 896-unit `viewBox` (`src/svg.ts`), so it is **0.94
+device pixels at 846px and 0.34 at 308px**, and a sub-pixel stroke is antialiased into whatever it
+sits on:
+
+| Width | Engine | Frame as rendered, vs its canvas | |
+|---|---|---|---|
+| 846px dark, on dark | Chrome | 3.62:1 | clears 3:1 |
+| 846px dark, on dark-dimmed | Chrome | **2.84:1** | misses, where the token computes 3.02:1 |
+| 846px dark, on dark-high-contrast | Chrome | 3.92:1 | clears 3:1 |
+| 846px light, on white | Chrome 2.80:1, Firefox 3.02:1 | | borderline |
+| **308px light, on white** | Chrome **1.43:1**, Firefox **1.00:1** | | **the frame is gone** |
+| **308px dark, on dark** | Chrome **1.94:1**, Firefox **1.37:1** | | **the frame is gone** |
+
+At 308px Firefox drops the stroke entirely: the edge pixel is the window body's own colour. What is
+left holding the window is the body-against-canvas step, which is 1.37:1 in dark and **1.03:1 in
+light**, and 1.03:1 is the exact number quoted two paragraphs above as the reason the frame exists.
+So on a phone in light mode the window has no edge, at the width `docs/design-contract.md` says the
+work is judged at. Nothing else is affected: every text role still clears 4.5:1, so this costs the
+terminal-window illusion rather than any legibility.
+
+**The fix is one attribute and it is measured, not proposed.** Adding
+`vector-effect="non-scaling-stroke"` to that rect renders the stroke at one device pixel whatever the
+scale, and at 308px it brings the light frame to **3.02:1 in both engines**, which is exactly the
+figure the token was chosen for. `stroke-width="2"` was tried as the obvious alternative and is worse
+and engine-dependent (2.06:1 Chrome, 3.02:1 Firefox), because it is still sub-pixel at 308px. The
+change is left for the owner because it alters published output and the assets would need rebuilding;
+the measurement is recorded here so the decision is made against numbers and the table above is not
+read as a compliance claim it does not support.
+
 ### 3.5 Motion
 
 Every animation must justify itself in one sentence. Anything that cannot is cut.
@@ -500,19 +531,23 @@ a published surface.
 
 ## 7. Accessibility
 
-Targets WCAG 2.1 AA, with one documented exception.
+Targets WCAG 2.1 AA, with two documented exceptions: 2.2.2, which is structural and accepted, and
+1.4.11 at phone width, which was found by measuring rendered pixels in Task 12 and has a one-attribute
+fix waiting on the owner (3.4).
 
 | Criterion | Status |
 |---|---|
 | 1.1.1 Non-text content | `alt` describes the image; the transcript block carries the full text as real Markdown |
 | 1.4.3 Contrast (text) | Every text role is at least 4.5:1 on both `bg` and `surface` of its own variant |
-| 1.4.11 Non-text contrast | The window frame clears 3:1 against every canvas it faces |
+| **1.4.11 Non-text contrast** | **Not met at phone width.** The frame's tokens clear 3:1, but the stroke is sub-pixel below about 500px and antialiases away: at 308px it measures 1.43:1 in Chrome and 1.00:1 in Firefox. Measured, with the one-attribute fix, in 3.4. No text is affected |
 | 1.4.4 Resize | The SVG has no fixed pixel width, so it scales with the column and survives 200% zoom |
 | 2.1.1 Keyboard | Nothing inside the image is interactive; the transcript is native Markdown |
 | 2.3.1 Flashes | Nothing flashes more than three times a second |
 | **2.2.2 Pause, Stop, Hide** | **Not met in the strict sense.** Motion runs longer than 5s and a README image cannot host a pause control |
 
 The 2.2.2 gap is mitigated, not ignored: `prefers-reduced-motion` removes all motion, every loop is low-amplitude, and the content is fully available as text in the transcript regardless of motion state. Nothing in the Session depends on seeing the animation.
+
+The 1.4.11 gap costs the window's edge and nothing else. Every text role still clears 4.5:1 at every width, and the Session's content, hierarchy and figures are unaffected; what a phone reader loses is the sense of a bounded terminal rather than anything they need to read.
 
 A day with no activity is drawn, not omitted: it sits at 0.45 opacity of the `border` token, which measures 1.60:1 against the window in dark and 1.54:1 in light. It is below 3:1 by design, because a quiet day being quiet is itself the meaning; the figures that matter are printed as text on the result line. Before the beam reaches it the same cell sits at 0.30 of that token (1.35:1 and 1.32:1), so an unprobed cell and a probed silent one are deliberately close: what the sweep reveals about a quiet day is that there was nothing to reveal.
 
