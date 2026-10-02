@@ -12,21 +12,22 @@ The build fails with a clear message if something will not render, so a mistake 
 
 | Key | What it is |
 |---|---|
-| `handle` | The big lettering at the top. Short works best; it is drawn at about 5 columns per letter. |
-| `cwd` | The path under the role line. |
-| `role` | One line under the lettering. |
+| `handle` | The nickname. It is spelled in the shell prompt at the top and again in the startup block beside the cat. |
+| `login` | Your GitHub account name, which the figures are fetched for. It is also the path the prompt prints. |
+| `prompt` | The `host` you are logged in to, and the `command` the cat is the output of. |
+| `startup` | The three lines beside the cat: a `version`, a `colourWord` drawn in the colour it names, the `model` line after it, and a `status` line. |
 | `whoami` | One to three lines of prose for `/whoami`. |
 | `lanes` | The groups under `/ops`. Each has a `label` and a list of repos with a `name` and a one-line `blurb`. |
 | `stackRows` | The rows under `/stack`. Each has a `label` (which may be empty) and a list of `items`, printed as plain text. |
 | `verbs` | The spinner's words, grouped by what the cat is doing: `sleep`, `yawn`, `stretch`, `settle`, `peek`, then the alarm, `alert`, `swat-up`, `swat-down`, `glare`, `butt-up`, `butt-down`, `recover`. The spinner always names the pose on screen, so give `yawn` a yawning word. Give `sleep` several and it rotates through them during the long naps. Every group needs at least one word. The two halves of a blow (`swat-up` and `swat-down`, `butt-up` and `butt-down`) usually want the SAME word, so the spinner holds one phrase for the whole gesture instead of flickering. **The alarm's words shipped as a first draft and are yours to rewrite.** |
-| `statusline` | The effort labels, which one is highlighted (`effortSelected`, which must be one of the labels), the mode badge and the footer note. |
+| `statusline` | The effort panel at the bottom, which is the last thing on the page: the `effortWord` heading, the two `effortEnds` above the track, the `effortLabels` and which one is highlighted (`effortSelected`, which must be one of them), the `toggle` word and its state, the `toggleNote` gloss, the `toggleHint` under the toggle, and the `help` key hints that close the Session. |
 | `readme` | Two lines the README shows around the picture. `imageAlt` is what a screen reader says instead of the picture, so describe the picture rather than reading the session out: the session's own words are already in the transcript under it. `transcriptSummary` is the word on the fold-out that holds the transcript. |
 
 ## Rules the build enforces
 
 1. **Nothing blank, nothing missing.** Every field above must be present and be text. Only a `stackRows` label may be empty. `whoami` takes at most three lines, `lanes` and `stackRows` cannot be empty, and every lane needs repos.
 2. **72 columns.** Nothing may be wider. Long blurbs are the usual cause; the error names the row.
-3. **Drawable characters only.** Plain text and Vietnamese are fine. Emoji are not, and the error names the field and the character with its code, for example `content.json: role: character ... (U+1F642) is not in the font`. A short list of symbols the font lacks is refused too; it is `FORBIDDEN_GLYPHS` in `src/font.ts`.
+3. **Drawable characters only.** Plain text and Vietnamese are fine. Emoji are not, and the error names the field and the character with its code, for example `content.json: startup.status: character ... (U+1F642) is not in the font`. A short list of symbols the font lacks is refused too; it is `FORBIDDEN_GLYPHS` in `src/font.ts`.
 4. **No forbidden names.** The build refuses to write anything containing one, whichever field it is in, and matches without regard to case. The error names the field but never repeats the name.
 
 ## Keeping a name private

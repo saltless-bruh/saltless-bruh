@@ -37,7 +37,7 @@ The Profile README presented as a single agent-CLI session, from the opening Hea
 _Avoid_: page layout, dashboard, card stack
 
 **Session Grammar**:
-The borrowed layout and glyph conventions of an agent CLI (rule-bordered prompt, tool-call bullets, nested results, spinner, task list, mode badges, effort picker), used without any Anthropic name, logo or mascot.
+The borrowed layout and glyph conventions of an agent CLI (rule-bordered prompt, tool-call bullets, nested results, spinner, effort picker), used without any Anthropic name, logo or mascot. No task list and no mode badge are drawn; neither ever was, and the Session carries no not-affiliated note either (ADR 0002, amended 2026-10-02).
 _Avoid_: Claude Code UI, Claude Code theme
 
 **Command**:
@@ -45,15 +45,15 @@ One slash-command invocation and its rendered output; the unit of content inside
 _Avoid_: section, card, block, widget
 
 **Header**:
-The opening of the Session: a shell prompt naming the Handle, the host and the path; the Mascot as that prompt's command output, with the Startup Block printed beside it; and the role line.
-_Avoid_: hero, welcome screen
+The opening of the Session: a shell prompt naming the Handle, the host and the path, and the Mascot as that prompt's command output with the Startup Block printed beside it. Flush left: the Mascot's ink lands on the same margin the prompt and every rule start from. There is no role line; it said what `/whoami` says.
+_Avoid_: hero, welcome screen, role line
 
 **Shell Prompt**:
 The two rows that open the Header, borrowed from Kali Linux: the Handle, the host and the path in a bracketed first row, and the command the Mascot is the output of in the second. It names the Handle in the one place a shell puts a name, and the Kali shape says what the owner does without a word about it.
 _Avoid_: banner, header line, title bar
 
 **Startup Block**:
-The three lines printed to the right of the Mascot, in the shape an agent CLI prints at startup: the Handle and a version, a model line parodying one, and a status line. It is voice, where the role line below it is fact; both are kept, because a visitor who reads only one line should still learn what the owner does.
+The three lines printed to the right of the Mascot, in the shape an agent CLI prints at startup: the Handle and a version, a model line parodying one, and a status line. It is voice rather than fact, and since the role line was deleted it is the only thing in the Header that says anything in words; the fact is `/whoami`'s, one Command below.
 _Avoid_: tagline, strapline, subtitle
 
 **Banner**:
@@ -77,8 +77,8 @@ A fault on the rack that wakes the Mascot: the LEDs go red and flash in unison, 
 _Avoid_: alert, notification, event, incident
 
 **Statusline**:
-The closing panel of the Session: an accent top border, the effort picker set to "lazy", the toggle with its gloss and hints, a mode badge and the not-affiliated-with-Anthropic note.
-_Avoid_: footer, effort row
+The closing panel of the Session, and the whole of its bottom: an accent top border, the effort picker set to "lazy", a vertical dividing the scale from the toggle, the toggle with its gloss and hint, and the key hints that end the Session. No mode badge and no not-affiliated note; both were deleted on 2026-10-02 (ADR 0002).
+_Avoid_: footer, effort row, mode badge, disclaimer
 
 ## Look
 

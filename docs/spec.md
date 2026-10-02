@@ -21,11 +21,10 @@ github.com/saltless-bruh
 │  │ ┌─(HANDLE@host)-[~/login]                                                    │ │
 │  │ └─$ <the command whose output the Mascot is>                                 │ │
 │  │                                                                              │ │
-│  │     [Mascot: cat asleep on rack]  HANDLE  vVERSION                           │ │
-│  │      rack LEDs blink -> Finding   <colour word> <model line>                 │ │
-│  │                                   <status line>                              │ │
+│  │ [Mascot: cat asleep on rack]  HANDLE  vVERSION                               │ │
+│  │  rack LEDs blink -> Finding   <colour word> <model line>                     │ │
+│  │                               <status line>                                  │ │
 │  │                                                                              │ │
-│  │     role line                                                                │ │
 │  │ ───────────────────────────────────────────────────────────────────────────  │ │
 │  │ > /whoami     three lines of copy                                            │ │
 │  │ > /ops        three Lanes as a tree, seven repos, one line each              │ │
@@ -34,13 +33,12 @@ github.com/saltless-bruh
 │  │ * <verb>...   spinner, loops forever                                         │ │
 │  │ ───────────────────────────────────────────────────────────────────────────  │ │
 │  │ Effort                                                                       │ │
-│  │             Faster                                   Smarter                 │ │
-│  │             ───────────────────────────────────────▲────                     │ │
-│  │                low    medium    high    xhigh    lazy                        │ │
-│  │             Ultrachill: dynamic nap on every task       Ultrachill  on       │ │
-│  │                                                         Tab to toggle        │ │
+│  │             Faster                               Smarter   │                 │ │
+│  │             ───────────────────────────────────────▲────   │                 │ │
+│  │                low    medium    high    xhigh    lazy      │                 │ │
+│  │             Ultrachill: dynamic nap on every task          │ Ultrachill  on  │ │
+│  │                                                              Tab to toggle   │ │
 │  │   <-/-> to adjust - Enter to confirm - Esc to cancel                         │ │
-│  │ >> autopilot on        terminal-style design, not affiliated with Anthropic  │ │
 │  └──────────────────────────────────────────────────────────────────────────────┘ │
 │                                                                                   │
 │ <details> Session transcript </details>   <- real selectable text, same content   │
@@ -264,6 +262,46 @@ is refused and names itself rather than wrapping.
 
 Containment is **drawn** rather than implied by that indent: `├─` on every repo but the last in its Lane, `└─` on the last, and a `│` carried down the description row of a non-last repo, with that column left blank under the last, which is what closes the branch. Every connector comes from the repo's position in its Lane, so a Lane of one gets `└─` for the same reason the last of seven does. This is what `tree(1)` prints, which makes it terminal-native rather than decorative, and it is the same alphabet as the Header prompt's `┌─`/`└─`. It costs no rows and no columns: the connectors go at column 4, which the indent was already leaving blank, and the name and description stay at columns 7 and 9.
 
+**The Header is flush left, and the Mascot is placed by its INK rather than by its grid.** Until
+2026-10-02 the sprite sat at the command's column, which is where a shell's output belongs relative
+to what printed it. The reasoning is sound and the result was wrong: the sprite and the startup block
+beside it are the widest object on the page, so a four-column indent made the whole Header read as
+floating in from the margin while the prompt's `┌─`/`└─` above it and every rule below it ran from
+column 0. The reference this grammar is borrowed from puts its own startup banner flush against that
+margin. The sprite's column is therefore **0**, and because `mascotDefs` subtracts `MASCOT_INK_LEFT`
+(10 art pixels of blank left edge in the source grids) the column it is handed is the column the
+leftmost **painted** pixel lands on, not where the art file begins. The startup block's column is
+re-derived from the sprite rather than adjusted to follow it, so it moved from 29 to 25 with no
+constant edited. The two prompt rows are unchanged: they already started at column 0, so the Header
+now shares one spine from its first row to its last.
+
+**The role line is deleted.** It read "Offensive Security · Agentic AI Systems" and `/whoami`'s first
+line reads "offensive security. agentic ai systems." four rows below it, so the Session stated the
+owner's discipline twice in two cases; a copy audit flagged the redundancy and it grew more visible as
+the Header did. The row also had nothing around it, alone between the startup block and the rule,
+which is what made it read as orphaned rather than as the Header's closing statement. The blank row
+above it **stays**: the artwork's ink reaches the bottom of its own band with no margin, so whatever
+is printed under it lands under three units away, and that clearance was never the role line's. The
+`role` key is gone from `content.json` and from its validation; the SVG's accessible name, which was
+the only other reader of it, now reads `whoami[0]`.
+
+**The Statusline's two panes are divided by a `│`.** The effort scale and the toggle shared four rows
+with nothing but whitespace between them, so the toggle read as having drifted right rather than as
+occupying a pane. The divider sits **immediately left of the toggle block with one clear column on
+each side**, derived from the toggle's own column (itself derived from the toggle's wording), so
+re-wording the toggle carries the divider with it. It is the `/ops` tree's own continuation mark, read
+off that constant rather than retyped: `┃`, `╎` and a box corner would each be a new mark to learn for
+a job the Session's existing alphabet already does. It spans the four rows the two panes share, from
+the `Faster`/`Smarter` row down to the gloss row, and not the `Effort` heading above them, which sits
+outside both panes, nor the key hints below, which run the full width under both. **The span was
+decided by rendering both** at 846px and 308px: stopped at the levels row, the gloss, which is the
+longest line in the left pane, is the one row reaching across the boundary with nothing marking it,
+and the toggle, which is the thing the divider exists to separate, is the one row not separated.
+Colour is **`muted`**, measured at **5.65:1 on the dark window and 4.77:1 on the light one**. `border`
+was the alternative and is refused on a measurement rather than on taste: **2.79:1 and 2.92:1**, so a
+structural mark drawn in it would miss the 3:1 that 1.4.11 asks of exactly this kind of element, and
+it is not a text role at all by the 4.5:1 rule in 3.4.
+
 ### 3.4 Palette
 
 Everforest Hard with an aqua-green Accent. Every text role is at least 4.5:1 on both `bg` and `surface` of its own variant.
@@ -333,7 +371,7 @@ Every animation must justify itself in one sentence. Anything that cannot is cut
 
 | Element | Behaviour | Why it earns its place |
 |---|---|---|
-| Playback | Once on load, 1.92s measured against the owner's content: rows arrive 26ms apart, each settling over 180ms | Storytelling: establishes that this is a session being run, not a poster |
+| Playback | Once on load, 1.87s measured against the owner's content: rows arrive 26ms apart, each settling over 180ms | Storytelling: establishes that this is a session being run, not a poster |
 | Spinner | After playback, one spinner loops. Its verb names whatever the Mascot is doing right now, on the same 36s clock | State: it is a readout of the Mascot, not decoration, which is why it may loop at all |
 | Mascot | 36s master loop: breathing at 3.0s, with a yawn, a stretch, a settle, a one-second peek at the viewer, and an alarm she wakes to | Storytelling: the operator naps while the agents work, which is the whole metaphor |
 | Mascot micro-layers | Ear 17s, tail 23s. Co-prime periods mean the combined pattern does not visibly repeat | Keeps the loop from reading as a loop |
@@ -360,24 +398,32 @@ is tens of seconds of a visitor looking at a page that is not there. Rows arrive
 owner's real content it is 1.92s**: 68 rows, measured in headless Chrome **and Firefox** at both 846px and
 308px rather than computed, and printed by `npm run build` on every run so it cannot go stale again. The
 ceiling is what matters and it is unchanged; an earlier 57-row Session measured 1.64s and this section
-quoted that one length as though it were the rule, and a 58-row one measured 1.66s.
+quoted that one length as though it were the rule, a 58-row one measured 1.66s, and a 68-row one 1.92s.
 
-**1.92s is the closest this has come to the ceiling, and it is worth saying out loud rather than
-discovering later.** The Statusline became a panel (eight rows) and the Header became a shell prompt (two),
-so ten rows arrived in one day and each one costs 26ms. Four more rows reach two seconds.
+**1.92s was the closest this has come to the ceiling, and two rows came back off the same day.** The
+Statusline became a panel (eight rows) and the Header became a shell prompt (two), so ten rows arrived
+in one morning and each one costs 26ms. Then the owner's review deleted the role row and the row that
+carried the mode badge and the not-affiliated note, and **66 rows measure 1.87s**. Worth stating
+plainly, because the arithmetic is easy to misread: the badge and the note were **one row, not two**,
+since the badge sat at the left margin and the note was flush right on the same line. Three deletions
+of copy removed two rows.
 
 > **THE NEXT ROWS ADDED TO THE SESSION MUST COME WITH A REDUCTION IN THE 26ms STAGGER.** That is the
 > lever, and it is the only one: the stagger is a design constant rather than a measurement, so it can
 > be retuned, while the row budget is the content and cutting content to protect an animation would be
 > the wrong trade. Nobody can perceive the difference between a 1.9s reveal and a 2.0s one; the ceiling
 > exists because tens of seconds is intolerable, not because two is a cliff. This is written as an
-> instruction rather than as an observation so that whoever adds row 69 finds the constraint here
-> instead of discovering it in a render.
+> instruction rather than as an observation so that whoever adds the row that takes this past 1.9s
+> finds the constraint here instead of discovering it in a render. The two rows deleted on 2026-10-02
+> bought **six rows** of headroom at today's stagger, and they are not a budget to spend: they came out
+> because the page read as cluttered.
 
 The startup block beside the Mascot cost nothing, because it prints into rows the sprite had already
 reserved. That is the shape to prefer when there is a choice, and the `/ops` tree and the `/stack`
 bars were both built to it: each draws into columns their own section was already leaving blank, so
-three changes landed on 2026-10-02 for **zero extra rows** and the figure above is unmoved.
+three changes landed on 2026-10-02 for **zero extra rows**. The Statusline's pane divider is the
+fourth and newest of them: it draws into a gutter the panel was already leaving blank between the
+scale and the toggle, so it adds structure for no rows at all.
 
 **There is no Banner reveal any more.** It resolved the wordmark letter by letter over 0.45s and was the
 Session's one moment of spectacle; the wordmark was retired with the Header (3.3), so the spectacle went
@@ -409,7 +455,11 @@ Animation must only touch `opacity` and `transform`. No `filter`, `mask` or `blu
 ### 3.6 Identity and copy
 
 - The real name must never appear in any committed file, generated asset, alt text or transcript (ADR 0001). This is enforced by a build check, not by discipline.
-- No Anthropic name, logo, mascot, brand colour or verb list (ADR 0002). The Statusline carries the not-affiliated note.
+- No Anthropic name, logo, mascot, brand colour or verb list (ADR 0002). **The Statusline no longer
+  carries a not-affiliated note**, amended into ADR 0002 on 2026-10-02: that line was measured to be
+  the only occurrence of the name anywhere in the published profile, so deleting it takes the profile
+  from one mention to zero and satisfies this rule more completely than printing it did. Everything
+  the rule forbids is still forbidden, unweakened; what is borrowed is layout grammar.
 - No invented numbers. Every figure shown is fetched or computed.
 - No em-dashes and no emoji in visible copy.
 
@@ -427,12 +477,13 @@ The rule, so the copy self-audit applies a definition instead of making a judgem
 
 | In `content.json`, by that test | In the generator, by that test |
 |---|---|
-| `Effort`, the word before the levels | The glyph set `❯ ● ╰ ─ │ ▶▶ ✶` |
+| `Effort`, the word before the levels | The glyph set `❯ ● ╰ ─ │ ✶` |
 | `scan complete:`, `days up`, `contributions` | The `·` between the two halves of the result line |
 | The `Ultrachill` toggle and the state it reads | The spinner's `…`, which is punctuation on a word rather than a word |
 | The gloss on the toggle, its hint, and each key hint | The `·` between two key hints, and the `▲` on the effort track |
 | Every spinner verb | The command names `/whoami /ops /stack /activity`, which are the borrowed CLI shape, not the owner's prose |
-| The mode badge and the not-affiliated note | The order of the fragments in a sentence, and the columns they land on |
+| Every key hint on the panel's closing line | The order of the fragments in a sentence, and the columns they land on |
+| | The `│` dividing the effort scale from the toggle, which carries no lexical content at all |
 | The prompt's host, and the command whose output the Mascot is | The prompt's own marks, `┌─( @ )-[ ] └─$`, and the `~/` in front of the path |
 
 A sentence assembled from several of these is built from **labelled fragments, never a template
@@ -450,13 +501,12 @@ is the same for every value it decorates belongs to the generator (the spinner's
 | `login` | The GitHub account name the API is queried by, e.g. `saltless-bruh`. It is a different value from `handle`, which is the nickname (CONTEXT.md: the Handle is both). The prompt's path is this with a `~/` in front of it, which is why **there is no `cwd` key**: a path kept in a second field is a path that can disagree with the account the figures came from, and printed in the prompt and again on its own row it is the same fact twice |
 | `prompt` | `host`, the machine the Handle is logged in to, and `command`, the one whose output the Mascot is. The prompt's own marks are Session Grammar and stay in the generator |
 | `startup` | The three lines printed beside the Mascot, as labelled fragments: `version` (after the Handle on the first line), `colourWord` and `model` (the second), and `status` (the third). The split in the middle line is not decoration: `colourWord` is DRAWN IN THE COLOUR IT NAMES, so it has to be a run of its own, and the generator supplies only the space between the two halves. The block's column is measured from the Mascot's own ink, so retouching the art moves the text instead of colliding with it, and its rows are measured from the band's foot: the block is GROUNDED on the sprite, its last line level with the sprite's last row |
-| `role` | The one-line role under the Mascot |
-| `whoami` | Up to 3 lines of copy |
+| `whoami` | Up to 3 lines of copy. **There is no `role` key**: it printed the owner's discipline on a row of its own, four rows above `whoami`'s first line, which printed the same words in lower case. One statement, in the Command whose job is to make it. The SVG's accessible name reads `whoami[0]`, which is the only thing that ever read `role` besides the deleted row |
 | `lanes[]` | Each has a `label` and `repos[]`, each repo a `name` and a one-line `blurb` |
 | `stackRows[]` | Each has a `label` and `items[]`. Each item is printed in brackets, which are Session Grammar and belong to the generator; a row with an empty `label` is a continuation of the one above it and its items stay in the same column |
 | `verbs` | Spinner words, grouped by Mascot state. Every state in `MASCOT_TIMELINE` needs at least one: `sleep`, `yawn`, `stretch`, `settle`, `peek`, and the alarm's `alert`, `swat-up`, `swat-down`, `glare`, `butt-up`, `butt-down`, `recover`. A state with several words rotates through them while that state is on screen. Giving the two halves of a blow the same word is deliberate: the spinner then holds one phrase across the whole gesture instead of flickering between two |
 | `activityLine` | The words of the `/activity` result line, as labelled fragments: `label` (`scan complete:`), `daysUp` (`days up`) and `contributions`. The generator supplies the order, the numbers and the `·` |
-| `statusline` | The effort panel's copy. `effortWord` is the heading, and the panel's track is indented by its length, so a longer word still pushes the scale along. `effortEnds` is `start` and `end`, the two words above the ends of the track (`Faster` / `Smarter`). `effortLabels` are the levels, left to right, and the LAST of them is the scale's top tier, which is drawn as a rainbow. `effortSelected` names one of them. `toggle` is the shimmering word and the state it reads (`Ultrachill` / `on`), `toggleNote` is the one-line gloss under the scale, and `toggleHint` the line under the toggle. `help` is the key hints as labelled fragments, which the generator joins with its own `·`. `modeBadge` and `note` close the Session |
+| `statusline` | The effort panel's copy. `effortWord` is the heading, and the panel's track is indented by its length, so a longer word still pushes the scale along. `effortEnds` is `start` and `end`, the two words above the ends of the track (`Faster` / `Smarter`). `effortLabels` are the levels, left to right, and the LAST of them is the scale's top tier, which is drawn as a rainbow. `effortSelected` names one of them. `toggle` is the shimmering word and the state it reads (`Ultrachill` / `on`), `toggleNote` is the one-line gloss under the scale, and `toggleHint` the line under the toggle. `help` is the key hints as labelled fragments, which the generator joins with its own `·`, and it is the **last row of the Session**. **There is no `modeBadge` and no `note`**: they shared one row under `help`, and both are gone (ADR 0002's second amendment). The badge went because the grammar this borrows replaces the statusline when the effort picker opens, so the two are never on screen together; the note went because it was the only occurrence of the word "Anthropic" in the whole published profile |
 | `readme` | The two visible strings the README carries outside the Session: `imageAlt`, the picture's accessible name, and `transcriptSummary`, the word on the `<details>` toggle. `imageAlt` says what the picture **is**, not what it contains: the contents are the transcript directly below it, and a reader who hears the Session out of the alt text and then again out of the transcript hears it twice |
 
 Validation rules, all enforced at build time:
@@ -655,6 +705,15 @@ fix waiting on the owner (3.4).
 The 2.2.2 gap is mitigated, not ignored: `prefers-reduced-motion` removes all motion, every loop is low-amplitude, and the content is fully available as text in the transcript regardless of motion state. Nothing in the Session depends on seeing the animation.
 
 The 1.4.11 gap costs the window's edge and nothing else. Every text role still clears 4.5:1 at every width, and the Session's content, hierarchy and figures are unaffected; what a phone reader loses is the sense of a bounded terminal rather than anything they need to read.
+
+**The Statusline's pane divider is a structural graphical object, so 1.4.11 applies to it and it meets
+it.** The `│` between the effort scale and the toggle is drawn in `muted`, which measures **5.65:1 on
+the dark window and 4.77:1 on the light one**, both well clear of 3:1. It is drawn as a `<text>` run
+rather than as a stroke, so unlike the window frame it is a whole glyph at any scale and does not
+antialias away at phone width; it was read at 308px in both variants. `border` was weighed as the
+quieter alternative and refused on this criterion: **2.79:1 and 2.92:1**, which misses 3:1 in both.
+Nothing rests on seeing the divider, because the two panes are also separated by six blank columns and
+the transcript carries each row as text.
 
 The `/stack` bars are graphical objects conveying information, so 1.4.11 applies to them and they
 meet it: a bar is the Accent on the window, which measures 6.51:1 in dark and 4.77:1 in light, well

@@ -205,8 +205,9 @@ sees immediately.
 
 **Settled in Task 9, and measured.** Rows arrive 26ms apart and each takes 180ms to settle, so the last
 row lands at `26ms x (rows - 1) + 180ms`. That figure belongs to the content, not to the design: the
-57-row Session measured in Task 9 finished at 1.636s, and the owner's real content is 58 rows and
-finishes at **1.66s**.
+57-row Session measured in Task 9 finished at 1.636s; the owner's real content was 58 rows at
+**1.66s**, then 68 at **1.92s**, and is **66 rows at 1.87s** after the 2026-10-02 deletions. Quote
+the formula, not any one of these.
 
 **Re-measured in Task 12 against the real content, in both engines.** Frozen frames through real headless
 Chrome and Firefox at 846px and 308px: the last row's band is far from settled at 1.45s and 1.50s, ramps
@@ -246,8 +247,10 @@ leaves the sprite's whole lower right empty.
 Grounded, the block's last line is level with the sprite's last row. Three things follow, and all
 three were visible in the render rather than argued for:
 
-- The block and the sprite **end on one floor**, so the blank row and the role line below close both
-  of them together instead of closing the art and leaving the text hanging.
+- The block and the sprite **end on one floor**, so the blank row below closes both of them together
+  instead of closing the art and leaving the text hanging. That blank row used to be followed by the
+  role line; the role line was deleted on 2026-10-02 and the blank stayed, because the clearance was
+  never the role's and the header's rule now sits under it.
 - The three lines land **one per rack unit**, which is a real relationship rather than a tidier
   rectangle: the lines are the machine's own startup output and they now sit on the machine.
 - The air that is left goes to the **top right**, where the dream bubble already floats, so it reads
