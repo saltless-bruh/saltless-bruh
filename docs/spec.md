@@ -129,13 +129,18 @@ Every animation must justify itself in one sentence. Anything that cannot is cut
 |---|---|---|
 | Playback | Once on load, about 4.3s: Banner decrypts, then each Command types and prints | Storytelling: establishes that this is a session being run, not a poster |
 | Banner | Resolves from random block glyphs over 0.8s | Hierarchy: it is the one moment of spectacle, spent on the name |
-| Spinner | After playback, one spinner loops. Its verb names whatever the Mascot is doing right now, on the same 60s clock | State: it is a readout of the Mascot, not decoration, which is why it may loop at all |
-| Mascot | 60s master loop: breathing at 3.75s, with a yawn, a stretch, a settle and a nose-bubble pop at irregular times | Storytelling: the operator naps while the agents work, which is the whole metaphor |
-| Mascot micro-layers | Ear 17s, tail 23s. Co-prime periods mean the combined pattern repeats about every 6.5 hours | Keeps the loop from reading as a loop |
+| Spinner | After playback, one spinner loops. Its verb names whatever the Mascot is doing right now, on the same 36s clock | State: it is a readout of the Mascot, not decoration, which is why it may loop at all |
+| Mascot | 36s master loop: breathing at 3.0s, with a yawn, a stretch, a settle and a nose-bubble pop at irregular times | Storytelling: the operator naps while the agents work, which is the whole metaphor |
+| Mascot micro-layers | Ear 17s, tail 23s. Co-prime periods mean the combined pattern does not visibly repeat | Keeps the loop from reading as a loop |
 | Rack LEDs | 7s, 11s and 13s flickers | State: the machine is busy; this is the cause the sleeping cat is the effect of |
-| Scan Sweep | Beam crosses the calendar once during playback, then once per 60s master loop | Storytelling: the calendar is read as something being scanned, not a heatmap |
+| Scan Sweep | Beam crosses the calendar once during playback, then once per 36s master loop | Storytelling: the calendar is read as something being scanned, not a heatmap |
+| Ultrachill shimmer | A bright band crosses the word once every 9s, a quarter of the master loop | Hierarchy: it marks the one joke in the Statusline without running constantly |
 
-**Perpetual motion is budgeted.** Four independent loops running at once reads as a screensaver, so only the spinner, the Mascot (with its micro-layers) and the LEDs run continuously, all of them low-amplitude. The Scan Sweep deliberately does **not** free-run on a short cycle: it is the widest moving element on the page, so it fires once on load and then rests, re-firing only on the 60s Mascot boundary.
+**The loop is 36 seconds, and the gaps are what got cut.** An earlier 60-second version put the first event 15 seconds in, past the point most visitors look away, while only about 12 of those 60 seconds contained any event at all. Shortening the gesture durations would have been the wrong fix: a 3.4-second yawn is a yawn, a 1-second one is a twitch. So every gesture kept its length and the waiting between them was halved. The first event now lands at 7.5s and the longest wait is 11.25s.
+
+**Perpetual motion is budgeted.** Several independent loops running at once reads as a screensaver, so only the spinner, the Mascot (with its micro-layers) and the LEDs run continuously, all of them low-amplitude. The Scan Sweep deliberately does **not** free-run on a short cycle: it is the widest moving element on the page, so it fires once on load and then rests, re-firing only on the Mascot boundary. The Ultrachill shimmer fires once per quarter-loop for the same reason.
+
+**Everything derives from one timeline.** `MASCOT_TIMELINE` in `src/timeline.ts` is the only place a pose boundary is written down; every keyframe percentage, the bubble's pop instant and the spinner's verb schedule are computed from it. This is not tidiness. When the loop was retimed from 60s to 36s, the single value that had been hand-typed rather than derived, a breath count, silently produced a 2.25-second breath instead of 3.0 and was caught only because everything around it moved correctly. A derived value cannot drift; a copied one always can.
 
 **The spinner is bound to the Mascot.** The Mascot's timeline is the single source of truth for both. The spinner's verb is derived from it, so the label always names the pose on screen: `Yawning…` while the cat yawns, `Stretching…` while it stretches, `Startled…` for the moment after the bubble pops, and a slow rotation through the sleep verbs the rest of the time. A spinner cycling words unrelated to the picture would be decoration; this one reports state, and the two together read as one coordinated motion rather than two loops competing.
 
