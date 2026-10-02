@@ -127,8 +127,8 @@ Every animation must justify itself in one sentence. Anything that cannot is cut
 
 | Element | Behaviour | Why it earns its place |
 |---|---|---|
-| Playback | Once on load, about 4.3s: Banner decrypts, then each Command types and prints | Storytelling: establishes that this is a session being run, not a poster |
-| Banner | Resolves from random block glyphs over 0.8s | Hierarchy: it is the one moment of spectacle, spent on the name |
+| Playback | Once on load, 1.64s measured: rows arrive 26ms apart, each settling over 180ms | Storytelling: establishes that this is a session being run, not a poster |
+| Banner | Resolves letter by letter over 0.45s, each letter cutting through one flicker frame | Hierarchy: it is the one moment of spectacle, spent on the name |
 | Spinner | After playback, one spinner loops. Its verb names whatever the Mascot is doing right now, on the same 36s clock | State: it is a readout of the Mascot, not decoration, which is why it may loop at all |
 | Mascot | 36s master loop: breathing at 3.0s, with a yawn, a stretch, a settle, a one-second peek at the viewer, and an alarm she wakes to | Storytelling: the operator naps while the agents work, which is the whole metaphor |
 | Mascot micro-layers | Ear 17s, tail 23s. Co-prime periods mean the combined pattern does not visibly repeat | Keeps the loop from reading as a loop |
@@ -136,6 +136,19 @@ Every animation must justify itself in one sentence. Anything that cannot is cut
 | Rack LEDs, faulting | From 28s to 31.6s they are `error` and flash in unison at 2.5Hz, then hold steady `accent` for the recovery beat | State: unison is what reads as one machine in trouble, precisely because the healthy state is defined by never agreeing |
 | Scan Sweep | Beam crosses the calendar once during playback, then once per 36s master loop | Storytelling: the calendar is read as something being scanned, not a heatmap |
 | Ultrachill shimmer | A bright band crosses the word once every 9s, a quarter of the master loop | Hierarchy: it marks the one joke in the Statusline without running constantly |
+
+**The playback is the one animation with a hard ceiling, because it is the one everybody waits on.** It
+fires on every page load and stands between a reader and the content, so the unit is the row and not the
+character: the Session carries about 2,600 characters, and a per-character typewriter at any readable rate
+is tens of seconds of a visitor looking at a page that is not there. Rows arrive 26ms apart and settle over
+180ms, which puts the last row of a 57-row Session at 1.64s, measured in headless Chrome at both 846px and
+308px rather than computed. The Banner resolves inside that window rather than strictly before it, because
+holding the body back until the name had finished would push the total past two seconds; the name is
+nonetheless complete at 0.45s, while the Session is still printing its `/whoami`.
+
+The Banner's reveal is a per-letter stepped reveal and not the glyph scramble an earlier draft asked for.
+The Banner is geometry rather than text (3.3), so there are no glyphs to scramble through; the reasoning is
+recorded in `docs/design-contract.md`.
 
 **The loop is 36 seconds, and the gaps are what got cut.** An earlier 60-second version put the first event 15 seconds in, past the point most visitors look away, while only about 12 of those 60 seconds contained any event at all. Shortening the gesture durations would have been the wrong fix: a 3.4-second yawn is a yawn, a 1-second one is a twitch. So every gesture kept its length and the waiting between them was halved. The first event now lands at 7.5s and the longest wait is 11.25s.
 
