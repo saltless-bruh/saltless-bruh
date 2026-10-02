@@ -1002,15 +1002,6 @@
   "replace": "    return [];"
  },
  {
-  "id": "G6  gates: an unconfigured name list reported as clean rather than unchecked",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "      gate: \"forbidden names\",\n      status: \"absent\",",
-  "replace": "      gate: \"forbidden names\",\n      status: \"pass\","
- },
- {
   "id": "G7  gates: the GitHub token shape removed from the secret gate",
   "file": "scripts/gates.ts",
   "tests": [
@@ -1018,51 +1009,6 @@
   ],
   "find": "  { label: \"a GitHub token (gh?_ prefix)\", pattern: /\\bgh[pousr]_[A-Za-z0-9]{36,}/ },\n",
   "replace": ""
- },
- {
-  "id": "G8  gates: nothing counts as credential-shaped, so an assigned secret escapes",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "const credentialShaped = (s: string): boolean =>\n  (/[a-z]/.test(s) && /[A-Z]/.test(s) && /[0-9]/.test(s)) || /^[0-9a-f]{32,}$/i.test(s);",
-  "replace": "const credentialShaped = (s: string): boolean => s === \"\";"
- },
- {
-  "id": "G9  gates: the hex arm dropped, so a legacy lowercase-hex token escapes",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": " || /^[0-9a-f]{32,}$/i.test(s);",
-  "replace": ";"
- },
- {
-  "id": "G10 gates: the keyword boundary back to \\b, which misses my_token =",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "const ASSIGNED_SECRET = /(?:^|[^A-Za-z0-9])(?:token|secret",
-  "replace": "const ASSIGNED_SECRET = /\\b(?:token|secret"
- },
- {
-  "id": "G11 gates: $ allowed as a value, so the workflow's own secrets reference reads as a secret",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "[^\\\\s\"'#,}$]`),",
-  "replace": "[^\\\\s\"'#,}]`),"
- },
- {
-  "id": "G12 gates: the whitespace widened, so a blank value reaches into the next line",
-  "file": "scripts/gates.ts",
-  "tests": [
-   "test/gates.test.ts"
-  ],
-  "find": "`${TOKEN_ENV}[^\\\\S\\\\n]*[=:][^\\\\S\\\\n]*[\"']?[^\\\\s\"'#,}$]`",
-  "replace": "`${TOKEN_ENV}\\\\s*[=:]\\\\s*[\"']?[^\\\\s\"'#,}$]`"
  },
  {
   "id": "G13 gates: the en-dash dropped from the dash gate",
@@ -1277,7 +1223,7 @@
   "tests": [
    "test/gates.test.ts"
   ],
-  "find": "  results.push(visible.length === 0\n    ? absent(\"placeholder names\", [GENERATED.readme, \"content.json\"])\n    : verdict(\"placeholder names\", visible.join(\", \"), placeholders));\n",
+  "find": "  results.push(visible.length === 0\n    ? absent(\"placeholder names\", [GENERATED.dark, GENERATED.light, GENERATED.readme])\n    : verdict(\"placeholder names\", visible.join(\", \"), placeholders));\n",
   "replace": ""
  },
  {
@@ -1304,8 +1250,8 @@
   "tests": [
    "test/gates.test.ts"
   ],
-  "find": "  ({ gate, status: \"absent\", detail: `not built yet: ${missing.join(\", \")}`, problems: [] });",
-  "replace": "  ({ gate, status: \"absent\", detail: \"not built yet\", problems: [] });"
+  "find": "  ({ gate, status: \"absent\", detail: `not built yet: ${missing.join(\", \")}`, problems: [], reason: \"unbuilt\", missing });",
+  "replace": "  ({ gate, status: \"absent\", detail: \"not built yet\", problems: [], reason: \"unbuilt\" });"
  },
  {
   "id": "G40 gates: a failure reported in the words of an absence",
@@ -1450,5 +1396,401 @@
   ],
   "find": "    results.push(verdict(\n      \"glyphs\",\n",
   "replace": "    if (false) results.push(verdict(\n      \"glyphs\",\n"
+ },
+ {
+  "id": "G45 gates: a file that ships with the repository reported as something a build would write",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  ({ gate, status: \"absent\", detail: `missing from the checkout: ${missing.join(\", \")}`, problems: [], reason: \"missing\", missing });",
+  "replace": "  ({ gate, status: \"absent\", detail: `missing from the checkout: ${missing.join(\", \")}`, problems: [], reason: \"unbuilt\", missing });"
+ },
+ {
+  "id": "G47 gates: the missing-from-the-checkout block dropped from the summary",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  const missing = of(\"missing\");\n  if (missing.length > 0) {",
+  "replace": "  const missing = of(\"missing\");\n  if (false) {"
+ },
+ {
+  "id": "G48 gates: an absence stops saying why, so the summary is back to assuming",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    results.filter((r) => r.status === \"absent\" && (r.reason ?? \"unbuilt\") === reason);",
+  "replace": "    results.filter((r) => r.status === \"absent\" && \"unbuilt\" === reason);"
+ },
+ {
+  "id": "G49 gates: the summary names a variable nothing reads",
+  "file": "src/content.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "export const FORBIDDEN_NAMES_ENV = \"PROFILE_FORBIDDEN_NAMES\";",
+  "replace": "export const FORBIDDEN_NAMES_ENV = \"PROFILE_FORBIDDEN_NAME\";"
+ },
+ {
+  "id": "A1  activity: the unset-token failure demands read:user again, which the API does not need",
+  "file": "src/activity.ts",
+  "tests": [
+   "test/activity.test.ts"
+  ],
+  "find": "A user token with the repo scope is enough for your own figures; read:user is only needed to read another user's contributions.",
+  "replace": "The token needs the read:user scope."
+ },
+ {
+  "id": "A2  activity: the 401 hint blames the scope that was measured unnecessary",
+  "file": "src/activity.ts",
+  "tests": [
+   "test/activity.test.ts"
+  ],
+  "find": "is either invalid or missing the repo scope",
+  "replace": "is either invalid or missing the read:user scope"
+ },
+ {
+  "id": "W15 refresh: the GITHUB_TOKEN claim stated as measured when it was never tested",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "echo \"GITHUB_TOKEN is still assumed not to do, unverified: it is an installation token\" >&2",
+  "replace": "echo \"GITHUB_TOKEN will not do, measured: it is an installation token\" >&2"
+ },
+ {
+  "id": "W16 refresh: the name list passed under a name nothing reads",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run gates",
+  "replace": "          PROFILE_FORBIDDEN_NAME: ${{ secrets.PROFILE_FORBIDDEN_NAME }}\n        run: npm run gates"
+ },
+ {
+  "id": "G57 gates: the placeholder predicate ignores its argument, so every assigned secret escapes",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "      if (looksIllustrative(m[1])) continue;",
+  "replace": "      if (m[1] !== undefined) continue;"
+ },
+ {
+  "id": "G58 gates: placeholders not recognised, so a document explaining the setting blocks a build",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "      if (looksIllustrative(m[1])) continue;",
+  "replace": "      if (false) continue;"
+ },
+ {
+  "id": "G59 gates: placeholder detection widened until a real credential reads as a placeholder",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "const looksIllustrative = (s: string): boolean =>\n  !/[0-9]/.test(s) && /^[A-Za-z]+(?:[-_.][A-Za-z]+)*$/.test(s);",
+  "replace": "const looksIllustrative = (s: string): boolean => /^[A-Za-z0-9_\\-+/]+$/.test(s);"
+ },
+ {
+  "id": "G60 gates: the digit test dropped, so a generated value reads as illustrative",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  !/[0-9]/.test(s) && /^[A-Za-z]+(?:[-_.][A-Za-z]+)*$/.test(s);",
+  "replace": "  /^[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)*$/.test(s);"
+ },
+ {
+  "id": "G61 gates: the minimum credential length dropped, so a two-character value is a secret",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "const MIN_CREDENTIAL_LENGTH = 8;",
+  "replace": "const MIN_CREDENTIAL_LENGTH = 1;"
+ },
+ {
+  "id": "G62 gates: the assigned-credential value narrowed to letters, so a real token escapes",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    pattern: /(?:^|[^A-Za-z0-9])(?:token|secret|passwd|password|api[_-]?key|access[_-]?key|private[_-]?key|credentials?)[\"']?[^\\S\\n]*[=:][^\\S\\n]*[\"']?([A-Za-z0-9_\\-+/]{20,})/gi,",
+  "replace": "    pattern: /(?:^|[^A-Za-z0-9])(?:token|secret|passwd|password|api[_-]?key|access[_-]?key|private[_-]?key|credentials?)[\"']?[^\\S\\n]*[=:][^\\S\\n]*[\"']?([A-Za-z]{20,})/gi,"
+ },
+ {
+  "id": "G63 gates: the keyword boundary back to \\b, which misses my_token =",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    pattern: /(?:^|[^A-Za-z0-9])(?:token|secret",
+  "replace": "    pattern: /\\b(?:token|secret"
+ },
+ {
+  "id": "G64 gates: a .env that sets nothing is indistinguishable from having no .env",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  if (statSync(path, { throwIfNoEntry: false })?.isFile() !== true) return \"no-file\";",
+  "replace": "  if (statSync(path, { throwIfNoEntry: false })?.isFile() !== true) return \"absent\";"
+ },
+ {
+  "id": "G65 gates: any line in .env counts, so a name written as a key reads as configured",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    if (key !== name) continue;",
+  "replace": "    if (key === \"\") continue;"
+ },
+ {
+  "id": "G66 gates: a blank value in .env reads as set",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    found = value === \"\" ? \"blank\" : \"set\";",
+  "replace": "    found = \"set\";"
+ },
+ {
+  "id": "G67 gates: the unloaded-file case loses its own advice, the one nobody can guess",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    case \"set\":\n      return `${NOT_SCANNED}, yet a .env here sets ${FORBIDDEN_NAMES_ENV}: this process did not load it, so run it as \\`npm run gates\\`, which passes --env-file-if-exists=.env`;",
+  "replace": "    case \"set\":\n      return NOT_SCANNED;"
+ },
+ {
+  "id": "G68 gates: the .env diagnosis quotes the file, which is how the name got out in the first place",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "      return `${NOT_SCANNED}, and a .env here does not set ${FORBIDDEN_NAMES_ENV}: if you meant to configure it, check that every line reads NAME=value, with the name on the LEFT of the = (a name written as a key sets nothing)`;",
+  "replace": "      return `${NOT_SCANNED}, and a .env here does not set ${FORBIDDEN_NAMES_ENV}: its first line is ${readFileSync(join(dirOf(root), \".env\"), \"utf8\").split(\"\\n\")[0]}`;"
+ },
+ {
+  "id": "G69 gates: the unconfigured note reads as a clean tree",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "const NOT_SCANNED = \"no private names configured, so nothing was scanned for\";",
+  "replace": "const NOT_SCANNED = \"the tree is clean\";"
+ },
+ {
+  "id": "G70 gates: the pass that enforced nothing stops saying so",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    results.push({ ...pass(\"forbidden names\", nameListNote(root)), unenforced: true });",
+  "replace": "    results.push(pass(\"forbidden names\", nameListNote(root)));"
+ },
+ {
+  "id": "G71 gates: the summary stops flagging a pass that checked nothing",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  const note = unenforced.length === 0 ? \"\" : `\\n\\nNOTE: ${unenforced.map((r) => r.gate).join(\", \")} passed without checking anything.\\nRead its line above for why. That is not the same claim as the tree having been checked.`;",
+  "replace": "  const note = \"\";"
+ },
+ {
+  "id": "G72 gates: configured names are no longer scanned, so opt-out becomes removal",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    const hits = collisions.length > 0 ? collisions : scanTreeForForbiddenNames(root, names).map((h) => `${h} carries a forbidden name (ADR 0001)`);",
+  "replace": "    const hits: string[] = collisions;"
+ },
+ {
+  "id": "G73 gates: a configured name the profile shows is reported as file hits, not as the contradiction",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    const collisions = identityCollisions(root, names);",
+  "replace": "    const collisions: string[] = [];"
+ },
+ {
+  "id": "G74 gates: the mixed-cause summary reports whichever cause it looked at first",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "  const missing = of(\"missing\");",
+  "replace": "  const missing = unbuilt.length > 0 ? [] : of(\"missing\");"
+ },
+ {
+  "id": "A3  activity: the scan over fetched data removed, so a name can arrive and be published",
+  "file": "src/activity.ts",
+  "tests": [
+   "test/activity.test.ts"
+  ],
+  "find": "      assertNoForbiddenNames(raw, \"data fetched from the GitHub API\");",
+  "replace": "      if (false) assertNoForbiddenNames(raw, \"data fetched from the GitHub API\");"
+ },
+ {
+  "id": "W17 refresh: the preflight sends the owner to mint a read:user token",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "echo \"It is a user token. Measured 2026-10-02: the repo scope is enough\" >&2",
+  "replace": "echo \"It is a personal access token with the read:user scope.\" >&2"
+ },
+ {
+  "id": "W18 refresh: the name list required again, so the refresh stops without it",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "          echo \"the token is present\"",
+  "replace": "          if [ -z \"${PROFILE_FORBIDDEN_NAMES}\" ]; then\n            echo \"missing PROFILE_FORBIDDEN_NAMES\" >&2\n            exit 1\n          fi\n          echo \"the token is present\""
+ },
+ {
+  "id": "W19 refresh: the optional secret no longer reaches the build, so setting it would change nothing",
+  "file": ".github/workflows/refresh.yml",
+  "tests": [
+   "test/workflow.test.ts"
+  ],
+  "find": "          PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}\n          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}\n        run: npm run build",
+  "replace": "          PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}\n        run: npm run build"
+ },
+ {
+  "id": "E1  package: npm run gates stops loading .env, so a configured name list is read by nobody",
+  "file": "package.json",
+  "tests": [
+   "test/env-file.test.ts"
+  ],
+  "find": "\"gates\": \"node --env-file-if-exists=.env scripts/gates.ts\"",
+  "replace": "\"gates\": \"node scripts/gates.ts\""
+ },
+ {
+  "id": "E2  package: npm run build stops loading .env, so the token is read by nobody",
+  "file": "package.json",
+  "tests": [
+   "test/env-file.test.ts"
+  ],
+  "find": "\"build\": \"node --env-file-if-exists=.env src/build.ts\"",
+  "replace": "\"build\": \"node src/build.ts\""
+ },
+ {
+  "id": "E3  package: gates downgraded to the strict --env-file, which exits 9 wherever there is no .env",
+  "file": "package.json",
+  "tests": [
+   "test/env-file.test.ts"
+  ],
+  "find": "\"gates\": \"node --env-file-if-exists=.env",
+  "replace": "\"gates\": \"node --env-file=.env"
+ },
+ {
+  "id": "E4  package: build downgraded to the strict --env-file, which breaks every CI run",
+  "file": "package.json",
+  "tests": [
+   "test/env-file.test.ts"
+  ],
+  "find": "\"build\": \"node --env-file-if-exists=.env",
+  "replace": "\"build\": \"node --env-file=.env"
+ },
+ {
+  "id": "E5  package: the flag points at the example instead of the real file",
+  "file": "package.json",
+  "tests": [
+   "test/env-file.test.ts"
+  ],
+  "find": "\"gates\": \"node --env-file-if-exists=.env scripts/gates.ts\"",
+  "replace": "\"gates\": \"node --env-file-if-exists=.env.example scripts/gates.ts\""
+ },
+ {
+  "id": "E6  package: npm test given .env, so a local file can change a test result",
+  "file": "package.json",
+  "tests": [
+   "test/env-file.test.ts"
+  ],
+  "find": "\"test\": \"node --test\"",
+  "replace": "\"test\": \"node --env-file-if-exists=.env --test\""
+ },
+ {
+  "id": "V1  render-check: an unknown engine falls back to Chrome instead of being refused",
+  "file": "scripts/render-check.ts",
+  "tests": [
+   "test/render-check.test.ts"
+  ],
+  "find": "  if (!(ENGINES as readonly string[]).includes(named)) {\n    throw new Error(`unknown engine ${JSON.stringify(named)}; expected one of ${ENGINES.join(\", \")}`);\n  }\n  return named as Engine;",
+  "replace": "  if (!(ENGINES as readonly string[]).includes(named)) return \"chrome\";\n  return named as Engine;"
+ },
+ {
+  "id": "V2  render-check: command() drives Chrome whatever engine was asked for",
+  "file": "scripts/render-check.ts",
+  "tests": [
+   "test/render-check.test.ts"
+  ],
+  "find": "  return s.engine === \"firefox\"\n    ? { bin: \"firefox\", args: firefoxArgs(s, firefoxProfile(profileDir, s.reduced)) }\n    : { bin: \"google-chrome-stable\", args: chromeArgs(s) };",
+  "replace": "  return { bin: \"google-chrome-stable\", args: chromeArgs(s) };"
+ },
+ {
+  "id": "V3  render-check: Firefox always asked for reduced motion, whatever the run wanted",
+  "file": "scripts/render-check.ts",
+  "tests": [
+   "test/render-check.test.ts"
+  ],
+  "find": "  `user_pref(\"ui.prefersReducedMotion\", ${reduced ? 1 : 0});\\n`;",
+  "replace": "  `user_pref(\"ui.prefersReducedMotion\", ${reduced ? 1 : 1});\\n`;"
+ },
+ {
+  "id": "V4  render-check: Chrome stops being told about reduced motion",
+  "file": "scripts/render-check.ts",
+  "tests": [
+   "test/render-check.test.ts"
+  ],
+  "find": "  ...(s.reduced ? [\"--force-prefers-reduced-motion\"] : []),",
+  "replace": "  ...(s.reduced ? [] : []),"
+ },
+ {
+  "id": "V5  render-check: the freeze reads the animation duration where the delay belongs",
+  "file": "scripts/render-check.ts",
+  "tests": [
+   "test/render-check.test.ts"
+  ],
+  "find": "    const delay = explicit !== null ? Number(explicit[1]) : times.length >= 2 ? times[1] : null;",
+  "replace": "    const delay = explicit !== null ? Number(explicit[1]) : times.length >= 2 ? times[0] : null;"
+ },
+ {
+  "id": "V6  render-check: the per-rule shift emitted before the blanket rule, which then wins",
+  "file": "scripts/render-check.ts",
+  "tests": [
+   "test/render-check.test.ts"
+  ],
+  "find": "    `*{animation-delay:-${at}s!important;animation-play-state:paused!important}${shiftDelays(style[1], at)}</style>`,",
+  "replace": "    `${shiftDelays(style[1], at)}*{animation-delay:-${at}s!important;animation-play-state:paused!important}</style>`,"
+ },
+ {
+  "id": "V7  render-check: an unanimated document is frozen silently instead of refused",
+  "file": "scripts/render-check.ts",
+  "tests": [
+   "test/render-check.test.ts"
+  ],
+  "find": "  if (!svg.includes(\"</style>\")) throw new Error(`${label} has no <style> to freeze; nothing in it is animated`);",
+  "replace": "  if (!svg.includes(\"</style>\")) return svg;"
+ },
+ {
+  "id": "V8  render-check: Firefox sized to the image, so its window clips what Chrome shows",
+  "file": "scripts/render-check.ts",
+  "tests": [
+   "test/render-check.test.ts"
+  ],
+  "find": "  \"--headless\", \"--profile\", profile,\n  `--window-size=${s.width + 40},2400`,",
+  "replace": "  \"--headless\", \"--profile\", profile,\n  `--window-size=${s.width},2400`,"
  }
 ]
