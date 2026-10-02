@@ -54,7 +54,7 @@ ${base}${o.css ?? ""}
 @media (prefers-reduced-motion: reduce){*{animation:none!important}}
 </style>
 <rect width="${CANVAS_W}" height="${h}" fill="${p.bg}"/>
-<rect x="0.5" y="0.5" width="${CANVAS_W - 1}" height="${h - 1}" fill="none" stroke="${p.border}" stroke-width="1"/>
+<rect x="0.5" y="0.5" width="${CANVAS_W - 1}" height="${h - 1}" fill="none" stroke="${p.border}" stroke-width="1" vector-effect="non-scaling-stroke"/>
 ${o.defs ?? ""}
 ${renderRows(rows)}
 </svg>`;

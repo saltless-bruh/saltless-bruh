@@ -153,9 +153,17 @@ test("the window is a themed background plus a one pixel frame drawn inside the 
     const h = canvasH(1);
     assert.equal(rest.length, 0, "no other rects");
     assert.deepEqual(bg, { width: String(CANVAS_W), height: String(h), fill: p.bg });
+    // `vector-effect` is load-bearing, not decoration. A plain stroke-width of 1 is 1 USER unit,
+    // which is 0.34 device pixels once the 896-unit canvas is drawn at the 308px phone width, and a
+    // sub-pixel stroke antialiases into whatever it sits on: measured at 1.00:1 in light and 1.37:1
+    // in dark, so the window had no edge at the width docs/design-contract.md judges the work at.
+    // Non-scaling keeps it one DEVICE pixel at any scale, measured back to 2.92:1 light and 2.79:1
+    // dark. Removing it silently returns the frame to invisible on a phone while every other test
+    // still passes, so it is asserted here rather than left to a renderer to notice.
     assert.deepEqual(frame, {
       x: "0.5", y: "0.5", width: String(CANVAS_W - 1), height: String(h - 1),
       fill: "none", stroke: p.border, "stroke-width": "1",
+      "vector-effect": "non-scaling-stroke",
     });
   }
 });
