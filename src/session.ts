@@ -247,10 +247,13 @@ export function languageShares(langs: { name: string; bytes: number }[]): { name
  * (docs/spec.md 3.6).
  *
  * THE ROUNDING HAPPENS ONCE, IN EIGHTHS, and the whole blocks are the whole part of that one
- * figure. The obvious alternative, flooring to whole columns and rounding what is left over
- * separately, is wrong exactly where no eye can check it: 47% of 34 columns is 15.98, whose
- * leftover rounds to a ninth eighth, so that arithmetic emits either a 35th cell or a glyph one
- * past the end of the table. Carrying is not a special case here; it is what `/ 8` already does.
+ * figure, so the carry is the arithmetic's job rather than the glyph table's. The obvious
+ * alternative, flooring to whole columns and rounding what is left over separately, hands the carry
+ * to the table: 47% of 34 columns is 15.98, whose leftover rounds to an EIGHTH eighth, and at 41,
+ * 44, 47, 91, 94 and 97 percent that arithmetic asks for a partial block the usual seven-glyph
+ * table does not have. Measured, it reaches the same answer as this one only because the table here
+ * happens to end in the full block, which is luck rather than a design, and `EIGHTHS` is a table of
+ * eight for reasons that have nothing to do with rescuing it.
  */
 export function languageBar(pct: number, width: number = BAR_COLS): string {
   const eighths = Math.round((pct / 100) * width * 8);

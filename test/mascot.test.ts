@@ -1542,14 +1542,14 @@ test("the artwork carries an empty left margin, which is why placing it by its g
  * art so the left margin stops being 10, and the test below catches that the moment it happens:
  * the derivation follows the art and a literal does not, so the rendered left edge stops matching
  * the column asked for. The measuring itself is pinned separately against synthetic grids in
- * test/pixelart.test.ts, by mutants P1 to P6 in scripts/mutants.json.
+ * test/pixelart.test.ts, by mutants PX1 to PX6 in scripts/mutants.json.
  *
  * THE SAME IS TRUE OF THE WIDTH, and it was uncovered until 2026-10-02. `MASCOT_INK_COLS` takes a
  * maximum over every pose's right edge, which is right, but every pose has the same right edge
  * because an invariant forces the rack identical across them, so the maximum had nothing to
  * measure: swapping it for a minimum, or for any single pose's edge, changed no output and no test
  * noticed. The derivation moved to `sharedInkWidth` in src/pixelart.ts so that it can be handed
- * frames that actually differ, which is what P1 to P3 now mutate.
+ * frames that actually differ, which is what PX1 to PX3 now mutate.
  *
  * Making them killable would mean adding an art-directory injection seam to src/mascot.ts for no
  * behaviour anyone can observe, which is contorting the design to satisfy the measurement rather

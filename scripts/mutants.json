@@ -2047,7 +2047,7 @@
     "replace": "  const fits = (c: number): boolean => hues.some((h) => inGamut(colourAt(h, c)));"
   },
   {
-    "id": "P1 pixelart: the clearance takes the NARROWEST frame, so every wider one is overlapped",
+    "id": "PX1 pixelart: the clearance takes the NARROWEST frame, so every wider one is overlapped",
     "file": "src/pixelart.ts",
     "tests": [
       "test/pixelart.test.ts",
@@ -2057,7 +2057,7 @@
     "replace": "  return Math.min(...grids.map((g) => inkRight(g.rows))) - sharedInkLeft(grids) + 1;"
   },
   {
-    "id": "P2 pixelart: the span is measured exclusively, so a clearance is one column short",
+    "id": "PX2 pixelart: the span is measured exclusively, so a clearance is one column short",
     "file": "src/pixelart.ts",
     "tests": [
       "test/pixelart.test.ts",
@@ -2067,7 +2067,7 @@
     "replace": "  return Math.max(...grids.map((g) => inkRight(g.rows))) - sharedInkLeft(grids);"
   },
   {
-    "id": "P3 pixelart: the span is measured from the grid's edge rather than from the shared ink edge",
+    "id": "PX3 pixelart: the span is measured from the grid's edge rather than from the shared ink edge",
     "file": "src/pixelart.ts",
     "tests": [
       "test/pixelart.test.ts",
@@ -2077,7 +2077,7 @@
     "replace": "  return Math.max(...grids.map((g) => inkRight(g.rows))) + 1;"
   },
   {
-    "id": "P4 pixelart: the right edge is read off the first row that paints, not the furthest",
+    "id": "PX4 pixelart: the right edge is read off the first row that paints, not the furthest",
     "file": "src/pixelart.ts",
     "tests": [
       "test/pixelart.test.ts"
@@ -2086,7 +2086,7 @@
     "replace": "  return xs[0];"
   },
   {
-    "id": "P5 pixelart: trailing spaces count as ink, so the right edge is the grid's own width",
+    "id": "PX5 pixelart: trailing spaces count as ink, so the right edge is the grid's own width",
     "file": "src/pixelart.ts",
     "tests": [
       "test/pixelart.test.ts",
@@ -2096,7 +2096,7 @@
     "replace": "  const xs = rows.map((row) => row.length - 1).filter((x) => x >= 0);"
   },
   {
-    "id": "P6 pixelart: a frame that drifts RIGHT is accepted, so the scene slides between frames",
+    "id": "PX6 pixelart: a frame that drifts RIGHT is accepted, so the scene slides between frames",
     "file": "src/pixelart.ts",
     "tests": [
       "test/pixelart.test.ts"

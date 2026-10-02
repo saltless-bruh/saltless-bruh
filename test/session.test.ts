@@ -290,9 +290,16 @@ test("fragments of one drawn thing may touch, and still may not overlap", () => 
 });
 
 test("no run is empty, so no empty element is drawn", () => {
+  // `tiny` is here because `busy` cannot reach this: every one of its languages rounds to at least
+  // one percent, so no bar ever comes back empty and the one place in the Session that can produce
+  // an empty run is never built. A mutant that pushed the empty bar as a run survived this test for
+  // exactly that reason, which is the fixture's fault rather than the assertion's.
+  const tiny: Activity = { ...busy, languages: [{ name: "Big", bytes: 999_000 }, { name: "Tiny", bytes: 1 }] };
   for (const [, make] of CONTENTS) {
-    for (const row of composeSession(make(), busy).rows) {
-      for (const run of row.runs) assert.notEqual(run.text, "", "an empty run");
+    for (const a of [busy, tiny]) {
+      for (const row of composeSession(make(), a).rows) {
+        for (const run of row.runs) assert.notEqual(run.text, "", "an empty run");
+      }
     }
   }
 });
@@ -789,9 +796,12 @@ test("the bar is drawn to the nearest eighth of a column, and the rounding CARRI
   //   47% is 15.98, JUST UNDER one, and rounds up to a whole block with no eighth after it;
   //   48% is 16.32, just over, and keeps three eighths.
   //
-  // 47% is the one that kills the obvious implementation. Flooring to whole columns and rounding
-  // what is left over separately gives 15 blocks and a remainder of 0.98, which rounds to an eighth
-  // eighth: a ninth sub-cell, or a glyph one past the end of the table.
+  // 47% is where the obvious implementation goes wrong. Flooring to whole columns and rounding what
+  // is left over separately gives 15 blocks and a remainder of 0.98, which rounds to an EIGHTH
+  // eighth and asks the glyph table for a partial it does not have. Written with the usual
+  // seven-glyph table of partials it indexes one past the end, and it does so at six of the hundred
+  // shares: 41, 44, 47, 91, 94 and 97. It survives here only because this table ends in the full
+  // block, which is luck; doing the rounding once in eighths makes the carry the arithmetic's job.
   assert.equal(languageBar(50), "█".repeat(17));
   assert.equal(languageBar(47), "█".repeat(16));
   assert.equal(languageBar(48), "█".repeat(16) + "▍");
