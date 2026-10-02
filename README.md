@@ -14,11 +14,11 @@
 
 
 
+
+
                              LAZIE  v0x7A69
                              red cat with lazy effort · self hosted
                              agents working · operator horizontal
-
-
 
     Offensive Security · Agentic AI Systems
 ────────────────────────────────────────────────────────────────────────
@@ -29,34 +29,34 @@
 
 ❯ /ops
   ╰  offense/
-       saltpilot
-         pentest copilot for the Pi agent runtime
-       csrf-shield-ai
+    ├─ saltpilot
+    │    pentest copilot for the Pi agent runtime
+    └─ csrf-shield-ai
          CSRF risk scoring for HAR captures, with a Go triage TUI
   ╰  agent-infra/
-       saltcode
-         spec-driven agent: frontier plans once, local model executes
-       memory-system
-         self-hosted agent memory: git wiki over postgres and pgvector
-       runtime-feature-falsifier
+    ├─ saltcode
+    │    spec-driven agent: frontier plans once, local model executes
+    ├─ memory-system
+    │    self-hosted agent memory: git wiki over postgres and pgvector
+    └─ runtime-feature-falsifier
          audits whether a feature really works through the running app
   ╰  model-infra/
-       saltnitor
-         Rust TUI command center for llama.cpp with live telemetry
-       orchbiter
+    ├─ saltnitor
+    │    Rust TUI command center for llama.cpp with live telemetry
+    └─ orchbiter
          kernel-level arbitration between local LLM and compute tasks
 
 ❯ /stack
-     Python      90%
-     Rust        6%
-     Go          3%
-     Shell       1%
-     HTML        0%
-     TypeScript  0%
-     offense  metasploit  burp  bloodhound  sliver  mythic
-              ligolo-ng  pspy  peass-ng
-     ai       llama.cpp  pgvector  mcp  langchain  unsloth
-     ops      docker  linux
+     Python      ██████████████████████████████▋      90%
+     Rust        ██                                    6%
+     Go          █                                     3%
+     Shell       ▍                                     1%
+     HTML                                             <1%
+     TypeScript                                       <1%
+     offense  [metasploit] [burp] [bloodhound] [sliver] [mythic]
+              [ligolo-ng] [pspy] [peass-ng]
+     ai       [llama.cpp] [pgvector] [mcp] [langchain] [unsloth]
+     ops      [docker] [linux]
 
 ❯ /activity
 
