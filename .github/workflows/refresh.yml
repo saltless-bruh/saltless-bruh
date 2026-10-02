@@ -1,0 +1,131 @@
+# The daily refresh: fetch the real activity, regenerate both Theme Variants and the README, gate
+# the result, and commit the three outputs together when any of them changed.
+#
+# THREE THINGS AN EARLIER DRAFT OF THIS FILE GOT WRONG. Each one would have been invisible.
+#
+#   1. IT READS PROFILE_GH_TOKEN FROM A REPOSITORY SECRET, NEVER THE BUILT-IN GITHUB_TOKEN.
+#      The contribution calendar sits behind `contributionsCollection`, which the built-in token
+#      cannot reliably read, and private contributions are only ever counted for the token's own
+#      owner. A run with the wrong token does not error in a useful way; it returns a thinner
+#      calendar, which then publishes as though it were the year. docs/spec.md 5.2 has the
+#      reasoning. The built-in token is still here, and does exactly one job: pushing the commit.
+#
+#   2. IT COMMITS assets/, cache/ AND README.md TOGETHER. An earlier draft added only the assets
+#      and the README. The build would then have fetched real figures, written them into
+#      cache/activity.json, published them, and thrown the cache away, every single day, with
+#      nothing failing anywhere. The symptom would have been a cache that mysteriously never
+#      updates, which is a hard thing to go looking for. The cache is also what keeps this
+#      schedule alive: GitHub disables a cron after 60 days with no repository activity, and the
+#      cache's own fetchedAt changes on every successful fetch, so a daily commit is a daily
+#      heartbeat.
+#
+#   3. IT RUNS `npm run gates` BEFORE ANYTHING IS COMMITTED. A daily job that publishes an
+#      ungated profile is a daily job that will eventually publish a broken one, on a day nobody
+#      is looking. The gates exit 1 when something is wrong and 3 when something was not built,
+#      and either one stops the commit.
+#
+# THE TOKEN NEVER REACHES A LOG LINE. It is bound to the two steps that need it and to no others,
+# so no later step can print it even by accident; it is never passed to the gates, which do not
+# need it; nothing here echoes it, and the only test applied to it is whether it is empty. The
+# generator holds the other end of that promise: it reads the variable itself, scrubs the value
+# out of every response and every failure message, and quotes an HTTP status rather than a body
+# (src/activity.ts).
+
+name: Refresh profile
+
+on:
+  schedule:
+    # Daily, and deliberately off the hour: a cron at :00 is when every scheduled workflow on the
+    # platform fires at once and the queue delays them. Nothing here needs a precise minute.
+    - cron: "17 4 * * *"
+  # Manual, for the first run and for trying a change without waiting a day.
+  workflow_dispatch:
+
+# Least privilege. Declaring this block at all is what drops every other scope to none, so the
+# token this job carries cannot reach issues, packages, deployments or another repository. Write
+# is needed because the job pushes a commit; nothing else here is more than a read.
+permissions:
+  contents: write
+
+# One refresh at a time, and never cancelled part way through. `cancel-in-progress: true` would be
+# the usual choice and it is wrong here: this job commits and pushes, and being cancelled between
+# the two is how a branch ends up carrying work that was never pushed.
+concurrency:
+  group: refresh-profile
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # persist-credentials stays at its default of true, because the commit step pushes with it.
+      # Those are the credentials of the built-in token scoped by `permissions` above, and they
+      # are not the token the fetch uses.
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # Node runs the .ts sources directly by stripping types, so there is no build step and
+          # the major version is load bearing: the syntax the generator avoids (enum, namespace,
+          # parameter properties) is avoided because stripping cannot erase it.
+          node-version: "26"
+
+      - run: npm ci
+
+      # The suite before the publish, not after. Everything past this point writes files that go
+      # straight onto the profile, so a generator that is already broken should stop here.
+      - run: npm test
+
+      - name: Check this repository is configured to refresh
+        env:
+          PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}
+          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}
+        run: |
+          missing=""
+          if [ -z "${PROFILE_GH_TOKEN}" ]; then
+            missing="${missing} PROFILE_GH_TOKEN"
+          fi
+          if [ -z "${PROFILE_FORBIDDEN_NAMES}" ]; then
+            missing="${missing} PROFILE_FORBIDDEN_NAMES"
+          fi
+          if [ -n "${missing}" ]; then
+            echo "This repository is missing Actions secret(s):${missing}" >&2
+            echo "" >&2
+            echo "PROFILE_GH_TOKEN is a personal access token with the read:user scope. The" >&2
+            echo "built-in GITHUB_TOKEN will not do: it cannot reliably read the contribution" >&2
+            echo "calendar and it never counts private contributions (docs/spec.md 5.2)." >&2
+            echo "" >&2
+            echo "PROFILE_FORBIDDEN_NAMES is a comma separated list of strings that must never" >&2
+            echo "appear in a published file. ADR 0001 is enforced by a check rather than by" >&2
+            echo "discipline, and the check has nothing to look for without it, so the gates" >&2
+            echo "report the scan as unchecked rather than as clean and this job stops." >&2
+            exit 1
+          fi
+          echo "both secrets are present"
+
+      # The only step that sees the credential, and the only one that needs it.
+      - name: Build the Session from real figures
+        env:
+          PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}
+          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}
+        run: npm run build
+
+      # No token here. The gates read files, and handing them a credential would put it one
+      # console.log away from a public build log for no gain at all.
+      - name: Gate the result before any of it is published
+        env:
+          PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}
+        run: npm run gates
+
+      - name: Commit the three outputs together, if any of them changed
+        run: |
+          if [ -z "$(git status --porcelain -- assets cache README.md)" ]; then
+            echo "assets, cache and README.md are all unchanged; nothing to commit"
+            exit 0
+          fi
+          git config user.name "${{ github.repository_owner }}"
+          git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+          git add -- assets cache README.md
+          git commit -m "chore: refresh the profile session"
+          git push
