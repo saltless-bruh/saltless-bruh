@@ -41,6 +41,7 @@ export async function buildSvg(o: BuildSvgOptions): Promise<string> {
     .text { fill: ${p.text} } .muted { fill: ${p.muted} } .accent { fill: ${p.accent} }
     .warning { fill: ${p.warning} } .error { fill: ${p.error} }
     .bold { fill: ${p.text}; font-weight: 700 }
+    .accent-bold { fill: ${p.accent}; font-weight: 700 }
   `;
   // Two faces, not one with a 400-700 range: a single face makes the browser
   // synthesise the bold, which smears a monospace grid.

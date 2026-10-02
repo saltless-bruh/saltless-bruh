@@ -1,6 +1,15 @@
 import { COLS, colX, rowBaselineY } from "./grid.ts";
 
-export type Style = "text" | "muted" | "accent" | "warning" | "error" | "bold";
+/**
+ * A text role. Each name is also the CSS class `renderRows` emits, and `src/svg.ts` holds the one
+ * rule per name that gives it its colour.
+ *
+ * `bold` is the body text at weight 700 and `accent-bold` is the Accent at weight 700: two rules
+ * rather than one weight flag, because a run carries a single style and the two combinations the
+ * Session actually uses are these. `accent-bold` is the Statusline's emphasis, where the selected
+ * effort level has to be both the brightest thing on its row and the heaviest.
+ */
+export type Style = "text" | "muted" | "accent" | "warning" | "error" | "bold" | "accent-bold";
 /**
  * `cls` attaches an animation hook to a single run, e.g. the spinner glyph.
  *
@@ -23,10 +32,23 @@ export type Style = "text" | "muted" | "accent" | "warning" | "error" | "bold";
  * than a class name, so the row model keeps protecting the row whatever the motion layer calls
  * its classes. Alternatives are not the same thing as an overlay: the Statusline's highlight
  * copy is deliberately coincident with the word beneath it, which is a different mechanism.
+ *
+ * `piece` names a group of SIDE-BY-SIDE fragments of one drawn thing: the effort scale's track,
+ * which is a rule broken by its marker, and a word split into one run per character so that each
+ * one can carry its own colour. Runs sharing a piece may sit shoulder to shoulder with no blank
+ * column between them, because they already read as one thing; they still may not OVERLAP each
+ * other, and they collide normally with everything outside the group, so a split word's columns
+ * are guarded exactly as the single run it replaced was.
+ *
+ * The three are deliberately distinct. `layer` means never together, `piece` means together and
+ * adjacent, and an overlay means together and coincident. Collapsing any two of them would make
+ * the collision check either useless or wrong: a `piece` that was allowed to overlap would let a
+ * split word hide a collision inside itself, and an overlay treated as a `piece` would be rejected
+ * for doing the one thing it exists to do.
  */
 export type Run = {
   col: number; text: string; style?: Style; cls?: string;
-  textOnly?: true; drawOnly?: true; layer?: string;
+  textOnly?: true; drawOnly?: true; layer?: string; piece?: string;
 };
 export type Row = { runs: Run[]; cls?: string };
 
