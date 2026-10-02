@@ -554,8 +554,8 @@ test("the ear stretches: its overlay is a second copy of the slab, so the lift e
   });
   assert.deepEqual(
     attached.sort(),
-    ["butt-down", "glare", "settle", "sleep", "stretch"],
-    "these five carry head ink under the slab, so the static copy is load-bearing; in the rest an eye hole sits there, which the artwork chose",
+    ["butt-down", "glare", "peek", "settle", "sleep", "stretch"],
+    "these six carry head ink under the slab, so the static copy is load-bearing; in the rest an eye hole sits there, which the artwork chose. peek is on the list because of its catchlight, which is painted ink directly under the slab",
   );
   assert.ok(attached.length > 0, "if nothing were attached the second copy would be waste rather than a stretch");
   // The lift is a whole art pixel now, so the slab needs a lattice row above it to extend into. A tip drawn on row 0

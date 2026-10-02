@@ -204,20 +204,64 @@ test("settle: it is a different picture from both neighbours, and a small change
 test("peek: exactly two pixels of the sleeping pose change, and they are one eye opening", () => {
   // The brief's budget, held literally. Anything more and the cat has woken up, which is the opposite
   // of the gag: the zZz and the nose bubble must still say deep sleep.
-  assert.deepEqual(changes("sleep", "peek"), ["29,6:2>3", "30,6:2>3"]);
+  //
+  // The catchlight is free. It sits on x29 row 6, which the eye was opening into anyway, so adding it
+  // spends no extra pixel: that pixel goes from body to accent instead of from body to hole. Putting the
+  // glint in the eye's LOWER row would have cost a third changed pixel, because those two are already
+  // the closed slit, and a third pixel is the enlargement this budget exists to refuse.
+  assert.deepEqual(changes("sleep", "peek"), ["29,6:2>4", "30,6:2>3"]);
 });
 
-test("peek: the open eye is a square hole and the other stays a one-row slit, so only one eye opened", () => {
-  const eye = (pose: string, x0: number): string[] => [x0, x0 + 1].flatMap((x) => [5, 6, 7].flatMap((y) => (at(pose, x, y) === "3" ? [`${x},${y}`] : [])));
-  assert.equal(eye("sleep", 25).length, 2, "sleep's left eye is a two-pixel slit");
-  assert.equal(eye("sleep", 29).length, 2, "sleep's right eye is a two-pixel slit");
-  assert.deepEqual(eye("peek", 25), eye("sleep", 25), "the left eye must not open as well");
-  assert.deepEqual(eye("peek", 29), ["29,6", "29,7", "30,6", "30,7"], "the right eye is a 2 x 2 hole");
-  // Symmetric about its own socket, so the pupil has no sideways bias: she is looking straight out.
-  const xs = eye("peek", 29).map((p) => Number(p.split(",")[0]));
-  const ys = eye("peek", 29).map((p) => Number(p.split(",")[1]));
-  assert.equal(new Set(xs).size, 2);
-  assert.equal(new Set(ys).size, 2);
+/** The 2 x 2 socket an open eye occupies, as characters, reading left to right then top to bottom. */
+const socket = (pose: string, x0: number): string[] =>
+  [6, 7].flatMap((y) => [x0, x0 + 1].map((x) => at(pose, x, y)));
+
+test("peek: the open eye fills its socket exactly, so the gaze keeps its forward symmetry", () => {
+  // Symmetry is a claim about the EYE, not about the hole: the socket is a square with no body ink left
+  // in it, so there is no sideways bias in where the eye sits. The catchlight is a specular reflection
+  // of a light source rather than a pupil, so it sits off-centre by convention without moving the gaze.
+  assert.deepEqual(socket("peek", 29).filter((c) => c === "2"), [], "body ink left inside the open socket would skew the eye");
+  const box = [6, 7].flatMap((y) => [29, 30].filter((x) => at("peek", x, y) !== "2").map((x) => [x, y] as [number, number]));
+  assert.equal(box.length, 4, "the eye is the whole 2 x 2 socket");
+  assert.equal(new Set(box.map(([x]) => x)).size, 2, "two columns wide");
+  assert.equal(new Set(box.map(([, y]) => y)).size, 2, "two rows tall");
+  // And only one eye opened: the left socket is still sleep's one-row slit.
+  assert.deepEqual(socket("peek", 25), socket("sleep", 25), "the left eye must not open as well");
+  assert.deepEqual(socket("sleep", 25), ["2", "2", "3", "3"], "the premise: a closed eye is body over a one-row slit");
+  assert.deepEqual(socket("sleep", 29), ["2", "2", "3", "3"]);
+});
+
+test("peek: the catchlight is one accent pixel, and it is the only accent on any face in any pose", () => {
+  // It must read as an eye and not as one more of the cat's accent speckles. Two things make that true and
+  // both are asserted. It is the ONLY accent pixel anywhere in the head columns across the whole loop, so
+  // there is nothing on a face for it to be mistaken for; and it is enclosed by the eye's own hole, which
+  // no speckle on this cat is, because every other speckle sits on open body.
+  const onFaces = POSES.flatMap((pose) =>
+    find(pose, "4").filter(([x, y]) => x >= 23 && x <= 31 && y <= 7).map(([x, y]) => `${pose} ${x},${y}`));
+  assert.deepEqual(onFaces, ["peek 29,6"], "exactly one accent pixel on a face, in exactly one pose");
+  assert.equal(at("peek", 29, 6), "4");
+  // Enclosed: the two neighbours inside the socket are hole, so the glint sits in darkness rather than on body.
+  assert.deepEqual([at("peek", 30, 6), at("peek", 29, 7)], ["3", "3"], "the glint must be bounded by the eye, not floating on the cheek");
+  // The conventional light in this project's pixel art comes from the upper left, so that is where a
+  // specular highlight belongs; it is also the corner furthest from the head's own right-hand edge at x31.
+  assert.equal(Math.min(...[6, 7].flatMap((y) => [29, 30].filter((x) => at("peek", x, y) === "4").map(() => y))), 6, "upper row");
+  assert.equal(Math.min(...[29, 30].filter((x) => at("peek", x, 6) === "4")), 29, "left column");
+});
+
+test("peek: the catchlight gives the open eye the internal structure that opening it removed", () => {
+  // This is the measurement the glint exists for. Rendered at 308px, a plain open eye is a FLAT one-colour
+  // rectangle: opening it replaces a two-tone socket (body over slit) with a single-tone one, so there is
+  // literally nothing inside it for a reader to find, which is why it vanished at phone width. Measured
+  // through scripts/render-check.ts at 308px, maximum internal dE across the socket: closed slit 64.9,
+  // plain open hole 0.0, with the catchlight 64.4 (dark) and 61.1 (light).
+  const tones = (pose: string, x0: number): number => new Set(socket(pose, x0)).size;
+  assert.equal(tones("sleep", 29), 2, "a closed eye has an edge inside its socket");
+  assert.equal(tones("peek", 29), 2, "and so must an open one, or it reads as a flat patch");
+  // Stated as the thing that would break it: a socket of one repeated character is the defect.
+  assert.ok(new Set(socket("peek", 29)).size > 1, "the open eye must not be a single flat tone");
+  // The glint's character is not the hole's, which is what makes the two tones different colours and not
+  // merely two names for the window.
+  assert.notEqual(at("peek", 29, 6), at("peek", 30, 6));
 });
 
 test("peek: the ears, the nose and the zZz are untouched, so nothing else says she woke", () => {
