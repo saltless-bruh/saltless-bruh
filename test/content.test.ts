@@ -47,6 +47,7 @@ const VALID: Content = {
     effortLabels: ["low", "mid", "lazy", "max"], effortSelected: "lazy", modeBadge: "autopilot on",
     note: "fixture note", toggle: { word: "Fixtureword", state: "off" },
   },
+  readme: { imageAlt: "a fixture picture of a fixture session", transcriptSummary: "Fixture transcript" },
 };
 
 const STATES = [...new Set(MASCOT_TIMELINE.map((w) => w.state))];
@@ -177,6 +178,7 @@ test("the smallest valid document loads: one of everything", () => {
       effortWord: "e", effortLabels: ["only"], effortSelected: "only",
       modeBadge: "m", note: "n", toggle: { word: "t", state: "s" },
     },
+    readme: { imageAlt: "a", transcriptSummary: "t" },
   };
   assert.deepEqual(load(smallest), smallest);
 });
@@ -282,6 +284,19 @@ const STRUCTURE: [string, unknown, RegExp][] = [
   ["statusline.toggle.state", undefined, /statusline\.toggle\.state must be a string/],
   ["statusline.toggle.state", " ", /statusline\.toggle\.state must not be blank/],
   ["statusline.toggle.state", true, /statusline\.toggle\.state must be a string/],
+  // the README's own two visible strings: the picture's accessible name and the transcript's
+  // label. A blank alt is the one that matters most, because it is not a missing word, it is a
+  // picture a screen reader announces as nothing at all.
+  ["readme", undefined, /readme must be an object/],
+  ["readme", "a terminal session", /readme must be an object/],
+  ["readme", [], /readme must be an object/],
+  ["readme.imageAlt", undefined, /readme\.imageAlt must be a string/],
+  ["readme.imageAlt", "", /readme\.imageAlt must not be blank/],
+  ["readme.imageAlt", "   ", /readme\.imageAlt must not be blank/],
+  ["readme.imageAlt", 7, /readme\.imageAlt must be a string/],
+  ["readme.transcriptSummary", undefined, /readme\.transcriptSummary must be a string/],
+  ["readme.transcriptSummary", " ", /readme\.transcriptSummary must not be blank/],
+  ["readme.transcriptSummary", false, /readme\.transcriptSummary must be a string/],
 ];
 
 test("the structure table covers every mascot state, and the baseline it edits loads", () => {
@@ -328,12 +343,13 @@ test("a file that is not JSON is rejected, and the message says so", () => {
 const EDITABLE = leaves(VALID).filter((p) => p !== "statusline.effortSelected" && p !== "login");
 
 test("the sweep covers every string in the document, so it cannot pass vacuously", () => {
-  assert.equal(leaves(VALID).length, 46);
+  assert.equal(leaves(VALID).length, 48);
   for (const expected of [
     "handle", "whoami[2]", "lanes[1].repos[0].blurb", "stackRows[1].items[0]", "verbs.sleep[1]",
     "verbs.swat-down[0]", "verbs.recover[0]",
     "statusline.note", "statusline.toggle.word", "statusline.toggle.state", "statusline.effortWord",
     "activityLine.label", "activityLine.daysUp", "activityLine.contributions",
+    "readme.imageAlt", "readme.transcriptSummary",
   ]) {
     assert.ok(EDITABLE.includes(expected), `${expected} is not swept`);
   }

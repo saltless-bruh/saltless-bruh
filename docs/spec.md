@@ -219,6 +219,7 @@ is the same for every value it decorates belongs to the generator (the spinner's
 | `verbs` | Spinner words, grouped by Mascot state. Every state in `MASCOT_TIMELINE` needs at least one: `sleep`, `yawn`, `stretch`, `settle`, `peek`, and the alarm's `alert`, `swat-up`, `swat-down`, `glare`, `butt-up`, `butt-down`, `recover`. A state with several words rotates through them while that state is on screen. Giving the two halves of a blow the same word is deliberate: the spinner then holds one phrase across the whole gesture instead of flickering between two |
 | `activityLine` | The words of the `/activity` result line, as labelled fragments: `label` (`scan complete:`), `daysUp` (`days up`) and `contributions`. The generator supplies the order, the numbers and the `·` |
 | `statusline` | `effortWord` (the word before the levels, e.g. `Effort`; a longer word pushes the levels along), `effortLabels`, `effortSelected`, `modeBadge`, `note`, and `toggle` (the shimmering word and the state it reads, e.g. `Ultrachill` / `on`). The toggle is not one of the effort labels, so it has its own key |
+| `readme` | The two visible strings the README carries outside the Session: `imageAlt`, the picture's accessible name, and `transcriptSummary`, the word on the `<details>` toggle. `imageAlt` says what the picture **is**, not what it contains: the contents are the transcript directly below it, and a reader who hears the Session out of the alt text and then again out of the transcript hears it twice |
 
 Validation rules, all enforced at build time:
 

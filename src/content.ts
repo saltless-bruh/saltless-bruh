@@ -22,10 +22,19 @@ export type Statusline = {
 export type ActivityLine = { label: string; daysUp: string; contributions: string };
 /** Spinner words grouped by Mascot state, so the label names the pose on screen. */
 export type Verbs = Record<PoseName, string[]>;
+/**
+ * The two visible strings the README itself carries, outside the Session.
+ *
+ * `imageAlt` names what the picture IS, not what it contains, because what it contains is the
+ * transcript directly below it; a screen reader that hears the Session twice is worse served
+ * than one that hears a description and then the content. `transcriptSummary` is the word on the
+ * `<details>` toggle. Both are read aloud, so both are the owner's (docs/spec.md 4.1).
+ */
+export type ReadmeCopy = { imageAlt: string; transcriptSummary: string };
 export type Content = {
   handle: string; login: string; cwd: string; role: string; whoami: string[];
   lanes: Lane[]; stackRows: StackRow[]; verbs: Verbs;
-  activityLine: ActivityLine; statusline: Statusline;
+  activityLine: ActivityLine; statusline: Statusline; readme: ReadmeCopy;
 };
 
 /**
@@ -155,6 +164,13 @@ function assertShape(c: unknown): asserts c is Content {
   if (!isObj(toggle)) fail("statusline.toggle must be an object");
   text(toggle.word, "statusline.toggle.word");
   text(toggle.state, "statusline.toggle.state");
+
+  // The README's own two words. They are validated here like every other visible string, so a
+  // missing one fails the build instead of writing the literal "undefined" into the one element
+  // a screen reader reads first.
+  if (!isObj(c.readme)) fail("readme must be an object");
+  text(c.readme.imageAlt, "readme.imageAlt");
+  text(c.readme.transcriptSummary, "readme.transcriptSummary");
 }
 
 /**

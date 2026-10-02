@@ -85,5 +85,9 @@
     "modeBadge": "autopilot on",
     "note": "terminal-style design, not affiliated with Anthropic",
     "toggle": { "word": "Ultrachill", "state": "on" }
+  },
+  "readme": {
+    "imageAlt": "A terminal session, drawn as one picture. The same words are in the transcript below it.",
+    "transcriptSummary": "Session transcript"
   }
 }

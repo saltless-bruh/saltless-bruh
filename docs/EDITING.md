@@ -20,6 +20,7 @@ The build fails with a clear message if something will not render, so a mistake 
 | `stackRows` | The rows under `/stack`. Each has a `label` (which may be empty) and a list of `items`, printed as plain text. |
 | `verbs` | The spinner's words, grouped by what the cat is doing: `sleep`, `yawn`, `stretch`, `settle`, `peek`, then the alarm, `alert`, `swat-up`, `swat-down`, `glare`, `butt-up`, `butt-down`, `recover`. The spinner always names the pose on screen, so give `yawn` a yawning word. Give `sleep` several and it rotates through them during the long naps. Every group needs at least one word. The two halves of a blow (`swat-up` and `swat-down`, `butt-up` and `butt-down`) usually want the SAME word, so the spinner holds one phrase for the whole gesture instead of flickering. **The alarm's words shipped as a first draft and are yours to rewrite.** |
 | `statusline` | The effort labels, which one is highlighted (`effortSelected`, which must be one of the labels), the mode badge and the footer note. |
+| `readme` | Two lines the README shows around the picture. `imageAlt` is what a screen reader says instead of the picture, so describe the picture rather than reading the session out: the session's own words are already in the transcript under it. `transcriptSummary` is the word on the fold-out that holds the transcript. |
 
 ## Rules the build enforces
 
