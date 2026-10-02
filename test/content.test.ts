@@ -32,7 +32,14 @@ const VALID: Content = {
     yawn: ["Yawning"],
     stretch: ["Stretching"],
     settle: ["Resettling"],
-    startle: ["Startled"],
+    peek: ["Peeking"],
+    alert: ["Waking"],
+    "swat-up": ["Swatting"],
+    "swat-down": ["Swatting"],
+    glare: ["Glaring"],
+    "butt-up": ["Butting"],
+    "butt-down": ["Butting"],
+    recover: ["Recovering"],
   },
   activityLine: { label: "fixture done:", daysUp: "days seen", contributions: "pushes" },
   statusline: {
@@ -117,7 +124,10 @@ test("the shipped content file validates unchanged and is returned exactly as wr
 
 test("every mascot state has at least one spinner word in the shipped file", () => {
   const c = loadContent();
-  assert.deepEqual([...STATES].sort(), ["settle", "sleep", "startle", "stretch", "yawn"]);
+  assert.deepEqual([...STATES].sort(), [
+    "alert", "butt-down", "butt-up", "glare", "peek", "recover",
+    "settle", "sleep", "stretch", "swat-down", "swat-up", "yawn",
+  ]);
   for (const state of STATES) assert.ok(c.verbs[state].length > 0, `verbs.${state} is empty`);
 });
 
@@ -158,7 +168,10 @@ test("the smallest valid document loads: one of everything", () => {
     handle: "H", login: "l", cwd: "c", role: "r", whoami: ["w"],
     lanes: [{ label: "l/", repos: [{ name: "n", blurb: "b" }] }],
     stackRows: [{ label: "", items: ["i"] }],
-    verbs: { sleep: ["a"], yawn: ["b"], stretch: ["c"], settle: ["d"], startle: ["e"] },
+    verbs: {
+      sleep: ["a"], yawn: ["b"], stretch: ["c"], settle: ["d"], peek: ["e"], alert: ["f"],
+      "swat-up": ["g"], "swat-down": ["h"], glare: ["i"], "butt-up": ["j"], "butt-down": ["k"], recover: ["l"],
+    },
     activityLine: { label: "a", daysUp: "d", contributions: "c" },
     statusline: {
       effortWord: "e", effortLabels: ["only"], effortSelected: "only",
@@ -315,9 +328,10 @@ test("a file that is not JSON is rejected, and the message says so", () => {
 const EDITABLE = leaves(VALID).filter((p) => p !== "statusline.effortSelected" && p !== "login");
 
 test("the sweep covers every string in the document, so it cannot pass vacuously", () => {
-  assert.equal(leaves(VALID).length, 39);
+  assert.equal(leaves(VALID).length, 46);
   for (const expected of [
     "handle", "whoami[2]", "lanes[1].repos[0].blurb", "stackRows[1].items[0]", "verbs.sleep[1]",
+    "verbs.swat-down[0]", "verbs.recover[0]",
     "statusline.note", "statusline.toggle.word", "statusline.toggle.state", "statusline.effortWord",
     "activityLine.label", "activityLine.daysUp", "activityLine.contributions",
   ]) {

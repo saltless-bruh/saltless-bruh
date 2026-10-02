@@ -64,7 +64,14 @@
     "yawn": ["Yawning"],
     "stretch": ["Stretching"],
     "settle": ["Resettling"],
-    "startle": ["Startled"]
+    "peek": ["Keeping an eye out"],
+    "alert": ["Waking"],
+    "swat-up": ["Percussive maintenance"],
+    "swat-down": ["Percussive maintenance"],
+    "glare": ["Escalating"],
+    "butt-up": ["Forcing a reboot"],
+    "butt-down": ["Forcing a reboot"],
+    "recover": ["Closing the incident"]
   },
   "activityLine": {
     "label": "scan complete:",
