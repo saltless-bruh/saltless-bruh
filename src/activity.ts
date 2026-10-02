@@ -365,7 +365,8 @@ function readText(path: URL): string {
   try {
     return readFileSync(path, "utf8");
   } catch {
-    badCache("there is no cache file to read");
+    // Kept apart from a corrupt cache: there is nothing here to delete, only something to make.
+    fail(`there is no activity cache yet, so run the refresh with ${TOKEN_ENV} set to write one`);
   }
 }
 
