@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { TOKEN_ENV } from "../src/activity.ts";
+import { FORBIDDEN_NAMES_ENV } from "../src/content.ts";
 import { GENERATED } from "../scripts/gates.ts";
 
 // ---------------------------------------------------------------------------------------------
@@ -80,14 +81,43 @@ test("the token is bound to the steps that need it and to no others", () => {
 });
 
 test("nothing in the workflow can print the token", () => {
-  // The only test applied to the value is whether it is empty. No echo of it, no `set -x`, which
-  // would trace the expanded value of every command in the step.
+  // The property is that no command EXPANDS the variable into its output. An earlier version of
+  // this test also demanded the surrounding prose match a fixed list of phrasings, which is a test
+  // dictating documentation wording: it had to be edited to let the message be corrected, which is
+  // the sort of guard people eventually delete. What is pinned is the expansion and `set -x`,
+  // which would trace the expanded value of every command in the step.
   assert.ok(!/set\s+-[a-z]*x/.test(code), "a step turns on shell tracing, which prints expanded values");
   for (const line of code.split("\n")) {
-    if (!line.includes("echo") || !line.includes(TOKEN_ENV)) continue;
-    assert.match(line, /is (not set|a personal access token|present)|missing/, `this line may print the credential: ${line.trim()}`);
-    assert.ok(!line.includes(`\${${TOKEN_ENV}}`) && !line.includes(`$${TOKEN_ENV}`), `this line expands the credential into a log: ${line.trim()}`);
+    if (!/\becho\b/.test(line)) continue;
+    assert.ok(
+      !line.includes(`\${${TOKEN_ENV}}`) && !line.includes(`$${TOKEN_ENV}`),
+      `this line expands the credential into a log: ${line.trim()}`,
+    );
   }
+  // The only thing done with the value anywhere is testing it for emptiness.
+  const uses = code.split("\n").filter((l) => l.includes(`${TOKEN_ENV}}`) || l.includes(`$${TOKEN_ENV}`));
+  for (const line of uses) {
+    assert.match(line, /-z "\$\{/, `the credential is used for something other than an emptiness test: ${line.trim()}`);
+  }
+});
+
+test("the workflow does not send anyone to mint a scope the API does not need", () => {
+  // Measured 2026-10-02 (docs/spec.md 5.2): a token scoped `gist, read:org, repo, workflow`, with
+  // no `read:user`, returned the whole contribution calendar. The preflight message is read at the
+  // moment somebody decides which credential to create, and demanding `read:user` there is what
+  // held up the first real build of this project.
+  assert.match(code, /repo scope is enough/, "the message does not name the scope that is actually enough");
+  assert.doesNotMatch(code, /with the read:user scope/, "the message demands a scope the API does not require");
+  assert.doesNotMatch(code, /needs? the read:user/, "the message demands a scope the API does not require");
+  // The claim about the built-in token is a different claim and was never measured, so it must not
+  // be stated as though it had been.
+  assert.match(code, /unverified/, "the GITHUB_TOKEN claim is presented as established when it is not");
+});
+
+test("the workflow configures the variable the generator actually reads", () => {
+  // A secret passed under a name nothing reads is a gate quietly running unconfigured.
+  assert.ok(code.includes(`${FORBIDDEN_NAMES_ENV}: \${{ secrets.${FORBIDDEN_NAMES_ENV} }}`), `the workflow does not pass ${FORBIDDEN_NAMES_ENV}`);
+  assert.ok(code.includes(`${TOKEN_ENV}: \${{ secrets.${TOKEN_ENV} }}`), `the workflow does not pass ${TOKEN_ENV}`);
 });
 
 // ---------------------------------------------------------------------------------------------

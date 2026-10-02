@@ -293,7 +293,12 @@ test("with the variable unset the failure names the variable and where to set it
       (e: Error) => {
         assert.match(e.message, /PROFILE_GH_TOKEN/);
         assert.match(e.message, /\.env\.example/);
-        assert.match(e.message, /read:user/);
+        // The scope advice, which is MEASURED (docs/spec.md 5.2): a token scoped
+        // `gist, read:org, repo, workflow` with no `read:user` returned the whole calendar. This
+        // message used to demand `read:user`, which is read at the moment somebody decides which
+        // credential to mint and sent them to make one they did not need.
+        assert.match(e.message, /repo scope/, "the message does not name the scope that is actually enough");
+        assert.doesNotMatch(e.message, /needs? the read:user/, "the message demands a scope the API does not require");
         return true;
       },
     );

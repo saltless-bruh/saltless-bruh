@@ -92,9 +92,12 @@ jobs:
           if [ -n "${missing}" ]; then
             echo "This repository is missing Actions secret(s):${missing}" >&2
             echo "" >&2
-            echo "PROFILE_GH_TOKEN is a personal access token with the read:user scope. The" >&2
-            echo "built-in GITHUB_TOKEN will not do: it cannot reliably read the contribution" >&2
-            echo "calendar and it never counts private contributions (docs/spec.md 5.2)." >&2
+            echo "PROFILE_GH_TOKEN is a user token. Measured 2026-10-02: the repo scope is enough" >&2
+            echo "for the owner's own figures, and read:user is NOT required for them. The built-in" >&2
+            echo "GITHUB_TOKEN is still assumed not to do, unverified: it is an installation token" >&2
+            echo "scoped to one repository rather than a user token, it is not reliably able to read" >&2
+            echo "the contribution calendar, and private contributions are only ever counted for the" >&2
+            echo "token's own owner (docs/spec.md 5.2)." >&2
             echo "" >&2
             echo "PROFILE_FORBIDDEN_NAMES is a comma separated list of strings that must never" >&2
             echo "appear in a published file. ADR 0001 is enforced by a check rather than by" >&2

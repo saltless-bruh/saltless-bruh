@@ -129,7 +129,13 @@ export const githubTransport: Transport = async (request) => {
   const token = process.env[TOKEN_ENV] ?? "";
   if (token.trim() === "") {
     // Names the variable and where to put it. Nothing about a value, present or absent.
-    fail(`${TOKEN_ENV} is not set, so the activity cannot be fetched. Copy .env.example to .env and fill it in, or add an Actions secret of the same name. The token needs the read:user scope.`);
+    //
+    // The scope advice is measured, not remembered: a token scoped `gist, read:org, repo, workflow`
+    // with NO `read:user` returned the whole calendar on 2026-10-02 (docs/spec.md 5.2). This line
+    // used to say the token "needs the read:user scope", and being wrong here is expensive: it is
+    // read at exactly the moment somebody decides which credential to mint, and it sent them off to
+    // make one they did not need.
+    fail(`${TOKEN_ENV} is not set, so the activity cannot be fetched. Copy .env.example to .env and fill it in, or add an Actions secret of the same name. A user token with the repo scope is enough for your own figures; read:user is only needed to read another user's contributions.`);
   }
   const res = await fetch(API_URL, {
     method: "POST",
@@ -142,7 +148,7 @@ export const githubTransport: Transport = async (request) => {
   }).catch((e: Error) => fail(`the request to the GitHub API failed (${e.message})`));
 
   if (!res.ok) {
-    const hint = res.status === 401 || res.status === 403 ? `, so ${TOKEN_ENV} is either invalid or missing the read:user scope` : "";
+    const hint = res.status === 401 || res.status === 403 ? `, so ${TOKEN_ENV} is either invalid or missing the repo scope` : "";
     fail(`the GitHub API returned ${res.status}${hint}`);
   }
   return await res.text();

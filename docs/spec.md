@@ -313,9 +313,33 @@ Read from `PROFILE_GH_TOKEN` in the environment, never from an argument, a CLI f
 the tree. Locally it comes from `.env` (gitignored, see `.env.example`); in CI from a repository
 secret of the same name.
 
-**It needs the `read:user` scope, and the workflow's built-in `GITHUB_TOKEN` will not do.** The
-contribution calendar sits behind `contributionsCollection`, which the built-in token cannot
-reliably read, and private contributions are only counted for the token's own owner.
+**`read:user` is NOT required. Measured 2026-10-02**, against the live API, with the query
+`src/activity.ts` actually sends and a token whose scopes were exactly `gist, read:org, repo,
+workflow`:
+
+- `user(login: $login).contributionsCollection.contributionCalendar` returned 950 contributions
+  across 53 weeks and 370 days.
+- `viewer.contributionsCollection.restrictedContributionsCount` returned 0, so nothing was being
+  withheld from that total.
+- The repositories and languages half returned 16 repositories.
+
+So a user token with `repo` is enough for the owner's own figures. GitHub's own scope documentation
+is consistent with this: it describes `read:user` as granting access to read a user's profile data
+and nowhere lists it as required for contribution data. An earlier version of this section said the
+scope "must be `read:user`", which is false, and the cost was practical rather than cosmetic: it
+implied a new personal access token had to be minted before any local build could run, which is what
+held up the first real build.
+
+`read:user` is still the safe recommendation for the two cases that measurement did **not** exercise:
+a token that must read a **different** user's contributions, and one that must include restricted
+contributions. Neither is what this profile does.
+
+**The workflow's built-in `GITHUB_TOKEN` is still assumed not to do, and that half is UNVERIFIED.**
+The measurement above used a user token; the built-in credential is an installation token scoped to
+one repository, which is a different kind of credential, so nothing here promotes the one result to
+cover the other. The standing reasons are that `contributionsCollection` is not reliably readable by
+it and that private contributions are only counted for the token's own owner. Treat that as untested
+rather than as measured, and keep using `PROFILE_GH_TOKEN`.
 
 The token must never appear in an error message, a thrown value, the cache, a log line, or a
 generated asset. Two rules keep that true rather than hoping for it: the response body is scrubbed
