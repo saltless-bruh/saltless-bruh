@@ -40,9 +40,8 @@ export type Session = {
  * own calendar uses, then want CELL_W of height each, so 7 days is 7 x 12 = 84 units; at
  * CELL_H = 24 that is 3.5 rows. Four rows hold the sweep, with the spare half-row as breathing
  * room. Cells of 12 x 24 would read as a bar chart instead of a grid, so the height follows the
- * width rather than the row pitch. The result line that prints the days and the contributions
- * stays a text row of its own, because a status colour is always paired with a word: the sweep
- * needs its printed result, not just coloured cells.
+ * width rather than the row pitch. The "N/365 days up" result line stays a text row of its own:
+ * a status colour is always paired with a word, so the sweep needs its printed result.
  */
 export const SCAN_ROWS = 4;
 

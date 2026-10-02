@@ -79,6 +79,17 @@ function languageRows(lines: string[]): { name: string; pct: number; pctCol: num
 
 const total = (xs: number[]): number => xs.reduce((s, x) => s + x, 0);
 
+/**
+ * `src` with its comments and quoted strings blanked out, leaving the executable text. Template
+ * literals are deliberately kept, text and all: text inside a template is printed, which is
+ * exactly where a retyped constant would do its damage.
+ */
+const executableSource = (src: string): string => src
+  .replace(/\/\*[\s\S]*?\*\//g, " ")      // block comments
+  .replace(/(^|[^:])\/\/.*$/gm, "$1")      // line comments, leaving a "https://" alone
+  .replace(/'(?:[^'\\]|\\.)*'/g, "''")     // single-quoted strings
+  .replace(/"(?:[^"\\]|\\.)*"/g, '""');   // double-quoted strings
+
 /** The /activity result line as the content's fragments and this activity's numbers spell it. */
 function resultLine(c: Content, a: Activity): string {
   const { label, daysUp, contributions } = c.activityLine;
@@ -516,14 +527,45 @@ test("the window the result line counts against is the one the activity module d
   const printed = linesOf(composeSession(c, activity).rows).find((l) => l.includes(c.activityLine.label));
   assert.ok(printed?.includes(`${activity.activeDays}/${WINDOW_DAYS} `), `the result line reads ${printed}`);
 
-  // The value is imported rather than retyped, so the printed denominator cannot drift from the
-  // window the calendar is actually trimmed to. Two numbers that happen to agree today are not
-  // the property being protected, and no behaviour can tell them apart, so this is checked where
-  // the difference lives: a second copy must not exist in the generator at all. Same reason
-  // BREATHS_PER_LOOP was replaced by a derived value after it silently went wrong.
-  const src = readFileSync(new URL("../src/session.ts", import.meta.url), "utf8");
-  assert.match(src, /import \{ WINDOW_DAYS \} from "\.\/activity\.ts";/);
-  assert.doesNotMatch(src, new RegExp(`\\b${WINDOW_DAYS}\\b`), "the window is written into the generator a second time");
+  // Why this reads source at all. The value is imported rather than retyped so the printed
+  // denominator cannot drift from the window the calendar is actually trimmed to. Two numbers
+  // that happen to agree today are not the property being protected, and no behaviour can tell
+  // them apart, so the check has to look where the difference lives: no second copy of the
+  // window may exist in the generator. BREATHS_PER_LOOP is why this is worth a test. It was
+  // right at a 60s loop and silently wrong at 36s, and nothing in the suite could see it until
+  // the loop changed.
+  //
+  // Comments and quoted strings are blanked out first, so prose is free to say whatever is
+  // clearest. A guard that makes an unrelated comment fail a test teaches the next person to
+  // weaken the guard rather than to understand it.
+  const executable = executableSource(readFileSync(new URL("../src/session.ts", import.meta.url), "utf8"));
+  assert.match(executable, /import \{ WINDOW_DAYS \} from \s*""/, "the window must be imported, not retyped");
+  assert.doesNotMatch(
+    executable,
+    new RegExp(`\\b${WINDOW_DAYS}\\b`),
+    "the window is written into the executable source of the generator a second time",
+  );
+});
+
+test("the window guard reads code, not prose, so a comment or a message may name the window", () => {
+  // Pins the fix rather than the guard: the first version of the check above objected to the
+  // SCAN_ROWS comment quoting the spec's own "N/365 days up", which is the kind of false
+  // positive that gets a guard deleted instead of understood.
+  const strip = executableSource;
+  const window = new RegExp(`\\b${WINDOW_DAYS}\\b`);
+  const prose = [
+    `// the "N/${WINDOW_DAYS} days up" line\nconst a = 1;`,
+    `/* ${WINDOW_DAYS} days, one column per week */\nconst a = 1;`,
+    `const msg = "over ${WINDOW_DAYS} days";`,
+    `const msg = 'over ${WINDOW_DAYS} days';`,
+  ];
+  for (const src of prose) assert.doesNotMatch(strip(src), window, `prose was read as code: ${src}`);
+  const code = [
+    `const WINDOW_DAYS = ${WINDOW_DAYS};`,
+    `const line = \`${"${days}"}/${WINDOW_DAYS} up\`;`,
+    `const n = ${WINDOW_DAYS} - 1;`,
+  ];
+  for (const src of code) assert.match(strip(src), window, `code was read as prose: ${src}`);
 });
 
 test("the Scan Sweep reserves the rows square cells on a 53 by 7 calendar actually need", () => {
