@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { subsetToBase64 } from "../src/font.ts";
 import { buildSvg } from "../src/svg.ts";
-import { CELL_H, CELL_W, PAD } from "../src/grid.ts";
+import { CELL_H, CELL_W, PAD, colX } from "../src/grid.ts";
 import { PALETTES } from "../src/tokens.ts";
 import type { Palette, ThemeName } from "../src/tokens.ts";
 import { MASCOT_TIMELINE, MASTER_SECONDS } from "../src/timeline.ts";
 import type { PoseName } from "../src/timeline.ts";
-import { MASCOT_COLS, MASCOT_ROWS, mascotCss, mascotDefs } from "../src/mascot.ts";
+import { MASCOT_COLS, MASCOT_INK_LEFT, MASCOT_ROWS, mascotCss, mascotDefs } from "../src/mascot.ts";
 
 // ---------------------------------------------------------------------------------------------
 // Helpers. Everything below reads the GENERATED output (the real svg, css and path data) and the
@@ -205,14 +205,25 @@ const GRID_H = 28;
 const RACK_FROM = 11;
 const ART = new URL("../art/", import.meta.url);
 
-/** "x,y" keys of the art pixels a compiled path covers, with pixel (0, 0) at (PAD, PAD). */
+/**
+ * Art pixels the source grids leave blank on their left, measured from the files here rather than
+ * taken from the module. The scene is placed by its ink, so grid pixel (0, 0) lands INK_LEFT
+ * pixels left of the column asked for; reading the margin independently means an implementation
+ * that stops deriving the offset shifts every coordinate below and fails loudly.
+ */
+const INK_LEFT = Math.min(
+  ...readFileSync(new URL("sleep.grid.txt", ART), "utf8").replace(/\n$/, "").split("\n")
+    .map((row) => row.search(/[^ ]/)).filter((x) => x >= 0),
+);
+
+/** "x,y" keys of the art pixels a compiled path covers, with the ink's left edge at column 0. */
 function pixels(d: string): Set<string> {
   assert.match(d, /^(M[\d.]+ [\d.]+h[\d.]+v[\d.]+h-[\d.]+z)*$/, "path data is not compiler rectangles");
   const out = new Set<string>();
   for (const m of d.matchAll(/M([\d.]+) ([\d.]+)h([\d.]+)v([\d.]+)/g)) {
     const [x, y, w, h] = m.slice(1).map(Number);
     assert.equal(h, PX, `rect ${m[0]} is not one art pixel tall`);
-    const [px, py, pw] = [(x - PAD) / PX, (y - PAD) / PX, w / PX];
+    const [px, py, pw] = [(x - PAD) / PX + INK_LEFT, (y - PAD) / PX, w / PX];
     for (const v of [px, py, pw]) assert.ok(Number.isInteger(v), `rect ${m[0]} is off the pixel lattice`);
     for (let i = 0; i < pw; i++) out.add(`${px + i},${py}`);
   }
@@ -1180,5 +1191,78 @@ test("it animates only opacity and transform, and never uses SMIL, in the real d
     assert.ok(!/attributeName/.test(markup), "no animated geometry attributes");
     assert.ok(!/\b(filter|mask|backdrop-filter)\b|blur\(|feGaussianBlur/.test(markup), "no filter, mask or blur");
     assert.ok(!/\sstyle="/.test(markup), "no inline styles that could animate anything");
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// Placement: the scene is positioned by its ink, not by its grid
+// ---------------------------------------------------------------------------------------------
+
+/** The left edge of the leftmost rectangle under these nodes, in SVG units. */
+const leftEdgeUnits = (nodes: Node[]): number =>
+  Math.min(...nodes.flatMap((n) => pathsUnder(n)).flatMap((path) => rects(path.attrs.d).map((r) => r.x)));
+
+/** Every pose grid, read from the files. */
+const POSE_FILES = (): string[][] => states().map(readGrid);
+
+test("the artwork carries an empty left margin, which is why placing it by its grid misaligns it", () => {
+  // The premise of the whole fix, measured from the files: if this margin were zero there would be
+  // nothing to correct and the placement tests below would be vacuous.
+  assert.ok(INK_LEFT > 0, "the artwork has no left margin, so the ink offset corrects nothing");
+  assert.equal(INK_LEFT, 10);
+  assert.equal(INK_LEFT * PX, 60, "60 units, which is exactly 5 columns of the 12-unit grid");
+  for (const rows of POSE_FILES()) {
+    for (const row of rows) {
+      assert.equal(row.slice(0, INK_LEFT).trim(), "", "a pose paints inside the margin, so it is not margin");
+    }
+  }
+});
+
+test("the offset the scene is placed by is the artwork's own margin, measured not written down", () => {
+  // Read from every pose file here. A module that hard-codes the current offset passes this only
+  // for as long as the art keeps that margin, which is the failure the derivation exists to stop.
+  for (const rows of POSE_FILES()) {
+    assert.equal(MASCOT_INK_LEFT, Math.min(...rows.map((r) => r.search(/[^ ]/)).filter((x) => x >= 0)));
+  }
+});
+
+test("the leftmost painted pixel lands on the column asked for, in every pose and either theme", () => {
+  // What the owner reported: the visible left edge sat 5 columns right of the text beneath it.
+  // The rack is shared, so what a viewer sees in a given pose is that pose plus the rack.
+  for (const theme of ["dark", "light"] as const) {
+    for (const col of [0, 1, 5, 12]) {
+      const root = parseXml(mascotDefs(col, 0, theme));
+      const rack = find(root, "rack");
+      for (const state of states()) {
+        const edge = leftEdgeUnits([find(root, `pose-${state}`), rack]);
+        assert.equal(edge, colX(col), `${theme} pose-${state} at column ${col}: left edge ${edge}, wanted ${colX(col)}`);
+      }
+      // And nothing at all, bubble included, may sit left of that column.
+      assert.equal(leftEdgeUnits([root]), colX(col), `${theme} at column ${col}: something is painted left of the column asked for`);
+    }
+  }
+});
+
+test("the placement is a pure offset: moving the mascot a column moves every pixel one column", () => {
+  // Guards the derivation from being applied twice, or to the wrong axis.
+  const base = parseXml(mascotDefs(0, 0, "dark"));
+  const moved = parseXml(mascotDefs(1, 0, "dark"));
+  assert.equal(leftEdgeUnits([moved]) - leftEdgeUnits([base]), CELL_W);
+  const shift = (n: Node): string[] => pathsUnder(n).flatMap((path) => rects(path.attrs.d).map((r) => `${r.x},${r.y},${r.w}`));
+  assert.deepEqual(
+    shift(moved),
+    shift(base).map((k) => { const [x, y, w] = k.split(",").map(Number); return `${x + CELL_W},${y},${w}`; }),
+  );
+});
+
+test("the mascot stays inside the window once it is placed at column 0", () => {
+  // The grid origin now sits left of the canvas padding, so this is the check that nothing real
+  // went with it: the margin is empty, so no rectangle should be emitted out there.
+  for (const theme of ["dark", "light"] as const) {
+    for (const path of walk(parseXml(mascotDefs(0, 0, theme))).filter((n) => n.tag === "path")) {
+      for (const r of rects(path.attrs.d)) {
+        assert.ok(r.x >= PAD, `${path.attrs.class} paints at x=${r.x}, left of the window padding at ${PAD}`);
+      }
+    }
   }
 });

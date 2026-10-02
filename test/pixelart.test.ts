@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { loadGlyphs, parseGrid, runsOf, runsToPath } from "../src/pixelart.ts";
+import { inkLeft, loadGlyphs, parseGrid, runsOf, runsToPath, sharedInkLeft } from "../src/pixelart.ts";
 
 const SLEEP = new URL("../art/sleep.grid.txt", import.meta.url);
 const GLYPHS = loadGlyphs(new URL("../art/palette.json", import.meta.url));
@@ -211,4 +211,49 @@ test("merging is lossless and maximal over 300 random grids, not only the one ar
       }
     }
   }
+});
+
+// ---- placing artwork by its ink rather than by its grid -----------------------------------------
+
+test("inkLeft is the leftmost painted column, whatever margin the artwork carries", () => {
+  // The margin is a property of the art, so the answer has to move with it rather than be a number.
+  for (const margin of [0, 1, 5, 10, 31]) {
+    const rows = ["1", "11", " 1"].map((r) => " ".repeat(margin) + r);
+    assert.equal(inkLeft(rows), margin, `margin ${margin}`);
+  }
+});
+
+test("inkLeft reads every row, not just the first, and ignores rows that paint nothing", () => {
+  // The topmost row of a sprite is rarely its widest; a first-row-only reading would be wrong here.
+  assert.equal(inkLeft(["     1", "  1  1", "      "]), 2, "the second row reaches furthest left");
+  assert.equal(inkLeft(["", "   1", ""]), 3, "blank rows contribute no edge");
+  assert.equal(inkLeft(["     ", "1    "]), 0, "ink in the last row still sets the edge");
+});
+
+test("inkLeft counts any non-space character as ink, because the palette decides the colour", () => {
+  // A grid is characters, not booleans: the transparent one is the space, and nothing else.
+  for (const ch of "123456789") assert.equal(inkLeft(["   " + ch]), 3, `character ${ch} is ink`);
+});
+
+test("artwork that paints nothing has no left edge, and says so instead of answering 0", () => {
+  // Answering 0 would place an empty sprite flush and hide the fact that it is empty.
+  assert.throws(() => inkLeft([]), /paint nothing|no left edge/);
+  assert.throws(() => inkLeft(["   ", "  "]), /paint nothing|no left edge/);
+});
+
+test("sharedInkLeft returns the edge every frame agrees on", () => {
+  const frame = (name: string, margin: number) => ({ name, rows: ["1", " 1", "11"].map((r) => " ".repeat(margin) + r) });
+  for (const margin of [0, 4, 10]) {
+    assert.equal(sharedInkLeft([frame("a", margin), frame("b", margin), frame("c", margin)]), margin);
+  }
+  assert.equal(sharedInkLeft([frame("only", 7)]), 7, "one frame still has an edge");
+});
+
+test("sharedInkLeft refuses frames that disagree, and names the frame that broke it", () => {
+  // The failure this prevents is a scene that slides sideways whenever the frame changes, which no
+  // unit test of a single frame would catch and which reads on screen as the picture twitching.
+  const frame = (name: string, margin: number) => ({ name, rows: [" ".repeat(margin) + "1"] });
+  assert.throws(() => sharedInkLeft([frame("rest", 3), frame("drifted", 4)]), /drifted.*4.*rest.*3/s);
+  assert.throws(() => sharedInkLeft([frame("rest", 3), frame("ok", 3), frame("late", 1)]), /late/);
+  assert.throws(() => sharedInkLeft([]), /no grids|no left edge/);
 });

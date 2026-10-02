@@ -65,6 +65,40 @@ export function runsOf(rows: string[], chars: string, box?: Box): Run[] {
   return runs;
 }
 
+/**
+ * The leftmost column these rows paint anything in.
+ *
+ * Artwork carries whatever margin the artist left on its left edge, so the grid's column 0 is not
+ * the picture's left edge. A caller that places a grid by its ink rather than by its grid asks here
+ * instead of writing the margin down, because a number written down survives a retouch that moves
+ * the ink and the alignment then fails silently.
+ */
+export function inkLeft(rows: string[]): number {
+  const xs = rows.map((row) => row.search(/[^ ]/)).filter((x) => x >= 0);
+  if (xs.length === 0) throw new Error("these rows paint nothing, so they have no left edge to place them by");
+  return Math.min(...xs);
+}
+
+/**
+ * The one left edge a set of grids share, for artwork drawn as several frames of the same scene.
+ *
+ * A caller that places a scene by its ink needs a single edge for the whole set: placing it by one
+ * frame's ink while another frame starts further in would slide the picture sideways every time the
+ * frame changed, which is worse than the margin being removed. So disagreement is an error, not a
+ * minimum to take, and it is reported with the frame that broke it.
+ */
+export function sharedInkLeft(grids: { name: string; rows: string[] }[]): number {
+  if (grids.length === 0) throw new Error("no grids, so there is no left edge to share");
+  const edges = grids.map((g) => ({ name: g.name, left: inkLeft(g.rows) }));
+  const [first, ...rest] = edges;
+  for (const other of rest) {
+    if (other.left !== first.left) {
+      throw new Error(`${other.name}: its leftmost ink is pixel ${other.left}, but ${first.name} starts at ${first.left}; frames placed by their ink must share one edge or the scene shifts sideways between them`);
+    }
+  }
+  return first.left;
+}
+
 /** One rectangle per run, `size` units square per pixel, with pixel (0, 0) at (originX, originY). */
 export function runsToPath(runs: Run[], originX: number, originY: number, size: number): string {
   return runs.map((r) => `M${originX + r.x * size} ${originY + r.y * size}h${r.w * size}v${size}h-${r.w * size}z`).join("");

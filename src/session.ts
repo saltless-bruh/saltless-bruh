@@ -45,6 +45,13 @@ export type Session = {
  */
 export const SCAN_ROWS = 4;
 
+/**
+ * Row hook on the /activity result line. The Scan Sweep's result arrives after the beam has
+ * crossed, so the motion layer needs to name that row; the row itself is drawn, present and
+ * final without it, which is what a reduced-motion reader sees.
+ */
+export const SCAN_RESULT_CLASS = "scan-result";
+
 /** Prefix of the per-character highlight hooks on the Statusline toggle: `shimmer-0`, `shimmer-1`, ... */
 const SHIMMER_PREFIX = "shimmer-";
 export const shimmerClass = (index: number): string => `${SHIMMER_PREFIX}${index}`;
@@ -148,6 +155,10 @@ export function composeSession(c: Content, a: Activity): Session {
   // The role and the cwd get rows of their own under the Mascot, with the whole width to them.
   const rows: Row[] = Array.from({ length: MASCOT_ROWS }, blank);
   rows[bannerRow + Math.floor(BANNER_ROWS / 2)].runs.push({ col: bannerCol, text: c.handle, textOnly: true });
+  // The artwork fills its band to the last pixel: its ink reaches the bottom of the seventh row
+  // with no margin of its own, and the role line's cap height starts a couple of units under that,
+  // so the rack reads as glued to the text. One blank row is the margin the art does not carry.
+  rows.push(blank());
   rows.push({ runs: [{ col: 0, text: c.role, style: "bold" }] });
   rows.push({ runs: [{ col: 0, text: c.cwd, style: "muted" }] });
   const headerRows = rows.length;
@@ -159,8 +170,8 @@ export function composeSession(c: Content, a: Activity): Session {
   const bullet = (text: string): void => {
     rows.push({ runs: [{ col: 0, text: "●", style: "accent" }, { col: BODY_COL, text, style: "text" }] });
   };
-  const result = (text: string, style: Run["style"] = "text"): void => {
-    rows.push({ runs: [{ col: BODY_COL, text: "╰", style: "muted" }, { col: LIST_COL, text, style }] });
+  const result = (text: string, style: Run["style"] = "text", cls?: string): void => {
+    rows.push({ runs: [{ col: BODY_COL, text: "╰", style: "muted" }, { col: LIST_COL, text, style }], cls });
   };
 
   command("/whoami");
@@ -208,6 +219,7 @@ export function composeSession(c: Content, a: Activity): Session {
   result(
     `${line.label} ${a.activeDays}/${WINDOW_DAYS} ${line.daysUp} · ${a.totalContributions} ${line.contributions}`,
     "accent",
+    SCAN_RESULT_CLASS,
   );
   rows.push(blank());
 

@@ -7,8 +7,9 @@ import { assertNoCollisions, composeSession, languageShares, SCAN_ROWS, VERB_SUF
 import type { Activity } from "../src/session.ts";
 import { assertFits, rowsToText, renderRows, charsUsed } from "../src/rows.ts";
 import type { Row, Run } from "../src/rows.ts";
-import { CELL_H, CELL_W, COLS } from "../src/grid.ts";
+import { BASELINE_IN_ROW, CELL_H, CELL_W, COLS, FONT_SIZE, PAD } from "../src/grid.ts";
 import { MASCOT_COLS, MASCOT_ROWS } from "../src/mascot.ts";
+import { MASCOT_TIMELINE as POSES_TIMELINE } from "../src/timeline.ts";
 import { BANNER_ROWS, bannerWidthCols } from "../src/banner.ts";
 import { assertCovered } from "../src/font.ts";
 import { MASCOT_TIMELINE } from "../src/timeline.ts";
@@ -254,9 +255,9 @@ test("each part of the session wears its own style", () => {
 
 // ---- the header ----
 
-test("the header is the Mascot's rows plus a role row and a cwd row, derived from the Mascot", () => {
+test("the header is the Mascot's rows plus a blank, a role row and a cwd row, derived from the Mascot", () => {
   const { rows, headerRows } = composeSession(loadContent(), activity);
-  assert.equal(headerRows, MASCOT_ROWS + 2);
+  assert.equal(headerRows, MASCOT_ROWS + 3, "the Mascot's band, the blank row under it, the role and the cwd");
   const drawn = rows.slice(0, MASCOT_ROWS).map((r) => r.runs.filter((run) => !run.textOnly).length);
   assert.deepEqual(drawn, Array(MASCOT_ROWS).fill(0), "no glyph may be drawn over the Mascot or the Banner");
   assert.equal(rows[headerRows].runs.length, 1);
@@ -283,8 +284,9 @@ for (const [label, make] of CONTENTS) {
   test(`the role and cwd each get their own full-width row under the Mascot (${label})`, () => {
     const c = make();
     const { rows } = composeSession(c, activity);
-    assert.deepEqual(rows[MASCOT_ROWS].runs, [{ col: 0, text: c.role, style: "bold" }]);
-    assert.deepEqual(rows[MASCOT_ROWS + 1].runs, [{ col: 0, text: c.cwd, style: "muted" }]);
+    assert.deepEqual(rows[MASCOT_ROWS].runs, [], "a blank row separates the artwork from the role line");
+    assert.deepEqual(rows[MASCOT_ROWS + 1].runs, [{ col: 0, text: c.role, style: "bold" }]);
+    assert.deepEqual(rows[MASCOT_ROWS + 2].runs, [{ col: 0, text: c.cwd, style: "muted" }]);
   });
 }
 
@@ -583,12 +585,12 @@ test("the Scan Sweep reserves the rows square cells on a 53 by 7 calendar actual
   assert.equal(SCAN_ROWS, 4, "3.5 rows of ink, the remaining half row as breathing room");
 });
 
-test("the Session is exactly the rows its parts need, and four shorter than the first draft", () => {
+test("the Session is exactly the rows its parts need", () => {
   const c = loadContent();
   const { rows } = composeSession(c, activity);
   const repos = c.lanes.flatMap((lane) => lane.repos).length;
   const expected =
-      MASCOT_ROWS + 2                  // the Mascot's band, then the role and the cwd
+      MASCOT_ROWS + 3                  // the Mascot's band, a blank, then the role and the cwd
     + 1                                // the rule closing the header
     + 1 + c.whoami.length + 1          // /whoami, its bullets, a blank
     + 1 + c.lanes.length + 2 * repos + 1   // /ops, a lane label and two rows per repo, a blank
@@ -597,10 +599,10 @@ test("the Session is exactly the rows its parts need, and four shorter than the 
     + 1                                // the spinner
     + 1 + 2;                           // the closing rule, the effort row, the mode row
   assert.equal(rows.length, expected, "a row was added or lost somewhere in the composition");
-  // Pinned absolutely as well, so the drop is deliberate: the sweep reserved 8 rows while the
-  // calendar's real geometry needs 4, which made the Session 57 rows instead of 53.
-  assert.equal(rows.length, 53);
-  assert.equal(rows.length + 4, 57, "the four rows come from the sweep's reservation, nowhere else");
+  // Pinned absolutely as well, so every change to the budget is deliberate. The sweep reserving
+  // 4 rows rather than the first draft's 8 took the Session from 57 to 53; the blank row the
+  // artwork needs under it puts one back.
+  assert.equal(rows.length, 54);
 });
 
 test("the Scan Sweep gets its own rows right under /activity, and the result line follows them", () => {
@@ -896,4 +898,49 @@ test("the prompt starts the line and the command two columns in", () => {
   const whoami = lines.indexOf(PROMPT + "/whoami");
   assert.ok(whoami >= 0);
   assert.equal(lines[whoami].indexOf("/whoami"), 2);
+});
+
+// ---- the gap between the artwork and the role line ---------------------------------------------
+
+/**
+ * Cap height of JetBrains Mono v2.304 in units: 730/1000 em at the grid's font size, as
+ * docs/spec.md section 3.2 measures it. Where a capital letter's ink actually starts.
+ */
+const CAP_HEIGHT = (730 / 1000) * FONT_SIZE;
+
+/** The last row of the artwork that paints anything, read from the pose files. */
+const artBottomRow = (): number => {
+  const rows = [...new Set(POSES_TIMELINE.map((w) => w.state))].flatMap((state) =>
+    readFileSync(new URL(`../art/${state}.grid.txt`, import.meta.url), "utf8").replace(/\n$/, "").split("\n")
+      .map((row, y) => (row.trim() === "" ? -1 : y)));
+  return Math.max(...rows);
+};
+
+test("the artwork has no bottom margin of its own, which is why the role line needs a blank row", () => {
+  // The premise, measured from the files rather than assumed: the ink runs to the final row, so
+  // the band's last pixel and the band's bottom edge are the same line and the art contributes
+  // no breathing room at all. Were there a spare row inside the artwork this fix would be wrong.
+  const grid = readFileSync(new URL("../art/sleep.grid.txt", import.meta.url), "utf8").replace(/\n$/, "").split("\n");
+  assert.equal(artBottomRow(), grid.length - 1, "the artwork leaves a blank row at its foot, so it is not flush");
+  assert.equal(grid.length, 28);
+  // 28 art pixels at 6 units each is exactly the 7 rows the Mascot reserves: zero slack.
+  assert.equal(grid.length * (CELL_W / 2), MASCOT_ROWS * CELL_H);
+});
+
+test("a blank row separates the artwork's last pixel from the role line's cap height", () => {
+  const { rows } = composeSession(loadContent(), activity);
+  const roleRow = rows.findIndex((r) => r.runs.some((run) => run.text === loadContent().role));
+  assert.ok(roleRow > 0, "the role line is not in the Session");
+
+  const inkBottom = PAD + MASCOT_ROWS * CELL_H;                        // the artwork runs to here
+  const capTop = PAD + roleRow * CELL_H + BASELINE_IN_ROW - CAP_HEIGHT; // the role's ink starts here
+  const gap = capTop - inkBottom;
+
+  // One whole row of separation is the margin the artwork does not carry. Placing the role
+  // immediately under the band leaves 2.9 units, which is what read as glued.
+  assert.ok(gap >= CELL_H, `only ${gap} units between the rack and the role line, wanted at least one row (${CELL_H})`);
+  assert.equal(roleRow, MASCOT_ROWS + 1, "the role line sits one blank row below the artwork");
+  const glued = PAD + MASCOT_ROWS * CELL_H + BASELINE_IN_ROW - CAP_HEIGHT - inkBottom;
+  assert.ok(glued < 3, `the fault being fixed should measure under 3 units, measured ${glued}`);
+  assert.ok(gap > glued * 8, "the blank row must be a real separation, not a nudge");
 });

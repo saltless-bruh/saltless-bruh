@@ -1,5 +1,5 @@
 import { CELL_H, CELL_W, PAD, colX } from "./grid.ts";
-import { loadGlyphs, loadGrid, parseGrid, runsOf, runsToPath } from "./pixelart.ts";
+import { inkLeft, loadGlyphs, loadGrid, parseGrid, runsOf, runsToPath, sharedInkLeft } from "./pixelart.ts";
 import type { Box, Grid, Run } from "./pixelart.ts";
 import { MASCOT_TIMELINE, MASTER_SECONDS } from "./timeline.ts";
 import type { PoseName } from "./timeline.ts";
@@ -92,6 +92,17 @@ for (const [name, grid] of Object.entries(POSES)) {
   });
 }
 
+/**
+ * The leftmost art pixel the scene actually paints, measured from the artwork instead of written
+ * down here. The source grids carry empty columns on their left, so a scene placed by its grid sets
+ * its visible edge that far right of the text underneath it, which reads as a misalignment because
+ * it is one. `mascotDefs` subtracts this, so the column it is handed is the column the ink lands on.
+ * Deriving it is the point: retouching the art moves the offset with it instead of silently
+ * breaking the alignment against a hand-typed number. Every pose must agree on that edge, which is
+ * what `sharedInkLeft` holds, so a retouched pose fails the build rather than the eye.
+ */
+export const MASCOT_INK_LEFT = sharedInkLeft(Object.values(POSES));
+
 // In each region a character is either painted or deliberately the window (`bg`); a table entry nothing uses is a mistake.
 const charsIn = (rows: string[]): Set<string> => new Set([...rows.join("")].filter((c) => c !== " "));
 for (const [region, inks, chars] of [
@@ -165,9 +176,17 @@ const BUBBLE: Stamp[] = [
 ];
 const BURST: Stamp = stamp("bubble burst", 17, 4, ["  1  ", " 1 1 ", "1   1", " 1 1 ", "  1  "]);
 
+// The bubble is stamped at its own coordinates rather than taken from a pose grid, so it is the one
+// thing that could reach left of the edge the scene is placed by and quietly become the leftmost ink.
+for (const s of [...BUBBLE, BURST]) {
+  const x = s.x + inkLeft(s.grid.rows);
+  if (x < MASCOT_INK_LEFT) throw new Error(`${s.grid.name}: starts at art pixel ${x}, left of the scene's ink edge at ${MASCOT_INK_LEFT}`);
+}
+
 export function mascotDefs(col: number, row: number, theme: ThemeName): string {
   const p = PALETTES[theme];
-  const x0 = colX(col);
+  // Placed by its ink, not by its grid: `col` is the column the leftmost painted pixel lands on.
+  const x0 = colX(col) - MASCOT_INK_LEFT * PX;
   const y0 = PAD + row * CELL_H;
   const path = (cls: string, runs: Run[], token: keyof Palette): string =>
     runs.length === 0 ? "" : `<path class="${cls}" d="${runsToPath(runs, x0, y0, PX)}" fill="${p[token]}"/>`;
