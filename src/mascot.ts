@@ -108,11 +108,34 @@ for (const [region, inks, chars] of [
 const CAT_ROWS: Box = { x0: 0, x1: GRID_W, y0: 0, y1: RACK_FROM };
 const RACK_ROWS: Box = { x0: 0, x1: GRID_W, y0: RACK_FROM, y1: GRID_H };
 
-/** The right ear is the topmost ink in these columns, plus the head-top pixel under it. It moves as one. */
+/**
+ * The right ear: the topmost ink in these columns, plus the head-top pixel under it.
+ *
+ * This slab is painted twice on purpose. The static pass keeps it and the `.ear` group draws it again, so what the
+ * flick shows is the union of a slab at rest and the same slab a unit higher: the ear **stretches**, its tip
+ * extending and straightening while its base stays welded to the head. It is not a displacement, and the second
+ * copy is load-bearing, not waste. Four of the five poses carry head ink directly under the slab (`sleep`,
+ * `stretch` and `settle` at both columns, `startle` at column 29 beside the open eye), so cutting the slab from
+ * the static pass would lift the whole thing and open a strip of window the height of the lift underneath it.
+ * Only `yawn` has a silhouette break of its own there. A test pins both halves of this, so the tempting
+ * "do not paint it twice" cleanup fails loudly rather than quietly unsticking the ear.
+ */
 const EAR_X: [number, number] = [29, 31];
 const EAR_DEPTH = 2;
-/** The tail is the stray ink at the far end of the body, below the zZz. */
+/**
+ * The tail is the stray ink at the far end of the body, below the zZz, drawn detached from it.
+ *
+ * Unlike the ear, this box is cut out of the static pass, so the `.tail` group holds the **only** copy of those
+ * pixels and its flick displaces them. Painted twice, a sideways flick would show both positions at once and the
+ * tail would read as swelling rather than moving. The displacement is safe only because the tail touches no other
+ * cat ink: a test holds that invariant for every pose, since joining the tail to the body would make the same
+ * flick tear a seam open mid-sprite.
+ */
 const TAIL: Box = { x0: 45, x1: 48, y0: 5, y1: RACK_FROM };
+
+/** The same rows with a box blanked out, so a pass over them leaves those pixels to whoever else draws them. */
+const cutOut = (rows: string[], box: Box): string[] =>
+  rows.map((row, y) => (y >= box.y0 && y < box.y1 ? row.slice(0, box.x0) + " ".repeat(box.x1 - box.x0) + row.slice(box.x1) : row));
 
 function earBox(grid: Grid): Box {
   const tip = grid.rows.slice(0, RACK_FROM).findIndex((row) => /[24]/.test(row.slice(EAR_X[0], EAR_X[1])));
@@ -164,10 +187,15 @@ export function mascotDefs(col: number, row: number, theme: ThemeName): string {
     return `<g class="foot">${paints(under, CAT, { x0: 0, x1: GRID_W, y0: RACK_FROM, y1: RACK_FROM + 1 })}</g>\n`;
   };
 
+  /**
+   * A part an animation displaces must be drawn once, or the animation shows both positions at once. So the tail is
+   * cut out of the static pass and the `.tail` group carries it alone. The ear is deliberately left in: see EAR_X.
+   * The feet are continued from the untouched grid, because the tail occupies part of the bottom cat row.
+   */
   const pose = (name: PoseName): string => {
     const { rows } = POSES[name];
     return `<g class="pose pose-${name}">
-${foot(rows)}${paints(rows, CAT, CAT_ROWS)}
+${foot(rows)}${paints(cutOut(rows, TAIL), CAT, CAT_ROWS)}
 <g class="ear">${paints(rows, CAT, earBox(POSES[name]))}</g>
 <g class="tail">${paints(rows, CAT, TAIL)}</g>
 </g>`;

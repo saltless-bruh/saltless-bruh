@@ -7,6 +7,7 @@ import { CELL_H, CELL_W, PAD } from "../src/grid.ts";
 import { PALETTES } from "../src/tokens.ts";
 import type { Palette, ThemeName } from "../src/tokens.ts";
 import { MASCOT_TIMELINE, MASTER_SECONDS } from "../src/timeline.ts";
+import type { PoseName } from "../src/timeline.ts";
 import { MASCOT_COLS, MASCOT_ROWS, mascotCss, mascotDefs } from "../src/mascot.ts";
 
 // ---------------------------------------------------------------------------------------------
@@ -98,6 +99,42 @@ function animationsOf(css: string): Anim[] {
   return out;
 }
 
+/**
+ * A layer's keyframe stops, timed in seconds into ITS OWN cycle and sorted. Everything that measures how long a gesture
+ * lasts goes through here, so a gesture written as a share of a cycle shows up as the wrong number of milliseconds the
+ * moment two cycles differ in length.
+ */
+function stopsOf(css: string, cls: string): { seconds: number; decls: Record<string, string> }[] {
+  const anim = animationsOf(css).find((a) => a.cls === cls);
+  assert.ok(anim, `no animation rule for .${cls}`);
+  assert.equal(anim.timing, "step-end", "the samplers below assume frames cut, not blend");
+  const kf = keyframesOf(css).find((k) => k.name === anim.name);
+  assert.ok(kf, `no @keyframes ${anim.name}`);
+  return kf.stops.map((s) => {
+    const m = s.at.match(/^([\d.]+)%$/);
+    assert.ok(m, `keyframe stop ${s.at}`);
+    return { seconds: (Number(m[1]) / 100) * anim.seconds, decls: s.decls };
+  }).sort((a, b) => a.seconds - b.seconds);
+}
+
+/** The cycle length of a layer's animation, in seconds. */
+const cycleSeconds = (css: string, cls: string): number => {
+  const anim = animationsOf(css).find((a) => a.cls === cls);
+  assert.ok(anim, `no animation rule for .${cls}`);
+  return anim.seconds;
+};
+
+/** How far a layer translates along `axis`, in SVG units, at the furthest stop. */
+function translateOf(css: string, cls: string, axis: "X" | "Y"): number {
+  let furthest = 0;
+  for (const stop of stopsOf(css, cls)) {
+    for (const m of (stop.decls.transform ?? "").matchAll(new RegExp(`translate${axis}\\((-?[\\d.]+)(?:px)?\\)`, "g"))) {
+      if (Math.abs(Number(m[1])) > Math.abs(furthest)) furthest = Number(m[1]);
+    }
+  }
+  return furthest;
+}
+
 /** Computed value of `prop` for an element carrying these classes, from the NON-animation rules. */
 function baseValue(css: string, classes: string[], prop: string): string | undefined {
   let value: string | undefined;
@@ -163,6 +200,32 @@ const xy = (p: string): [number, number] => {
   const [x, y] = p.split(",").map(Number);
   return [x, y];
 };
+
+/**
+ * The rectangles a compiled path draws, in SVG units rather than art pixels. The animated translates are a fraction of
+ * an art pixel, so anything measuring what a move does has to work at this resolution.
+ */
+function rects(d: string): { x: number; y: number; w: number }[] {
+  assert.match(d, /^(M[\d.]+ [\d.]+h[\d.]+v[\d.]+h-[\d.]+z)*$/, "path data is not compiler rectangles");
+  return [...d.matchAll(/M([\d.]+) ([\d.]+)h([\d.]+)v([\d.]+)/g)].map((m) => {
+    const [x, y, w, h] = m.slice(1).map(Number);
+    assert.equal(h, PX, `rect ${m[0]} is not one art pixel tall`);
+    return { x, y, w };
+  });
+}
+
+type Span = [number, number];
+
+/** Total length these intervals cover, overlaps counted once. */
+function coveredLength(spans: Span[]): number {
+  let total = 0;
+  let end = -Infinity;
+  for (const [from, to] of [...spans].sort((a, b) => a[0] - b[0])) {
+    total += Math.max(0, to - Math.max(from, end));
+    end = Math.max(end, to);
+  }
+  return total;
+}
 
 type Ink = Map<string, string>;   // pixel -> fill
 
@@ -423,16 +486,91 @@ test("the rack is painted after the cat, so its frame line covers the continued 
   assert.ok(order.findIndex((n) => classesOf(n).includes("rack")) > lastInBreath, "the rack must come after everything that breathes");
 });
 
-test("the ear and tail layers are copies of their own pose, in the same colours, so moving them exposes nothing", () => {
+/** The paths the pose paints itself, with the animated overlays and the hidden foot continuation left out. */
+const staticInk = (pose: Node): Ink => inkOf([pose], ["ear", "tail", "foot"]);
+/** One animated overlay group inside a pose. */
+const overlayInk = (pose: Node, part: string): Ink => inkOf(walk(pose).filter((n) => classesOf(n).includes(part)));
+
+test("the ear stretches: its overlay is a second copy of the slab, so the lift extends the tip and leaves the base on the head", () => {
+  // The ear's double paint is correct and this test exists to keep it. The `.ear` group is the slab drawn again, and
+  // the flick lifts that copy; unioned with the static one the ear stretches, welded to the head at its base. Cut the
+  // slab out of the static pass (the tempting "do not paint it twice" cleanup) and the lift carries the whole ear away
+  // instead, opening a strip of window under it. Both halves of that are asserted: the second copy exists, and it is
+  // load-bearing because the head really does carry ink directly beneath the slab.
   for (const theme of ["dark", "light"] as const) {
     const root = parseXml(mascotDefs(0, 0, theme));
     for (const state of states()) {
       const pose = find(root, `pose-${state}`);
-      const base = inkOf([pose], ["ear", "tail"]);
-      for (const part of ["ear", "tail"]) {
-        const overlay = inkOf(walk(pose).filter((n) => classesOf(n).includes(part)));
-        assert.ok(overlay.size > 0, `pose-${state} has no ${part} ink to move`);
-        for (const [p, fill] of overlay) assert.equal(base.get(p), fill, `pose-${state} ${part} pixel ${p} is not on a pixel of the same colour`);
+      const base = staticInk(pose);
+      const ear = overlayInk(pose, "ear");
+      assert.ok(ear.size > 0, `pose-${state} has no ear ink to move`);
+      for (const [p, fill] of ear) {
+        assert.equal(base.get(p), fill, `pose-${state}: the static pass does not paint ear pixel ${p}, so the flick would lift the ear off the head instead of stretching it`);
+      }
+    }
+  }
+  // Read from the grid files: which poses have painted ink immediately below the ear slab, where a lifted-away ear
+  // would show window. '3' is a hole on purpose (the eye) and a space is the window, so neither counts as ink.
+  const attached = states().filter((state) => {
+    const rows = readGrid(state).slice(0, RACK_FROM);
+    const tip = rows.findIndex((r) => /[24]/.test(r.slice(29, 31)));
+    assert.ok(tip >= 0, `${state}: no ear in columns 29 and 30`);
+    const below = rows[tip + 2];
+    return below !== undefined && [29, 30].some((x) => "124".includes(below[x]));
+  });
+  assert.deepEqual(attached.sort(), ["settle", "sleep", "startle", "stretch"], "four poses need the static copy; only yawn breaks its own silhouette under the ear");
+});
+
+test("the tail displaces: the static pass leaves its pixels to the .tail group alone, so the flick moves it and never thickens it", () => {
+  // The defect this pins: the tail was painted twice, once statically and once in the `.tail` group, so its sideways
+  // flick showed both positions at once and the tail read as swelling rather than moving. The group must hold the only
+  // copy. Measured in units rather than art pixels, because the translate is a fraction of one.
+  const css = mascotCss();
+  const dx = translateOf(css, "tail", "X");
+  assert.notEqual(dx, 0, "the tail must actually move");
+  for (const theme of ["dark", "light"] as const) {
+    const root = parseXml(mascotDefs(0, 0, theme));
+    for (const state of states()) {
+      const pose = find(root, `pose-${state}`);
+      const base = staticInk(pose);
+      const tail = overlayInk(pose, "tail");
+      assert.ok(tail.size > 0, `pose-${state} has no tail ink to move`);
+      for (const p of tail.keys()) {
+        assert.ok(!base.has(p), `pose-${state}: ${p} is painted by the static pass as well as the .tail group, so a flick shows both positions at once`);
+      }
+      // Nothing was dropped by cutting the tail out: the two passes together are still the whole cat.
+      const whole = inkOf([pose], ["foot"]);
+      assert.deepEqual([...new Map([...base, ...tail])].sort(), [...whole].sort(), `pose-${state}: the static pass plus the tail is not the whole cat`);
+      // The flick is a displacement: the cat covers exactly as much of every row at the flick as it does at rest.
+      const bars = (shift: number): Map<number, number> => {
+        const byRow = new Map<number, Span[]>();
+        const add = (nodes: Node[], by: number): void => {
+          for (const n of nodes) for (const r of rects(n.attrs.d)) byRow.set(r.y, [...(byRow.get(r.y) ?? []), [r.x + by, r.x + r.w + by]]);
+        };
+        add(pathsUnder(pose, ["tail", "foot"]), 0);
+        add(walk(pose).filter((n) => classesOf(n).includes("tail")).flatMap((n) => pathsUnder(n)), shift);
+        return new Map([...byRow].map(([y, spans]) => [y, coveredLength(spans)]));
+      };
+      assert.deepEqual([...bars(dx)].sort(), [...bars(0)].sort(), `pose-${state}: the tail flick changes how much ink a row carries, so it swells instead of moving`);
+    }
+  }
+});
+
+test("the tail is drawn detached from the body in every pose, so sliding it sideways cannot tear the sprite", () => {
+  // The `.tail` group is now the only copy of its pixels and it slides in X, which is safe only while no other cat ink
+  // touches it. An art edit that joined the tail to the body would turn that slide into a seam opening mid-sprite, so
+  // the invariant is asserted here rather than left as a comment. The tail's own pixels come from the real drawing and
+  // the ink oracle from the grid files; the foot continuation is excluded because the frame line covers it.
+  const root = parseXml(mascotDefs(0, 0, "dark"));
+  for (const state of states()) {
+    const rows = readGrid(state).slice(0, RACK_FROM);
+    const tail = new Set(overlayInk(find(root, `pose-${state}`), "tail").keys());
+    assert.ok(tail.size > 0, `pose-${state} has no tail`);
+    for (const p of tail) {
+      const [x, y] = xy(p);
+      for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]] as [number, number][]) {
+        if (tail.has(`${nx},${ny}`) || ny < 0 || ny >= RACK_FROM || nx < 0 || nx >= GRID_W) continue;
+        assert.ok(!"124".includes(rows[ny][nx]), `pose-${state}: the tail at ${p} touches cat ink at ${nx},${ny}; sliding it would tear the sprite there`);
       }
     }
   }
@@ -561,7 +699,7 @@ test("the base stylesheet leaves every layer untransformed and the LEDs lit", as
 // The master loop is derived from MASCOT_TIMELINE
 // ---------------------------------------------------------------------------------------------
 
-type Window = { state: string; from: number; to: number };
+type Window = { state: PoseName; from: number; to: number };
 
 /** Opacity of a master-clock layer (a pose, a bubble step, the burst) at time t, read from its keyframes with step-end semantics. */
 function opacityAt(css: string, cls: string, t: number): number {
