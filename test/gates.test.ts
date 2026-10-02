@@ -612,6 +612,43 @@ test("an unbuilt tree says what has not been built yet, not that something is wr
   }
 });
 
+test("a built tree runs every gate there is, by name", async () => {
+  // The set, pinned on a BUILT tree, and this is the only place it can be pinned. On an unbuilt
+  // tree the absent branch supplies the same gate names, so a gate deleted from the branch that
+  // actually reads the files is invisible there: a mutant that dropped the assets from the dash
+  // gate survived a whole mutation run for exactly that reason before this test existed.
+  const dir = url(await builtTree());
+  assert.deepEqual(runGates(dir, { typecheck: false }).map((r) => r.gate), [
+    "forbidden names",
+    "secrets",
+    "placeholder names",
+    "dashes in content.json",
+    "dashes in the assets",
+    "control characters",
+    "glyphs",
+    "reduced motion",
+    "svg structure",
+    "size budget",
+    "readme",
+    "dashes in the readme",
+    "activity cache",
+  ]);
+});
+
+test("a glyph the font cannot draw is caught in the README as well as in the assets", async () => {
+  // The transcript is drawn from the same rows as the picture, so the same blank box lands in both.
+  const dir = await builtTree();
+  const clean = readFileSync(join(dir, GENERATED.readme), "utf8");
+  try {
+    writeFileSync(join(dir, GENERATED.readme), clean.replace("<details>", `<details>${FORBIDDEN_GLYPHS[0]}`));
+    const gate = gateNamed(runGates(url(dir), { typecheck: false }), "glyphs");
+    assert.equal(gate.status, "fail");
+    assert.match(gate.problems.join("\n"), new RegExp(GENERATED.readme));
+  } finally {
+    writeFileSync(join(dir, GENERATED.readme), clean);
+  }
+});
+
 test("a built tree passes every gate that has something to read", async () => {
   const dir = await builtTree();
   const results = runGates(url(dir), { typecheck: false });

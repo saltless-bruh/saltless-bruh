@@ -31,8 +31,8 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { TOKEN_ENV } from "../src/activity.ts";
 import { COMMITTED_FORBIDDEN_NAMES, CONFIGURED_FORBIDDEN_NAMES, FORBIDDEN_NAMES } from "../src/content.ts";
 import { FORBIDDEN_GLYPHS } from "../src/font.ts";
@@ -702,7 +702,18 @@ export function runGates(root: URL, o: { typecheck?: boolean } = {}): GateResult
       ...over(findControlCharacters),
       ...(there(GENERATED.readme) ? findControlCharacters(read(GENERATED.readme)).map((m) => `${GENERATED.readme} ${m}`) : []),
     ]));
-    results.push(verdict("glyphs", `${FORBIDDEN_GLYPHS.length} absent glyphs looked for in each variant`, over(findAbsentGlyphs)));
+    // The README is generated output too, and its transcript is drawn from the same rows, so a
+    // glyph the font cannot draw lands there as the same blank box. The build would not get that
+    // far (`assertCovered` refuses it), which is exactly why this reads the artifact on disk: the
+    // gate's job is the file that shipped, not the run that wrote it.
+    results.push(verdict(
+      "glyphs",
+      `${FORBIDDEN_GLYPHS.length} absent glyphs looked for in ${[...svgPaths, GENERATED.readme].join(", ")}`,
+      [
+        ...over(findAbsentGlyphs),
+        ...(there(GENERATED.readme) ? findAbsentGlyphs(read(GENERATED.readme)).map((m) => `${GENERATED.readme} ${m}`) : []),
+      ],
+    ));
     results.push(verdict("reduced motion", svgPaths.join(", "), over(findReducedMotionFaults)));
 
     const external = externalSvgCheck(svgPaths.map(abs));
@@ -791,7 +802,11 @@ export function report(results: GateResult[]): string {
 }
 
 if (import.meta.main) {
-  const root = new URL(process.argv[2] === undefined ? "../" : `${process.argv[2].replace(/\/*$/, "")}/`, import.meta.url);
+  // No argument means this repository. An argument is resolved against the working directory,
+  // which is where a person typing a relative path means, and not against this file's directory.
+  const root = process.argv[2] === undefined
+    ? new URL("../", import.meta.url)
+    : pathToFileURL(`${resolve(process.argv[2])}/`);
   const results = runGates(root);
   const code = exitCodeFor(results);
   (code === 0 ? console.log : console.error)(report(results));
