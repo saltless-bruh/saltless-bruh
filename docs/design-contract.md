@@ -48,6 +48,31 @@ Verified, not assumed:
 - **Never report a contrast number that was not measured.** Every figure in the ledger comes from a computation or a
   rendered-pixel sample. Keep it that way.
 
+**The ramp was judged against fixture data built to look busy. Task 12 judged it against the real year, and it
+holds.** The owner's calendar is **97 active days in 365, 26.6%**, so the grid is sparse and the question was
+whether the Scan Sweep still reads as scanning a network or as a mostly empty box. Rendered and looked at, at
+846px and 308px, dark and light:
+
+- **It reads.** The beam's before/after difference is the effect, and it survives sparsity because the silent
+  days are *drawn*, not omitted: what the beam crosses is a complete lattice of targets, most of them quiet,
+  which is exactly what section 7 of `docs/spec.md` says a quiet day should mean.
+- **The sparsity is distributed, not clustered, which is what saves it.** 39 of the 53 columns contain at least
+  one lit cell, and the longest run of columns with nothing lit at all is **3**, about 140ms of the 2.5s
+  crossing. The beam is never crossing a void for long enough to look broken.
+- **The hits still register when scattered.** 48 cells reach the top two bands, and 21 of them have another hit
+  directly below, so the merged-bar behaviour the geometry was designed for still happens on real data rather
+  than only on busy fixtures.
+- **The honest weakness, recorded rather than fixed.** Only 20 of 53 columns contain a hit, so about 1.56s of
+  the 2.5s crossing passes with no flare, and one stretch of 10 consecutive columns (0.47s) has none at all. A
+  scanner crossing a quiet quarter and reporting nothing is information rather than a fault, and 0.47s is short,
+  so nothing was changed. If a future year is quieter still, the lever is the **quartile thresholds**, not the
+  opacity ramp: the ramp is measured perceptually even and retuning it to compensate for sparse data would be
+  fixing the wrong thing.
+
+The real data also gives the grid a shape the fixtures never had: the last 12 columns carry 41 lit cells against
+16 in the first 12, so it reads as quiet-then-busy rather than as noise. That is the data being real, and it is
+an argument for never making this band look busier than it is.
+
 Two standing weaknesses, both accepted for now and recorded so they are not discovered as surprises:
 
 - **Art borrows text roles.** The mascot paints its body with the `text` token and its rack with `surface`. A cat is
@@ -138,10 +163,17 @@ The playback fires on every page load and stands between the reader and the cont
 constraint in the project. The finished Session must be the resting state, and must be what a reduced-motion viewer
 sees immediately.
 
-**Settled in Task 9, and measured.** Rows arrive 26ms apart and each takes 180ms to settle, so a 57-row
-Session is fully printed 1.636s after load. Verified by rendering frozen frames through real headless
-Chrome at 846px and 308px: the last row's band is still empty at 1.45s, ramps from 1.50s, and is
-pixel-identical to the settled frame from 1.64s on, at both widths.
+**Settled in Task 9, and measured.** Rows arrive 26ms apart and each takes 180ms to settle, so the last
+row lands at `26ms x (rows - 1) + 180ms`. That figure belongs to the content, not to the design: the
+57-row Session measured in Task 9 finished at 1.636s, and the owner's real content is 58 rows and
+finishes at **1.66s**.
+
+**Re-measured in Task 12 against the real content, in both engines.** Frozen frames through real headless
+Chrome and Firefox at 846px and 308px: the last row's band is far from settled at 1.45s and 1.50s, ramps
+from 1.55s, and is pixel-identical to the settled frame from 1.66s, at both widths in Chrome and at 846px
+in Firefox. Firefox at 308px is within 22/255 of settled at 1.66s and exact by 1.70s, which is the tiny
+text's antialiasing rather than a different schedule. Quote the formula rather than one of its answers;
+quoting an answer is what made the previous number wrong without anybody editing it.
 
 The unit is the ROW, not the character. A per-character typewriter across the whole Session is the obvious
 reading of the word and it is ruled out by arithmetic: the Session carries roughly 2,600 characters, and at

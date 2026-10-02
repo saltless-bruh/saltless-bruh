@@ -223,7 +223,7 @@ Every animation must justify itself in one sentence. Anything that cannot is cut
 
 | Element | Behaviour | Why it earns its place |
 |---|---|---|
-| Playback | Once on load, 1.64s measured: rows arrive 26ms apart, each settling over 180ms | Storytelling: establishes that this is a session being run, not a poster |
+| Playback | Once on load, 1.66s measured against the owner's content: rows arrive 26ms apart, each settling over 180ms | Storytelling: establishes that this is a session being run, not a poster |
 | Banner | Resolves letter by letter over 0.45s, each letter cutting through one flicker frame | Hierarchy: it is the one moment of spectacle, spent on the name |
 | Spinner | After playback, one spinner loops. Its verb names whatever the Mascot is doing right now, on the same 36s clock | State: it is a readout of the Mascot, not decoration, which is why it may loop at all |
 | Mascot | 36s master loop: breathing at 3.0s, with a yawn, a stretch, a settle, a one-second peek at the viewer, and an alarm she wakes to | Storytelling: the operator naps while the agents work, which is the whole metaphor |
@@ -237,8 +237,12 @@ Every animation must justify itself in one sentence. Anything that cannot is cut
 fires on every page load and stands between a reader and the content, so the unit is the row and not the
 character: the Session carries about 2,600 characters, and a per-character typewriter at any readable rate
 is tens of seconds of a visitor looking at a page that is not there. Rows arrive 26ms apart and settle over
-180ms, which puts the last row of a 57-row Session at 1.64s, measured in headless Chrome at both 846px and
-308px rather than computed. The Banner resolves inside that window rather than strictly before it, because
+180ms, so the figure is `26ms x (rows - 1) + 180ms` and it moves when the content does. **Against the
+owner's real content it is 1.66s**: 58 rows, of which 57 are the playback's (the `/activity` result line
+belongs to the Scan Sweep), measured 2026-10-02 in headless Chrome **and Firefox** at both 846px and 308px
+rather than computed, and printed by `npm run build` on every run so it cannot go stale again. The ceiling
+is what matters and it is unchanged; an earlier 57-row Session measured 1.64s and this section quoted that
+one length as though it were the rule. The Banner resolves inside that window rather than strictly before it, because
 holding the body back until the name had finished would push the total past two seconds; the name is
 nonetheless complete at 0.45s, while the Session is still printing its `/whoami`.
 
