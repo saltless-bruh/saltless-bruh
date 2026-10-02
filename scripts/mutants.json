@@ -1434,7 +1434,7 @@
   "replace": "export const FORBIDDEN_NAMES_ENV = \"PROFILE_FORBIDDEN_NAME\";"
  },
  {
-  "id": "A1  activity: the unset-token failure demands read:user again, which the API does not need",
+  "id": "AC1 activity: the unset-token failure demands read:user again, which the API does not need",
   "file": "src/activity.ts",
   "tests": [
    "test/activity.test.ts"
@@ -1443,7 +1443,7 @@
   "replace": "The token needs the read:user scope."
  },
  {
-  "id": "A2  activity: the 401 hint blames the scope that was measured unnecessary",
+  "id": "AC2 activity: the 401 hint blames the scope that was measured unnecessary",
   "file": "src/activity.ts",
   "tests": [
    "test/activity.test.ts"
@@ -1632,7 +1632,7 @@
   "replace": "  const missing = unbuilt.length > 0 ? [] : of(\"missing\");"
  },
  {
-  "id": "A3  activity: the scan over fetched data removed, so a name can arrive and be published",
+  "id": "AC3 activity: the scan over fetched data removed, so a name can arrive and be published",
   "file": "src/activity.ts",
   "tests": [
    "test/activity.test.ts"
