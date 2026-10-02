@@ -8,8 +8,15 @@
 // frames non-monotonically and never reached the end state at all. A negative animation-delay with
 // animation-play-state: paused is exact, because it is the animation's own clock being set.
 //
+// A STAGGER NEEDS MORE THAN THE ONE RULE. An animation whose phase comes from its own
+// `animation-delay` (the playback's row arrival, the Banner's per-letter reveal) is not frozen by a
+// blanket `animation-delay:-Xs`: that rule REPLACES the stagger, so every row lands on the same
+// instant and the cascade vanishes. Freezing at X means shifting every clock back by X, so each
+// explicit delay D is rewritten to D - X as well. Without this the playback renders as fully
+// arrived at any freeze past its reveal duration, which looks like a working frame and is not one.
+//
 // The freeze is applied to a COPY in a temp directory. The file named on the command line is never
-// touched, so what is measured is the real artifact with one extra rule, not a different drawing.
+// touched, so what is measured is the real artifact with a few extra rules, not a different drawing.
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -31,14 +38,40 @@ const freeze = flags.find((f) => f.startsWith("--freeze="))?.slice(9);
 const dir = mkdtempSync(join(tmpdir(), "render-check-"));
 const page = join(dir, "page.html");
 
+/**
+ * Every rule that sets an explicit delay, re-stated with that delay shifted back by `at`.
+ *
+ * The delay in the `animation` shorthand is its SECOND <time>; the first is the duration. The
+ * nested blocks inside `@keyframes` are skipped by construction, because a rule body here may not
+ * contain a brace, and a keyframe's own `0% { ... }` carries no `animation:` of its own.
+ *
+ * These come after the blanket rule and are `!important` too, so the later declaration wins.
+ */
+function shiftDelays(css: string, at: number): string {
+  const out: string[] = [];
+  for (const rule of css.matchAll(/([^{}@]+)\{([^{}]*)\}/g)) {
+    const [, selector, body] = rule;
+    const shorthand = /animation:\s*([^;}]*)/.exec(body);
+    const explicit = /animation-delay:\s*(-?[\d.]+)s/.exec(body);
+    const times = shorthand === null ? [] : [...shorthand[1].matchAll(/(-?[\d.]+)s\b/g)].map((m) => Number(m[1]));
+    const delay = explicit !== null ? Number(explicit[1]) : times.length >= 2 ? times[1] : null;
+    if (delay === null) continue;
+    out.push(`${selector.trim()}{animation-delay:${delay - at}s!important}`);
+  }
+  return out.join("");
+}
+
 let image = resolve(input);
 if (freeze !== undefined) {
   const svg = readFileSync(image, "utf8");
   if (!svg.includes("</style>")) throw new Error(`${input} has no <style> to freeze; nothing in it is animated`);
+  const at = Number(freeze);
+  const style = /<style>([\s\S]*?)<\/style>/.exec(svg);
+  if (style === null) throw new Error(`${input} has no <style> element to read the stagger out of`);
   image = join(dir, "frozen.svg");
   writeFileSync(image, svg.replace(
     "</style>",
-    `*{animation-delay:-${Number(freeze)}s!important;animation-play-state:paused!important}</style>`,
+    `*{animation-delay:-${at}s!important;animation-play-state:paused!important}${shiftDelays(style[1], at)}</style>`,
   ));
 }
 
