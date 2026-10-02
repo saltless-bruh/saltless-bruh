@@ -1817,8 +1817,8 @@
     "tests": [
       "test/session.test.ts"
     ],
-    "find": "  return labels.map((label, i) => Math.round(trackCol + slot * (i + 0.5) - cells(label) / 2));",
-    "replace": "  return labels.map((_, i) => Math.round(trackCol + slot * i));"
+    "find": "  const cols = labels.map((label, i) => Math.round(trackCol + slot * (i + 0.5) - cells(label) / 2));",
+    "replace": "  const cols = labels.map((_, i) => Math.round(trackCol + slot * i));"
   },
   {
     "id": "S4 session: the slot edges are rounded first, so the levels drift along the row",
@@ -1826,8 +1826,8 @@
     "tests": [
       "test/session.test.ts"
     ],
-    "find": "  return labels.map((label, i) => Math.round(trackCol + slot * (i + 0.5) - cells(label) / 2));",
-    "replace": "  return labels.map((label, i) => Math.round(trackCol + Math.round(slot) * i + (Math.round(slot) - cells(label)) / 2));"
+    "find": "  const cols = labels.map((label, i) => Math.round(trackCol + slot * (i + 0.5) - cells(label) / 2));",
+    "replace": "  const cols = labels.map((label, i) => Math.round(trackCol + Math.round(slot) * i + (Math.round(slot) - cells(label)) / 2));"
   },
   {
     "id": "S5 session: the marker leans left of an even-width level instead of sitting on its centre",
@@ -1862,8 +1862,8 @@
     "tests": [
       "test/session.test.ts"
     ],
-    "find": "  const track: Run[] = [{ col: markerCol, text: \"▲\", style: \"accent\", piece: PIECE_TRACK }];",
-    "replace": "  const track: Run[] = [{ col: markerCol, text: \"▲\", style: \"muted\", piece: PIECE_TRACK }];"
+    "find": "  const track: Run[] = [{ col: markerCol, text: \"\u25b2\", style: \"accent\", piece: PIECE_TRACK }];",
+    "replace": "  const track: Run[] = [{ col: markerCol, text: \"\u25b2\", style: \"muted\", piece: PIECE_TRACK }];"
   },
   {
     "id": "S9 session: the panel's top border goes back to being an ordinary rule",
@@ -1875,13 +1875,13 @@
     "replace": "  rows.push(rule());"
   },
   {
-    "id": "S10 session: the right column is sized by the toggle alone, so a longer hint runs off the grid",
+    "id": "S10 session: the inversion undone, so the toggle's wording sizes the scale again",
     "file": "src/session.ts",
     "tests": [
       "test/session.test.ts"
     ],
-    "find": "  const toggleCol = COLS - Math.max(toggleWidth, cells(s.toggleHint));",
-    "replace": "  const toggleCol = COLS - toggleWidth;"
+    "find": "  const trackCol = cells(s.effortWord) + TRACK_INDENT;\n  const trackEnd = trackCol + TRACK_COLS;\n  const toggleCol = trackEnd + PANEL_GAP;",
+    "replace": "  const toggleCol = COLS - Math.max(cells(s.toggle.word) + TOGGLE_GAP + cells(s.toggle.state), cells(s.toggleHint));\n  const trackCol = cells(s.effortWord) + TRACK_INDENT;\n  const trackEnd = toggleCol - PANEL_GAP;"
   },
   {
     "id": "S11 session: fragments of one piece are allowed to overlap, not merely to touch",
@@ -2200,8 +2200,8 @@
     "tests": [
       "test/session.test.ts"
     ],
-    "find": "const EIGHTHS = \"▏▎▍▌▋▊▉█\";",
-    "replace": "const EIGHTHS = \"▏▎▍▌▋▊▉\";"
+    "find": "const EIGHTHS = \"\u258f\u258e\u258d\u258c\u258b\u258a\u2589\u2588\";",
+    "replace": "const EIGHTHS = \"\u258f\u258e\u258d\u258c\u258b\u258a\u2589\";"
   },
   {
     "id": "S34 session: a share that rounds away prints 0%, which reads as a language that failed to measure",
@@ -2328,7 +2328,7 @@
       "test/build.test.ts"
     ],
     "find": "  // A Session that does not fit is not returned: the message names the row and its text.",
-    "replace": "  rows.push({ runs: [\n    { col: 0, text: \"▶▶ autopilot on\", style: \"muted\" },\n    { col: COLS - cells(\"terminal-style design, not affiliated with Anthropic\"), text: \"terminal-style design, not affiliated with Anthropic\", style: \"muted\" },\n  ] });\n\n  // A Session that does not fit is not returned: the message names the row and its text."
+    "replace": "  rows.push({ runs: [\n    { col: 0, text: \"\u25b6\u25b6 autopilot on\", style: \"muted\" },\n    { col: COLS - cells(\"terminal-style design, not affiliated with Anthropic\"), text: \"terminal-style design, not affiliated with Anthropic\", style: \"muted\" },\n  ] });\n\n  // A Session that does not fit is not returned: the message names the row and its text."
   },
   {
     "id": "S48 session: the pane divider's column is written down instead of derived from the toggle",
@@ -2373,7 +2373,7 @@
       "test/session.test.ts"
     ],
     "find": "const PANE_DIVIDER = TREE_CONTINUE;",
-    "replace": "const PANE_DIVIDER = \"┃\";"
+    "replace": "const PANE_DIVIDER = \"\u2503\";"
   },
   {
     "id": "S53 session: the pane divider is drawn in the Accent, so the structure competes with the marker",
@@ -2383,5 +2383,168 @@
     ],
     "find": "    rows[r].runs.push({ col: dividerCol, text: PANE_DIVIDER, style: \"muted\" });",
     "replace": "    rows[r].runs.push({ col: dividerCol, text: PANE_DIVIDER, style: \"accent\" });"
+  },
+  {
+    "id": "S54 session: the track is the 40 columns the owner compared 44 against and rejected",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "const TRACK_COLS = 44;",
+    "replace": "const TRACK_COLS = 40;"
+  },
+  {
+    "id": "S55 session: the track's indent goes back to borrowing the panel's column gutter",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "const TRACK_INDENT = 2;",
+    "replace": "const TRACK_INDENT = PANEL_GAP;"
+  },
+  {
+    "id": "S56 session: the toggle pane's guard measures the whole row, so it never fires",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const paneWidth = COLS - toggleCol;",
+    "replace": "  const paneWidth = COLS;"
+  },
+  {
+    "id": "S57 session: the toggle's own guard is dropped, so a long toggle runs off the grid",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  if (toggleWidth > paneWidth) {\n    throw new Error(`the toggle ${JSON.stringify(`${s.toggle.word}  ${s.toggle.state}`)} needs ${toggleWidth} columns and the pane right of the ${TRACK_COLS}-column track has ${paneWidth} (columns ${toggleCol} to ${COLS})`);\n  }",
+    "replace": "  if (false) {\n    throw new Error(`the toggle ${JSON.stringify(`${s.toggle.word}  ${s.toggle.state}`)} needs ${toggleWidth} columns and the pane right of the ${TRACK_COLS}-column track has ${paneWidth} (columns ${toggleCol} to ${COLS})`);\n  }"
+  },
+  {
+    "id": "S58 session: only the toggle is measured against the pane, so a long hint is not caught",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  if (cells(s.toggleHint) > paneWidth) {",
+    "replace": "  if (false) {"
+  },
+  {
+    "id": "S59 session: the levels are no longer measured against the fixed track before they are placed",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  if (needed > width) {",
+    "replace": "  if (false) {"
+  },
+  {
+    "id": "S60 session: the levels' minimum leaves no blank column between neighbours",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const needed = labels.reduce((w, label) => w + cells(label), 0) + (n - 1);",
+    "replace": "  const needed = labels.reduce((w, label) => w + cells(label), 0);"
+  },
+  {
+    "id": "S61 session: the toggle is dropped from the track's row, so the right pane says nothing",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  rows.push({ runs: [...track, ...toggleRuns] });",
+    "replace": "  rows.push({ runs: track });"
+  },
+  {
+    "id": "S62 session: the toggle sinks onto the labels row, which is the reference's placement and not this one's",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  rows.push({ runs: [...levels, { col: toggleCol, text: s.toggleHint, style: \"muted\" }] });",
+    "replace": "  rows.push({ runs: [...levels, ...toggleRuns] });"
+  },
+  {
+    "id": "S63 session: the toggle sinks back onto the gloss row, where it read as having fallen to the bottom",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  rows.push({ runs: [{ col: trackCol, text: s.toggleNote, style: \"muted\" }] });",
+    "replace": "  rows.push({ runs: [{ col: trackCol, text: s.toggleNote, style: \"muted\" }, ...toggleRuns] });"
+  },
+  {
+    "id": "S64 session: the row of air between the scale and the gloss is taken out again",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  // the row is inside the pane and a boundary that broke across a gap would read as two rules.\n  rows.push(blank());",
+    "replace": "  // the row is inside the pane and a boundary that broke across a gap would read as two rules."
+  },
+  {
+    "id": "S65 session: the divider skips the row of air, so the boundary reads as two rules",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  for (let r = paneFrom; r < rows.length; r++) {\n    rows[r].runs.push({ col: dividerCol, text: PANE_DIVIDER, style: \"muted\" });",
+    "replace": "  for (let r = paneFrom; r < rows.length; r++) {\n    if (rows[r].runs.length === 0) continue;\n    rows[r].runs.push({ col: dividerCol, text: PANE_DIVIDER, style: \"muted\" });"
+  },
+  {
+    "id": "G1 grid: the Session goes back to 72 columns, where the text renders at 18.9px",
+    "file": "src/grid.ts",
+    "tests": [
+      "test/grid.test.ts"
+    ],
+    "find": "export const COLS = 84;",
+    "replace": "export const COLS = 72;"
+  },
+  {
+    "id": "G2 grid: the Session goes to 96, which the owner rejected for opening a dead margin",
+    "file": "src/grid.ts",
+    "tests": [
+      "test/grid.test.ts"
+    ],
+    "find": "export const COLS = 84;",
+    "replace": "export const COLS = 96;"
+  },
+  {
+    "id": "N1 scan: the sweep follows the text cell again, so it shrinks with the font and strands itself",
+    "file": "src/scan.ts",
+    "tests": [
+      "test/scan.test.ts"
+    ],
+    "find": "export const PITCH = 14;",
+    "replace": "export const PITCH = 12;"
+  },
+  {
+    "id": "N2 scan: the cell keeps its old size, so the gutter triples and the lattice goes airy",
+    "file": "src/scan.ts",
+    "tests": [
+      "test/scan.test.ts"
+    ],
+    "find": "export const CELL = 12;",
+    "replace": "export const CELL = 10;"
+  },
+  {
+    "id": "N3 scan: the beam's width is written down again instead of being the gutter it travels in",
+    "file": "src/scan.ts",
+    "tests": [
+      "test/scan.test.ts"
+    ],
+    "find": "export const BEAM_W = GAP;",
+    "replace": "export const BEAM_W = GAP + 2;"
+  },
+  {
+    "id": "N4 session: the sweep's band keeps four rows, which seven square cells no longer fit",
+    "file": "src/session.ts",
+    "tests": [
+      "test/scan.test.ts",
+      "test/session.test.ts"
+    ],
+    "find": "export const SCAN_ROWS = 5;",
+    "replace": "export const SCAN_ROWS = 4;"
   }
 ]

@@ -206,8 +206,9 @@ sees immediately.
 **Settled in Task 9, and measured.** Rows arrive 26ms apart and each takes 180ms to settle, so the last
 row lands at `26ms x (rows - 1) + 180ms`. That figure belongs to the content, not to the design: the
 57-row Session measured in Task 9 finished at 1.636s; the owner's real content was 58 rows at
-**1.66s**, then 68 at **1.92s**, and is **66 rows at 1.87s** after the 2026-10-02 deletions. Quote
-the formula, not any one of these.
+**1.66s**, then 68 at **1.92s**, was **66 rows at 1.87s** after the 2026-10-02 deletions, and is
+**67 rows at 1.896s** since the Scan Sweep's band took a fifth row on 2026-10-03. Quote the formula,
+not any one of these.
 
 **Re-measured in Task 12 against the real content, in both engines.** Frozen frames through real headless
 Chrome and Firefox at 846px and 308px: the last row's band is far from settled at 1.45s and 1.50s, ramps

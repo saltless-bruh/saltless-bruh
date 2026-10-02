@@ -17,7 +17,7 @@ github.com/saltless-bruh
 │            light themes -> assets/session-light.svg                               │
 │            <img> fallback = session-dark.svg,  alt = one-line description         │
 │                                                                                   │
-│  ┌─ the Session, 72 cols ───────────────────────────────────────────────────────┐ │
+│  ┌─ the Session, 84 cols ───────────────────────────────────────────────────────┐ │
 │  │ ┌─(HANDLE@host)-[~/login]                                                    │ │
 │  │ └─$ <the command whose output the Mascot is>                                 │ │
 │  │                                                                              │ │
@@ -33,11 +33,11 @@ github.com/saltless-bruh
 │  │ * <verb>...   spinner, loops forever                                         │ │
 │  │ ───────────────────────────────────────────────────────────────────────────  │ │
 │  │ Effort                                                                       │ │
-│  │             Faster                               Smarter   │                 │ │
-│  │             ───────────────────────────────────────▲────   │                 │ │
-│  │                low    medium    high    xhigh    lazy      │                 │ │
-│  │             Ultrachill: dynamic nap on every task          │ Ultrachill  on  │ │
-│  │                                                              Tab to toggle   │ │
+│  │        Faster                               Smarter        │ Ultrachill  on  │ │
+│  │        ───────────────────────────────────────▲────        │ Tab to toggle   │ │
+│  │           low    medium    high    xhigh    lazy           │                 │ │
+│  │                                                            │                 │ │
+│  │        Ultrachill: dynamic nap on every task               │                 │ │
 │  │   <-/-> to adjust - Enter to confirm - Esc to cancel                         │ │
 │  └──────────────────────────────────────────────────────────────────────────────┘ │
 │                                                                                   │
@@ -188,12 +188,29 @@ Measured from JetBrains Mono v2.304: unitsPerEm 1000, advance 600 (exactly 0.6em
 |---|---|
 | Font size | 20 units |
 | Cell | 12 x 24 units (advance 20 x 0.6 = 12 exactly) |
-| Columns | 72 (= 864 units) |
+| Columns | 84 (= 1008 units) |
 | Padding | 16 units each side |
-| Canvas width | 896 units |
+| Canvas width | 1040 units |
 | Canvas height | 32 + rows x 24 |
 
-At 846px the cell is ~11.3px; at 308px it is ~4.1px. A `viewBox` with no fixed pixel width lets the image scale to the column.
+At 846px the cell is ~9.8px; at 308px it is ~3.6px. A `viewBox` with no fixed pixel width lets the image scale to the column.
+
+**84 columns, and the number is a measurement.** The canvas scales into the README column, so the
+column count is what sets the rendered TEXT size. At 72 columns the 20-unit font rendered at
+**18.9px** in an 846px column, where a terminal is 13 to 15px; that is what read as everything being
+huge and cramped. At 84 it renders at **16.3px** and the existing line lengths still nearly fill the
+row. **96 was built and rendered beside 84 and rejected by the owner**: it gets the size right too,
+and it opens a visible dead margin on the right, because the copy was written for 72 and does not
+grow with the grid. 84 is the widest setting the existing copy still fills. Pinned by
+`test/grid.test.ts`, which computes both figures rather than quoting them.
+
+**The row pitch is locked to twice the column, so the line-height ratio is structurally 1.2x and
+EXTRA LEADING CANNOT BE BOUGHT AT ANY SCALE.** `src/mascot.ts:33` refuses to load unless an art pixel
+is square, which is `CELL_W / 2 === CELL_H / 4`; with `PX = CELL_W / 2` that leaves `CELL_H = 2 x
+CELL_W` and nothing else. `CELL_H / FONT_SIZE` is therefore 1.2 at every font size and every column
+count. Raising `CELL_H` alone breaks the sprite; raising both holds the ratio and only changes the
+absolute size. This is recorded because it was found by breaking it, and because adding leading is
+the first thing a reader of the two tables above will reach for.
 
 ### 3.3 Glyphs
 
@@ -214,6 +231,25 @@ inferred from that claim.
 Verified **absent**, and therefore forbidden: `⎿ ✻ ✢ ✽ ✔ ✘ ◼ ◻ ⏵ ⏸`. The substitutes above replace them.
 
 Text is rendered as `<text>`. The Mascot and the Scan Sweep are **geometry**, not glyphs: block art compiled to merged paths per colour, with `shape-rendering="crispEdges"`, which avoids seam hairlines at fractional scale and gives the Mascot per-part groups to animate.
+
+**The Scan Sweep's pitch is its own, and it did not shrink when the text did.** It was `CELL_W`, one
+week per text column, which made the band 53 of 72 columns. At 84 columns that stops working: the
+cells are geometry rather than glyphs, so at a 12-unit pitch on the wider canvas the band falls from
+79% of the row to 67% and reads as stranded, ending before the two-thirds point while every rule
+above it runs the full width. The pitch is therefore **14 units**, which is `12 x 84 / 72`, so **the
+band's rendered size is unchanged**: at 846px a 12-unit pitch on the old 896-unit canvas was 11.33px
+and 14 units on the 1040-unit canvas is 11.38px. That is the whole rule and it is the right one here,
+because 84 columns exists to make the TEXT smaller and the sweep was never too big. It fills 742 of
+the 948 units from its own column to the margin, **78.3% against 79.1% before**.
+
+**It cost one row, and the squareness is why.** GitHub's own calendar uses square cells, so the row
+pitch follows the column pitch rather than the text grid, and seven cells at 14 units are 98 units
+where a four-row band is 96. `SCAN_ROWS` is therefore **5**, with the 22 units of slack split above
+and below for the beam's overhang. **No pitch above 12 fits four rows at all**, and `src/scan.ts`
+throws rather than drawing the sweep into the row above it. The cell grows with the pitch (12 units)
+and the gutter stays 2, because the gutter is the beam's own width: the beam sits in it exactly, and
+a hit closing it is the band's loudest signal. `BEAM_W` is now read off `GAP` instead of being the
+same number written down twice.
 
 **The Banner was geometry too, and it is no longer drawn.** The Header was a block-art wordmark
 beside the Mascot, and looked at live the two competed: the same blocks, the same Accent, the same
@@ -240,8 +276,8 @@ drawing and the number cannot disagree; the rounding is done once, in eighths, w
 blocks as the whole part of it, because flooring to columns and rounding the remainder separately
 carries past the end of the glyph table at shares like 47%.
 
-The constant costs the name field: a language name has 25 columns before the row overruns, against
-61 before. That is stated here and pinned by a test so a build failing on a long language name is a
+The constant costs the name field: a language name has 37 columns before the row overruns, against
+73 before (25 and 61 when the Session was 72 columns wide; both move with `COLS`). That is stated here and pinned by a test so a build failing on a long language name is a
 known price rather than a surprise.
 
 **A language whose share rounds away keeps its row, printed `<1%`.** The owner's decision. An empty
@@ -253,7 +289,7 @@ claim that something is there.
 **The `/stack` tool rows are bracketed**, `[metasploit] [burp]`, one column between tags. Two words
 separated by spaces read as prose, so `peass-ng pspy` is one tool or two depending on the reader;
 brackets make each one a unit. They cost two columns a tool and buy back one from the separator,
-and every shipped row still lands on a single row, the widest at 64 of 72 columns. A row too wide
+and every shipped row still lands on a single row, the widest at 64 of 84 columns. A row too wide
 is refused and names itself rather than wrapping.
 
 **Weight.** Both Regular and Bold are vendored and subset, and each gets its own `@font-face`. A single face with `font-weight: 400 700` would make the browser synthesise fake bold, which smears a monospace grid. Emphasis otherwise comes from the Accent, not from weight.
@@ -301,6 +337,39 @@ Colour is **`muted`**, measured at **5.65:1 on the dark window and 4.77:1 on the
 was the alternative and is refused on a measurement rather than on taste: **2.79:1 and 2.92:1**, so a
 structural mark drawn in it would miss the 3:1 that 1.4.11 asks of exactly this kind of element, and
 it is not a text role at all by the 4.5:1 rule in 3.4.
+
+**The effort track declares its own width: 44 columns, a named constant.** The owner calls this E44.
+Until 2026-10-03 the track ended at `toggleCol - PANEL_GAP` while `toggleCol` was the right edge less
+the toggle's own width, so **the scale's width was a function of the toggle's wording**: renaming
+`Ultrachill` to anything longer silently shrank the scale, and the five levels each lost a column to a
+word that has nothing to do with them. That is backwards. The scale is the panel's content and the
+toggle is a secondary readout beside it, so the dependency now runs the other way: `trackCol` is the
+heading's length plus two, the track is 44 columns, the toggle's column follows from the track's end
+plus the existing gap with the divider in it, and **the toggle pane is whatever remains to the right
+edge**. 44 was compared against 40 rendered and chosen by the owner: at 40 the five levels sit on
+8-column slots and `medium` and `xhigh` leave one or two blank columns between neighbours, so the
+scale reads as a list of words again, which is the exact complaint the panel exists to answer. Two
+guards keep the inversion honest and both name their numbers rather than overflowing: the levels must
+fit the 44 columns, and the toggle and its hint must each fit the pane the track leaves. The visible
+price, accepted with the 84-column grid for the same reason, is that the toggle is left-aligned in its
+pane rather than flush right, so about **12 columns of the row sit blank to the right of it**.
+
+**The toggle sits on the TRACK's row, with its hint on the levels row. This is a deliberate departure
+from the reference, which puts its own toggle on the LABELS row.** The owner has looked at both
+rendered and prefers this one; it is recorded here so nobody corrects it back. Before, the toggle sat
+on the gloss row, the fourth of the pane's rows, with the hint on a fifth row below the panes
+entirely, so the right pane began three rows below the block it belongs beside and read as having sunk
+to the bottom. Level with the track it toggles, the two panes start on one floor and the eye pairs
+them.
+
+**One row of air separates the scale from the gloss, and the divider runs through it.** The two end
+labels, the track and the levels are ONE object, a scale read top to bottom; the gloss is a separate
+statement about a different control. Butted together they read as a four-row block whose fourth row is
+an orphan, and one row of air makes the scale a unit and the gloss a caption. The blank is INSIDE the
+pane, so the boundary continues through it: a divider that broke across a gap would read as two rules
+rather than as one boundary, and because the span is derived from where the pane's rows start and end
+it followed the new row without an edit. **The two changes together cost nothing**: lifting the hint
+onto the levels row freed exactly the row the blank consumes, so the panel is the same ten rows it was.
 
 ### 3.4 Palette
 
@@ -403,10 +472,18 @@ quoted that one length as though it were the rule, a 58-row one measured 1.66s, 
 **1.92s was the closest this has come to the ceiling, and two rows came back off the same day.** The
 Statusline became a panel (eight rows) and the Header became a shell prompt (two), so ten rows arrived
 in one morning and each one costs 26ms. Then the owner's review deleted the role row and the row that
-carried the mode badge and the not-affiliated note, and **66 rows measure 1.87s**. Worth stating
+carried the mode badge and the not-affiliated note, and **66 rows measured 1.87s**. Worth stating
 plainly, because the arithmetic is easy to misread: the badge and the note were **one row, not two**,
 since the badge sat at the left margin and the note was flush right on the same line. Three deletions
 of copy removed two rows.
+
+**One row went back on with the 84-column grid, and it is the sweep's, not the copy's.** The Scan
+Sweep's pitch grew with the Session (3.3) and seven square cells at 14 units no longer fit a four-row
+band, so `SCAN_ROWS` is 5 and the owner's content is **67 rows, measuring 1.896s**. Nothing else moved:
+the Session does not wrap, so a wider grid changes no row count, and the Statusline's two changes of
+the same day, the lifted toggle and the row of air above the gloss, cancel each other exactly. **1.896s
+is four milliseconds under the 1.9s the instruction below names**, which is close enough to say out
+loud: the next row added fires it.
 
 > **THE NEXT ROWS ADDED TO THE SESSION MUST COME WITH A REDUCTION IN THE 26ms STAGGER.** That is the
 > lever, and it is the only one: the stagger is a design constant rather than a measurement, so it can
@@ -505,12 +582,12 @@ is the same for every value it decorates belongs to the generator (the spinner's
 | `stackRows[]` | Each has a `label` and `items[]`. Each item is printed in brackets, which are Session Grammar and belong to the generator; a row with an empty `label` is a continuation of the one above it and its items stay in the same column |
 | `verbs` | Spinner words, grouped by Mascot state. Every state in `MASCOT_TIMELINE` needs at least one: `sleep`, `yawn`, `stretch`, `settle`, `peek`, and the alarm's `alert`, `swat-up`, `swat-down`, `glare`, `butt-up`, `butt-down`, `recover`. A state with several words rotates through them while that state is on screen. Giving the two halves of a blow the same word is deliberate: the spinner then holds one phrase across the whole gesture instead of flickering between two |
 | `activityLine` | The words of the `/activity` result line, as labelled fragments: `label` (`scan complete:`), `daysUp` (`days up`) and `contributions`. The generator supplies the order, the numbers and the `·` |
-| `statusline` | The effort panel's copy. `effortWord` is the heading, and the panel's track is indented by its length, so a longer word still pushes the scale along. `effortEnds` is `start` and `end`, the two words above the ends of the track (`Faster` / `Smarter`). `effortLabels` are the levels, left to right, and the LAST of them is the scale's top tier, which is drawn as a rainbow. `effortSelected` names one of them. `toggle` is the shimmering word and the state it reads (`Ultrachill` / `on`), `toggleNote` is the one-line gloss under the scale, and `toggleHint` the line under the toggle. `help` is the key hints as labelled fragments, which the generator joins with its own `·`, and it is the **last row of the Session**. **There is no `modeBadge` and no `note`**: they shared one row under `help`, and both are gone (ADR 0002's second amendment). The badge went because the grammar this borrows replaces the statusline when the effort picker opens, so the two are never on screen together; the note went because it was the only occurrence of the word "Anthropic" in the whole published profile |
+| `statusline` | The effort panel's copy. `effortWord` is the heading, and the panel's track is indented by its length plus two, so a longer word still pushes the whole block along; what it no longer changes is the track's WIDTH, which is a fixed 44 columns (3.3). `effortEnds` is `start` and `end`, the two words above the ends of the track (`Faster` / `Smarter`). `effortLabels` are the levels, left to right, and the LAST of them is the scale's top tier, which is drawn as a rainbow. `effortSelected` names one of them. `toggle` is the shimmering word and the state it reads (`Ultrachill` / `on`), drawn level with the TRACK, and `toggleHint` the line under it, level with the levels; `toggleNote` is the one-line gloss under the scale, with a row of air above it. Neither the toggle nor the hint sizes anything any more: both have to fit the pane the fixed track leaves, and a build fails naming the numbers if one does not. `help` is the key hints as labelled fragments, which the generator joins with its own `·`, and it is the **last row of the Session**. **There is no `modeBadge` and no `note`**: they shared one row under `help`, and both are gone (ADR 0002's second amendment). The badge went because the grammar this borrows replaces the statusline when the effort picker opens, so the two are never on screen together; the note went because it was the only occurrence of the word "Anthropic" in the whole published profile |
 | `readme` | The two visible strings the README carries outside the Session: `imageAlt`, the picture's accessible name, and `transcriptSummary`, the word on the `<details>` toggle. `imageAlt` says what the picture **is**, not what it contains: the contents are the transcript directly below it, and a reader who hears the Session out of the alt text and then again out of the transcript hears it twice |
 
 Validation rules, all enforced at build time:
 
-1. Every rendered row fits in 72 columns.
+1. Every rendered row fits in 84 columns.
 2. Every codepoint used exists in the font subset.
 3. No string matches the forbidden-names list. For a composed Session this is checked against the
    **complete projection** of its rows (`rowsToFullText`), never the transcript: a run the picture
@@ -642,7 +719,7 @@ The work is done when all of these pass:
 4. Each SVG is <= 250 KB.
 5. The transcript block reproduces the Session as text.
 6. A scan of every committed file finds zero occurrences of the forbidden names.
-7. No row exceeds 72 columns, and every codepoint is in the font subset.
+7. No row exceeds 84 columns, and every codepoint is in the font subset.
 8. Both variants are valid, parseable XML.
 
 Checked by the owner after publishing, because they cannot be tested here: Safari, iOS, and the GitHub mobile app.

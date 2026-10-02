@@ -27,7 +27,7 @@ const oneRow = [{ runs: [{ col: 0, text: "x" }] }];
 test("the document is well-formed, self-contained and themed", async () => {
   const svg = await mk([{ runs: [{ col: 0, text: "HELLO WORLD", style: "accent" }] }]);
   assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
-  assert.match(svg, /viewBox="0 0 896 /);
+  assert.match(svg, new RegExp(`viewBox="0 0 ${CANVAS_W} `));
   assert.match(svg, /#272e33/);                       // dark bg token
   assert.ok(!svg.includes("<script"), "must contain no script");
   assert.ok(!svg.includes("<animate"), "must use CSS keyframes, never SMIL");
@@ -39,14 +39,14 @@ test("nothing script-like or SMIL is emitted, even with caller css and defs", as
   assert.ok(!/\son[a-z]+=/i.test(svg), "no inline event handlers");
 });
 
-test("the canvas is 896 wide and as tall as its rows, in viewBox, width and height alike", async () => {
+test("the canvas is CANVAS_W wide and as tall as its rows, in viewBox, width and height alike", async () => {
   for (const n of [1, 5]) {
     const rows = Array.from({ length: n }, () => ({ runs: [{ col: 0, text: "x" }] }));
     const root = attrsOf((await mk(rows)).match(/^<svg\b[^>]*>/)![0]);
     const h = 16 + n * 24 + 16;
     assert.equal(h, canvasH(n));
     assert.equal(root.viewBox, `0 0 ${CANVAS_W} ${h}`);
-    assert.equal(root.width, "896");
+    assert.equal(root.width, String(CANVAS_W));
     assert.equal(root.height, String(h));
   }
 });

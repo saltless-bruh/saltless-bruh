@@ -14,6 +14,7 @@ import { BANNER_ROWS, bannerLetters, bannerWidthCols } from "../src/banner.ts";
 import { assertCovered } from "../src/font.ts";
 import { MASCOT_TIMELINE } from "../src/timeline.ts";
 import { WINDOW_DAYS } from "../src/activity.ts";
+import { PITCH } from "../src/scan.ts";
 
 const activity: Activity = {
   totalContributions: 950, activeDays: 99,
@@ -46,7 +47,10 @@ function altered(): Content {
   c.stackRows = [{ label: "tools", items: ["aa", "bb"] }, { label: "", items: ["cc"] }];
   c.activityLine = { label: "recon done,", daysUp: "live days", contributions: "commits" };
   c.statusline = {
-    effortWord: "Budget", effortEnds: { start: "Cheaper", end: "Better" },
+    // A DIFFERENT LENGTH as well as a different word: the panel's geometry is measured from this
+    // word, so a six-letter stand-in for a six-letter heading left both fixtures on identical columns
+    // and a divider written down as today's number would have passed on both.
+    effortWord: "Reasoning", effortEnds: { start: "Cheaper", end: "Better" },
     effortLabels: ["one", "two", "three"], effortSelected: "two",
     toggle: { word: "Hypermellow", state: "idle" },
     toggleNote: "Hypermellow: a different gloss", toggleHint: "Space to flip",
@@ -627,7 +631,7 @@ test("the brackets cost two columns a tool, and a row that no longer fits is rep
   c.stackRows[0].label = "x".repeat(room);
   assert.doesNotThrow(() => composeSession(c, activity));
   c.stackRows[0].label = "x".repeat(room + 1);
-  assert.throws(() => composeSession(c, activity), /needs 73 columns/);
+  assert.throws(() => composeSession(c, activity), new RegExp(`needs ${COLS + 1} columns`));
 });
 
 // ---- the /ops tree ----
@@ -696,7 +700,7 @@ test("a description exactly as wide as its row allows fits and one character mor
   c.lanes[0].repos[0].blurb = "d".repeat(room);
   assert.doesNotThrow(() => composeSession(c, activity));
   c.lanes[0].repos[0].blurb = "d".repeat(room + 1);
-  assert.throws(() => composeSession(c, activity), /needs 73 columns/);
+  assert.throws(() => composeSession(c, activity), new RegExp(`needs ${COLS + 1} columns`));
 });
 
 test("a blurb too long even for its own row is reported, not silently overflowed", () => {
@@ -715,7 +719,7 @@ test("a repo name has the same limit, measured from its own column", () => {
   c.lanes[0].repos[0].name = "n".repeat(COLS - 7);
   assert.doesNotThrow(() => composeSession(c, activity));
   c.lanes[0].repos[0].name = "n".repeat(COLS - 7 + 1);
-  assert.throws(() => composeSession(c, activity), /needs 73 columns/);
+  assert.throws(() => composeSession(c, activity), new RegExp(`needs ${COLS + 1} columns`));
 });
 
 // ---- languages ----
@@ -940,11 +944,11 @@ test("a language name too long for its name, bar and figure is refused, not draw
   // The bar's width is a constant, so it costs the name field some of what it had. This states the
   // limit that buys rather than leaving it to be found by a build failing on somebody's Perl.
   const room = COLS - 5 - 2 - BAR_COLS - 2 - 4;
-  assert.equal(room, 25, "the longest language name /stack can print beside a bar");
+  assert.equal(room, 37, "the longest language name /stack can print beside a bar");
   const fits = { ...activity, languages: [{ name: "L".repeat(room), bytes: 10 }] };
   assert.doesNotThrow(() => composeSession(loadContent(), fits));
   const over = { ...activity, languages: [{ name: "L".repeat(room + 1), bytes: 10 }] };
-  assert.throws(() => composeSession(loadContent(), over), /needs 73 columns/);
+  assert.throws(() => composeSession(loadContent(), over), new RegExp(`needs ${COLS + 1} columns`));
 });
 
 test("with no languages to show, /stack holds only the tool rows", () => {
@@ -1039,15 +1043,16 @@ test("the Scan Sweep reserves the rows square cells on a 53 by 7 calendar actual
   const WEEK_COLS = 53;   // a contribution year, one grid column per week
   const DAY_ROWS = 7;     // one grid row per weekday
   assert.ok(WEEK_COLS <= COLS, `${WEEK_COLS} week columns must fit the Session's ${COLS}`);
-  // Square cells, which is what GitHub's own calendar uses: each is CELL_W wide and CELL_W
-  // tall, so the grid is DAY_ROWS * CELL_W units of ink. Cells of CELL_W x CELL_H would read
-  // as a bar chart rather than a contribution grid, so the height follows the width.
-  const ink = DAY_ROWS * CELL_W;
-  assert.equal(ink, 84);
-  assert.equal(ink / CELL_H, 3.5, "7 square cells is three and a half text rows, not eight");
+  // Square cells, which is what GitHub's own calendar uses: each is PITCH wide and PITCH tall, so the
+  // grid is DAY_ROWS * PITCH units of ink. Cells of PITCH x CELL_H would read as a bar chart rather
+  // than a contribution grid, so the height follows the width. The pitch is the SWEEP'S and no longer
+  // the text cell's, because the cells are geometry and did not have to shrink when the font did.
+  const ink = DAY_ROWS * PITCH;
+  assert.equal(ink, 98);
+  assert.ok(ink / CELL_H > 4, "7 square cells at this pitch would still fit the old four-row band");
   assert.ok(SCAN_ROWS * CELL_H >= ink, "the reserved rows must hold the whole grid");
   assert.ok((SCAN_ROWS - 1) * CELL_H < ink, "a reserved row that the grid does not reach is waste");
-  assert.equal(SCAN_ROWS, 4, "3.5 rows of ink, the remaining half row as breathing room");
+  assert.equal(SCAN_ROWS, 5, "just over four rows of ink, so five rows, and the slack holds the beam's overhang");
 });
 
 test("the Session is exactly the rows its parts need", () => {
@@ -1069,8 +1074,12 @@ test("the Session is exactly the rows its parts need", () => {
   // artwork needs under it puts one back; the Statusline becoming a panel adds eight more; the
   // Header becoming a shell prompt adds two, two prompt rows and a blank for one cwd row. Two came
   // back off on 2026-10-02: the role row, which said what `/whoami` says, and the row that carried
-  // the mode badge and the not-affiliated note, which were one row and are now none.
-  assert.equal(rows.length, 62);
+  // the mode badge and the not-affiliated note, which were one row and are now none. ONE WENT BACK
+  // ON when the Session widened to 84 columns: the sweep's pitch grew with it and seven square cells
+  // at 14 units no longer fit a four-row band, so SCAN_ROWS is 5. The panel's own two changes, the
+  // lifted toggle and the row of air above the gloss, cost NOTHING between them: lifting the hint
+  // onto the levels row freed exactly the row the blank consumes.
+  assert.equal(rows.length, 63);
 });
 
 test("the Scan Sweep gets its own rows right under /activity, and the result line follows them", () => {
@@ -1126,10 +1135,18 @@ test("a rule closes the spinner section and the statusline panel follows it", ()
 // one row under the key hints and both are gone, so `help` is the last row of the Session and the
 // panel ends where it ends.
 
-/** Where each of the panel's rows sits, counted back from the last row of the Session. */
+/**
+ * Where each of the panel's rows sits, counted back from the last row of the Session.
+ *
+ * THE RIGHT PANE MOVED UP TWO ROWS on 2026-10-03 and the left pane gained a row of air, and between
+ * them those two changes cost nothing: the toggle is now on the TRACK row and its hint on the LEVELS
+ * row, which freed exactly the row the blank above the gloss consumes. `toggle` and `hint` are gone as
+ * names because they are no longer rows of their own; what is left is the scale's four rows, the air,
+ * and the gloss.
+ */
 const PANEL = {
   border: -10, padding: -9, heading: -8, ends: -7, track: -6,
-  levels: -5, toggle: -4, hint: -3, gap: -2, help: -1,
+  levels: -5, air: -4, gloss: -3, gap: -2, help: -1,
 } as const;
 /** How many rows the panel occupies, derived from the row furthest back. */
 const PANEL_ROWS = -Math.min(...Object.values(PANEL));
@@ -1158,8 +1175,19 @@ function tokensOf(line: string): { text: string; col: number }[] {
  * The divider is structure rather than a word, so a test asking what the scale says on a row has to
  * step over it; a test asking where the divider is asks for it by name.
  */
-const scaleTokens = (line: string): { text: string; col: number }[] =>
-  tokensOf(line).filter((t) => t.text !== PANE_GLYPH);
+const scaleTokens = (line: string): { text: string; col: number }[] => {
+  const divider = [...line].indexOf(PANE_GLYPH);
+  return tokensOf(line).filter((t) => t.text !== PANE_GLYPH && (divider < 0 || t.col < divider));
+};
+
+/** The other half of the same idea: what the RIGHT pane prints on one of the rows the two share. */
+const toggleTokens = (line: string): { text: string; col: number }[] => {
+  const divider = [...line].indexOf(PANE_GLYPH);
+  return divider < 0 ? [] : tokensOf(line).filter((t) => t.col > divider);
+};
+
+/** Where the right pane starts: the column both of its lines are left-aligned on. */
+const paneCol = (rows: Row[]): number => toggleTokens(lineAt(rows, PANEL.track))[0].col;
 
 /** The span of columns the track covers, and where its marker sits. */
 function trackOf(rows: Row[]): { from: number; to: number; marker: number } {
@@ -1189,12 +1217,19 @@ for (const [label, make] of CONTENTS) {
     assert.equal(ends[0].col, from, "the first end sits at the track's left end");
     assert.equal(ends[1].col + [...s.effortEnds.end].length, to, "the second ends with the track");
     assert.ok(marker >= from && marker < to, "the marker is on the track");
-    assert.equal(lineAt(rows, PANEL.track).replace(/[─▲]/g, "").trim(), PANE_GLYPH, "the track is the rule, its marker and the divider, nothing else");
+    // The left pane's track row is the rule and its marker and nothing else; the divider and the
+    // toggle beyond it belong to the boundary and the right pane.
+    assert.equal(lineAt(rows, PANEL.track).split(PANE_GLYPH)[0].replace(/[─▲]/g, "").trim(), "", "the track is the rule and its marker, nothing else");
 
     assert.deepEqual(scaleTokens(lineAt(rows, PANEL.levels)).map((t) => t.text), s.effortLabels, "every level in order");
-    assert.ok(lineAt(rows, PANEL.toggle).startsWith(" ".repeat(from) + s.toggleNote), "the gloss starts where the track does");
-    assert.ok(lineAt(rows, PANEL.toggle).endsWith(`${s.toggle.word}  ${s.toggle.state}`), "the toggle closes the row");
-    assert.equal(lineAt(rows, PANEL.hint).trim(), s.toggleHint);
+    // THE RIGHT PANE SITS ON THE SCALE'S OWN TOP ROWS: the toggle level with the track it toggles and
+    // the hint under it, level with the levels. It used to sit on the gloss row, three rows below the
+    // start of the block it belongs beside, which is what read as having sunk to the bottom.
+    assert.ok(lineAt(rows, PANEL.track).endsWith(`${s.toggle.word}  ${s.toggle.state}`), "the toggle is not on the track's row");
+    assert.equal(toggleTokens(lineAt(rows, PANEL.levels)).map((t) => t.text).join(" "), s.toggleHint, "the hint is not under the toggle");
+    assert.deepEqual(scaleTokens(lineAt(rows, PANEL.air)), [], "the row of air between the scale and the gloss carries copy");
+    assert.deepEqual(toggleTokens(lineAt(rows, PANEL.air)), [], "the row of air between the scale and the gloss carries copy");
+    assert.ok(lineAt(rows, PANEL.gloss).startsWith(" ".repeat(from) + s.toggleNote), "the gloss starts where the track does");
     assert.equal(lineAt(rows, PANEL.help), `  ${s.help.join(" · ")}`, "the hints, joined by the generator's own mark");
   });
 }
@@ -1325,21 +1360,25 @@ test("the top tier is drawn as a rainbow, one run per character, whichever level
 // read as having drifted right rather than as a pane of its own. One `│` divides them, and it is the
 // only internal structure the panel has now that the mode badge and the note are gone.
 
-/** The rows the divider is drawn down, named so a shifted panel moves the expectation with it. */
-const PANE_ROWS = [PANEL.ends, PANEL.track, PANEL.levels, PANEL.toggle] as const;
+/**
+ * The rows the divider is drawn down, named so a shifted panel moves the expectation with it.
+ *
+ * FIVE ROWS NOW, and the row of air between the scale and the gloss is one of them: the blank is
+ * INSIDE the pane, so the boundary runs through it. A divider that broke across the gap would read as
+ * two rules rather than as one boundary.
+ */
+const PANE_ROWS = [PANEL.ends, PANEL.track, PANEL.levels, PANEL.air, PANEL.gloss] as const;
 
 for (const [label, make] of CONTENTS) {
-  test(`one vertical divides the effort scale from the toggle, derived from the toggle's column (${label})`, () => {
+  test(`one vertical divides the effort scale from the toggle, derived from the track's end (${label})`, () => {
     const c = make();
     const rows = panelOf(c);
-    const toggleLine = lineAt(rows, PANEL.toggle);
-    // The toggle block is flush with the right edge, so its column is the width of the wider of the
-    // toggle and the hint under it. Read off the picture rather than written down, so the expectation
-    // follows a re-worded toggle instead of pinning today's 58.
-    const toggleCol = COLS - Math.max(
-      [...`${c.statusline.toggle.word}  ${c.statusline.toggle.state}`].length,
-      [...c.statusline.toggleHint].length,
-    );
+    const toggleLine = lineAt(rows, PANEL.track);
+    // THE TOGGLE'S COLUMN FOLLOWS THE TRACK NOW, not the right edge. The track declares its own width
+    // and the gap after it places the toggle, so the block is read off the picture here, exactly as it
+    // was before, and the expectation follows the track instead of pinning today's 58.
+    const toggleCol = paneCol(rows);
+    assert.equal(toggleCol, trackOf(rows).to + 6, "the toggle does not sit one panel gap past the track");
     // Immediately left of that block with one clear column between: the divider belongs to the
     // boundary, not to either pane.
     const want = toggleCol - 2;
@@ -1354,9 +1393,11 @@ for (const [label, make] of CONTENTS) {
       assert.equal(line.filter((ch) => ch === "│").length, 1, `row ${at} draws more than one divider`);
     }
     assert.ok(toggleLine.indexOf("│") < toggleCol, "the divider is inside the toggle block");
+    // And the pane right of it is the remainder of the row, which is what the two guards measure.
+    assert.ok([...c.statusline.toggleHint].length <= COLS - toggleCol, "the hint does not fit the pane left over");
   });
 
-  test(`the divider stops at the panes and is not drawn on the heading, the hint or the help line (${label})`, () => {
+  test(`the divider stops at the panes and is not drawn on the heading, the padding or the help line (${label})`, () => {
     const rows = panelOf(make());
     const spanned = new Set<number>(PANE_ROWS.map((at) => rows.length + at));
     // Every other row of the whole Session: the heading above the panes sits outside both of them,
@@ -1372,21 +1413,89 @@ for (const [label, make] of CONTENTS) {
   });
 }
 
-test("the divider moves with the toggle rather than staying at a column somebody wrote down", () => {
-  const colOf = (c: Content): number => [...lineAt(panelOf(c), PANEL.track)].indexOf("│");
+// ---- E44: THE SCALE'S WIDTH IS THE SCALE'S, NOT THE TOGGLE'S WORDING -------------------------
+//
+// The track used to end at `toggleCol - PANEL_GAP` while `toggleCol` was the right edge less the
+// toggle's own width, so renaming `Ultrachill` to anything longer silently shrank the scale and the
+// five levels each lost a column to a word that has nothing to do with them. The dependency now runs
+// the other way: the track declares 44 columns and everything right of it follows.
+
+test("the track is a fixed width, and re-wording the toggle does not move it", () => {
+  const widthOf = (c: Content): number => { const { from, to } = trackOf(panelOf(c)); return to - from; };
   const c = loadContent();
-  const before = colOf(c);
-  // A longer toggle takes its column left, and the divider must go with it by exactly as much.
-  const grew = 6;
-  c.statusline.toggle = { word: c.statusline.toggle.word + "x".repeat(grew), state: c.statusline.toggle.state };
-  c.statusline.toggleNote = "a short gloss";   // the gloss shares the toggle's row and would collide
-  assert.equal(colOf(c) - before, -grew, "the divider did not follow the toggle");
-  // And when the HINT is the wider of the two, the divider follows that instead: the toggle block's
-  // column is the wider of the pair, which is the rule the divider is derived through.
-  const d = loadContent();
-  d.statusline.toggleHint = "T".repeat([...`${d.statusline.toggle.word}  ${d.statusline.toggle.state}`].length + grew);
-  d.statusline.toggleNote = "a short gloss";
-  assert.equal(colOf(d) - before, -grew, "the divider did not follow the hint when the hint is wider");
+  assert.equal(widthOf(c), 44, "the track is not the 44 columns the owner chose against 40");
+  // And where it starts: two columns past the heading word, which is its own measurement and not the
+  // six-column gutter between the panel's columns that it used to borrow.
+  assert.equal(trackOf(panelOf(c)).from, [...c.statusline.effortWord].length + 2, "the track's indent past the heading is not two columns");
+  // Every way the toggle's pane can get wider or narrower, and none of them may touch the track.
+  const wider = loadContent();
+  wider.statusline.toggle = { word: "Ultrachill".padEnd(16, "x"), state: "on" };
+  assert.equal(widthOf(wider), 44, "a longer toggle word shrank the scale");
+  const hint = loadContent();
+  hint.statusline.toggleHint = "Press Tab to toggle this";
+  assert.equal(widthOf(hint), 44, "a longer hint shrank the scale");
+  const shorter = loadContent();
+  shorter.statusline.toggle = { word: "Nap", state: "y" };
+  shorter.statusline.toggleHint = "Tab";
+  assert.equal(widthOf(shorter), 44, "a shorter toggle stretched the scale");
+  // And the divider and the toggle stay put with it, because both are derived from the track's end.
+  for (const other of [wider, hint, shorter]) {
+    assert.equal([...lineAt(panelOf(other), PANEL.track)].indexOf("│"), [...lineAt(panelOf(c), PANEL.track)].indexOf("│"), "the divider moved with the toggle's wording");
+    assert.equal(paneCol(panelOf(other)), paneCol(panelOf(c)), "the toggle pane moved with its own wording");
+  }
+});
+
+test("the heading still pushes the whole block along, and the track keeps its width while it does", () => {
+  const c = loadContent();
+  const at = (word: string): { from: number; to: number; divider: number; pane: number } => {
+    c.statusline.effortWord = word;
+    const rows = panelOf(c);
+    const { from, to } = trackOf(rows);
+    return { from, to, divider: [...lineAt(rows, PANEL.track)].indexOf("│"), pane: paneCol(rows) };
+  };
+  const short = at("E");
+  const long = at("Effort");
+  const grew = [..."Effort"].length - [..."E"].length;
+  assert.equal(long.from - short.from, grew, "a longer heading did not push the track by its own length");
+  assert.equal(long.to - long.from, short.to - short.from, "the track changed width when the heading did");
+  assert.equal(long.divider - short.divider, grew, "the divider did not travel with the track");
+  assert.equal(long.pane - short.pane, grew, "the toggle pane did not travel with the track");
+});
+
+test("a toggle or a hint too wide for the pane the track leaves is refused, with the numbers named", () => {
+  // The guard the inversion needs: the pane is a REMAINDER now, so copy that no longer fits it has to
+  // say so rather than running off the right edge. Both lines are checked, because either can be wider.
+  const over = loadContent();
+  over.statusline.toggle = { word: "U".repeat(30), state: "on" };
+  assert.throws(() => composeSession(over, activity), (e: Error) => {
+    assert.match(e.message, /needs 34 columns and the pane right of the 44-column track has 26/);
+    return true;
+  });
+  const hint = loadContent();
+  hint.statusline.toggleHint = "H".repeat(30);
+  assert.throws(() => composeSession(hint, activity), (e: Error) => {
+    assert.match(e.message, /hint .* needs 30 columns and the pane right of the 44-column track has 26/);
+    return true;
+  });
+  // And exactly what fits is accepted, so the guard is a limit rather than a margin somebody padded.
+  const exact = loadContent();
+  const room = 26;
+  exact.statusline.toggle = { word: "U".repeat(room - 2 - 2), state: "on" };
+  assert.doesNotThrow(() => composeSession(exact, activity));
+  exact.statusline.toggle = { word: "U".repeat(room - 2 - 1), state: "on" };
+  assert.throws(() => composeSession(exact, activity), /needs 27 columns/);
+});
+
+test("levels that no longer fit the fixed track are refused with their own numbers, not drawn over each other", () => {
+  const c = loadContent();
+  // Five levels needing more than the 44 columns the track declares. The message has to say that the
+  // LEVELS are too wide for the track, because the track is the thing that is no longer negotiable.
+  c.statusline.effortLabels = ["low", "medium", "high", "xhigh", "lazy"].map((l) => l + "x".repeat(6));
+  c.statusline.effortSelected = c.statusline.effortLabels[0];
+  assert.throws(() => composeSession(c, activity), (e: Error) => {
+    assert.match(e.message, /do not fit the track: they need 56 columns with one blank between each pair, and the track is 44/);
+    return true;
+  });
 });
 
 test("the divider is the same light vertical the /ops tree draws, not a heavier one", () => {
@@ -1406,7 +1515,7 @@ test("the divider is the same light vertical the /ops tree draws, not a heavier 
 
 test("a gloss that would run into the divider is rejected rather than drawn through it", () => {
   const c = loadContent();
-  const divider = [...lineAt(panelOf(c), PANEL.toggle)].indexOf("│");
+  const divider = [...lineAt(panelOf(c), PANEL.gloss)].indexOf("│");
   const trackFrom = trackOf(panelOf(c)).from;
   // The gloss is allowed to run past the track into the gap, and the DIVIDER is now what it stops
   // short of rather than the toggle, which is two columns further right. One blank column before it
@@ -1478,7 +1587,7 @@ test("the toggle's word and its state are the owner's copy, read from content.js
   const c = loadContent();
   c.statusline.toggle = { word: "Overcaffeinated", state: "warm" };
   c.statusline.toggleNote = "a gloss with no old word in it";
-  const text = lineAt(composeSession(c, activity).rows, PANEL.toggle);
+  const text = lineAt(composeSession(c, activity).rows, PANEL.track);
   assert.ok(text.endsWith("Overcaffeinated  warm"), text);
   assert.ok(!text.includes("Ultrachill"), "the old word is still written into the generator");
 });
@@ -1488,7 +1597,7 @@ test("the resting word is a gradient: one run per character, each with its own r
     const c = loadContent();
     c.statusline.toggle = { word, state: "on" };
     c.statusline.toggleNote = "g";   // a long toggle leaves the gloss little room, and it shares its row
-    const row = rowAt(composeSession(c, activity).rows, PANEL.toggle);
+    const row = rowAt(composeSession(c, activity).rows, PANEL.track);
     const chars = [...word];
     const base = row.runs.filter((r) => r.cls?.startsWith("gradient-"));
     assert.equal(base.length, chars.length, `${word}: one gradient run per character`);
@@ -1501,14 +1610,18 @@ test("the resting word is a gradient: one run per character, each with its own r
     // Nothing hides it: the gradient is the STILL FRAME, so it carries no animation hook at all.
     assert.ok(base.every((r) => !isShimmer(r.cls)), "the gradient copy is animated");
     const text = rowsToText([row]);
-    // The right column is flush with the Session's right edge, so the wider of the toggle and the
-    // hint beneath it ends on the last column. For a word shorter than its own hint that is the
-    // hint, which is why this measures the block rather than assuming it is the toggle.
+    // THE RIGHT COLUMN IS NO LONGER FLUSH RIGHT. Its column follows the track's end (the owner's E44),
+    // so the pane is the remainder of the row and the toggle is left-aligned in it, with the hint
+    // under it on the same column. What is checked is that the two share a column and that both sit
+    // inside the remainder, not that either one reaches the margin.
     assert.ok(text.endsWith(`${word}  on`), text);
-    const hint = lineAt(composeSession(c, activity).rows, PANEL.hint);
-    assert.equal(Math.max([...text].length, [...hint].length), COLS, `${word}: the right column is not flush right`);
-    assert.equal([...text].length - [...`${word}  on`].length, [...hint].length - [...c.statusline.toggleHint].length,
+    const rows = composeSession(c, activity).rows;
+    const hint = lineAt(rows, PANEL.levels);
+    const col = paneCol(rows);
+    assert.equal(base[0].col, col, `${word}: the toggle does not start at the pane's column`);
+    assert.equal([...hint].length - [...c.statusline.toggleHint].length, col,
       `${word}: the toggle and its hint do not start in the same column`);
+    assert.ok([...text].length <= COLS && [...hint].length <= COLS, `${word}: the pane runs off the grid`);
   }
 });
 
@@ -1516,7 +1629,7 @@ for (const [label, make] of CONTENTS) {
   test(`the sheen is a second copy over the gradient, one run per character (${label})`, () => {
     const c = make();
     const word = c.statusline.toggle.word;
-    const row = rowAt(composeSession(c, activity).rows, PANEL.toggle);
+    const row = rowAt(composeSession(c, activity).rows, PANEL.track);
     const chars = [...word];
     const base = row.runs.filter((r) => r.cls?.startsWith("gradient-"));
     const copy = row.runs.filter((r) => isShimmer(r.cls));
@@ -1531,17 +1644,19 @@ for (const [label, make] of CONTENTS) {
 }
 
 for (const [label, make] of CONTENTS) {
-  test(`the word reads once in the transcript, followed by its state, flush with the right edge (${label})`, () => {
+  test(`the word reads once in the transcript, followed by its state, in the pane the track leaves (${label})`, () => {
     const c = make();
     const { word, state } = c.statusline.toggle;
-    const line = lineAt(composeSession(c, activity).rows, PANEL.toggle);
+    const rows = composeSession(c, activity).rows;
+    const line = lineAt(rows, PANEL.track);
     // Drawn twice over, once as the gradient and once as the sheen, and it must read once. The
-    // gloss beside it is the owner's own copy and names the toggle on purpose, so the count is
-    // taken on the toggle's own columns rather than over the whole row.
-    const toggled = line.slice(COLS - [...`${word}  ${c.statusline.toggle.state}`].length);
+    // gloss is on its own row now, but the TRACK is on this one, so the count is still taken on the
+    // toggle's own columns rather than over the whole row.
+    const toggled = line.slice(paneCol(rows));
     assert.equal(toggled.split(word).length - 1, 1, "the word is drawn many times but must read once");
     assert.ok(line.endsWith(`${word}  ${state}`), line);
-    assert.equal([...line].length, COLS);
+    assert.equal(toggled, `${word}  ${state}`, "the toggle's pane prints something other than the word and its state");
+    assert.ok([...line].length <= COLS);
   });
 }
 
@@ -1553,12 +1668,45 @@ test("the highlight copy lives in the same row as the word, in no other row", ()
   assert.ok(withShimmer[0].runs.some((run) => run.cls?.startsWith("gradient-")));
 });
 
-test("the toggle is off the scale's own row, which is what sharing one made cramped", () => {
+// ---- the lifted toggle, and the row of air under the scale --------------------------------------
+
+test("the toggle is level with the track it toggles, two rows above where it used to sit", () => {
   const c = loadContent();
   const rows = panelOf(c);
-  assert.ok(!lineAt(rows, PANEL.levels).includes(c.statusline.toggle.word), "the toggle is back on the scale's row");
-  assert.ok(lineAt(rows, PANEL.toggle).includes(c.statusline.toggle.word));
-  assert.ok(lineAt(rows, PANEL.hint).includes(c.statusline.toggleHint));
+  const { word } = c.statusline.toggle;
+  // THE LIFT. It sat on the gloss row, the fourth of the pane's rows, with its hint on a fifth row
+  // below the panes entirely, so the right pane began three rows below the block it belongs beside and
+  // read as having sunk to the bottom. Level with the track, the two panes start on one floor.
+  assert.ok(lineAt(rows, PANEL.track).includes(word), "the toggle is not on the track's row");
+  assert.ok(lineAt(rows, PANEL.levels).includes(c.statusline.toggleHint), "the hint is not on the levels row");
+  assert.deepEqual(toggleTokens(lineAt(rows, PANEL.gloss)), [], "the toggle is back on the gloss row");
+  assert.ok(!lineAt(rows, PANEL.air).includes(word), "the toggle is on the row of air");
+  // THIS IS A DEPARTURE FROM THE REFERENCE, which puts its own toggle on the LABELS row, one lower.
+  // The owner compared both rendered and prefers this; docs/spec.md records it so it is not corrected
+  // back. The levels row carries the hint and nothing of the toggle itself.
+  assert.ok(!toggleTokens(lineAt(rows, PANEL.levels)).some((t) => word.includes(t.text)),
+    "the toggle slipped down onto the labels row, which is the reference's placement and not this one's");
+});
+
+test("one row of air separates the scale from the gloss, and the divider runs through it", () => {
+  const c = loadContent();
+  const rows = panelOf(c);
+  // The endpoints, the track and the levels are ONE object, a scale read top to bottom; the gloss is a
+  // separate statement about a different control. Butted together they read as a four-row block whose
+  // fourth row is an orphan, so there is a row of air between them.
+  assert.deepEqual(rowAt(rows, PANEL.air).runs.map((r) => r.text), [PANE_GLYPH],
+    "the row between the levels and the gloss carries something other than the divider");
+  assert.ok(lineAt(rows, PANEL.levels).trim() !== "", "the levels row is blank");
+  assert.ok(lineAt(rows, PANEL.gloss).includes(c.statusline.toggleNote), "the gloss is not where it should be");
+  // THE DIVIDER SPANS IT, because the blank is inside the pane: a boundary that broke across a gap
+  // would read as two rules. Its span is derived from where the pane's rows start and end, which is
+  // why this came for free, and that derivation is what is being checked.
+  const dividerRows = rows.filter((r) => r.runs.some((run) => run.text === PANE_GLYPH && run.col > 40));
+  assert.equal(dividerRows.length, PANE_ROWS.length, "the divider does not span exactly the pane's rows");
+  const at = [...lineAt(rows, PANEL.air)].indexOf(PANE_GLYPH);
+  for (const row of PANE_ROWS) {
+    assert.equal([...lineAt(rows, row)].indexOf(PANE_GLYPH), at, `row ${row} breaks the boundary`);
+  }
 });
 
 // ---- the identity gate ----

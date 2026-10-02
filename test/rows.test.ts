@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { colX, rowBaselineY } from "../src/grid.ts";
+import { COLS, colX, rowBaselineY } from "../src/grid.ts";
 import {
   rowWidth, assertFits, rowsToText, rowsToDrawnText, rowsToFullText, renderRows, charsUsed, esc,
 } from "../src/rows.ts";
@@ -40,24 +40,24 @@ test("a character outside the BMP occupies one column, not two", () => {
 
 // ---- assertFits ----
 
-test("a row of exactly 72 columns is allowed and 73 is rejected", () => {
-  assert.doesNotThrow(() => assertFits([row(0, 72)]));
-  assert.throws(() => assertFits([row(0, 73)]), /73 columns/);
+test("a row of exactly COLS columns is allowed and one more is rejected", () => {
+  assert.doesNotThrow(() => assertFits([row(0, COLS)]));
+  assert.throws(() => assertFits([row(0, COLS + 1)]), new RegExp(`${COLS + 1} columns`));
 });
 
 test("the limit applies to where a run ends, not to how long it is", () => {
-  assert.doesNotThrow(() => assertFits([row(71, 1)]));
-  assert.throws(() => assertFits([row(72, 1)]), /73 columns/);
-  assert.throws(() => assertFits([row(60, 20)]), /row 0 .*80 columns/);
+  assert.doesNotThrow(() => assertFits([row(COLS - 1, 1)]));
+  assert.throws(() => assertFits([row(COLS, 1)]), new RegExp(`${COLS + 1} columns`));
+  assert.throws(() => assertFits([row(COLS - 12, 20)]), new RegExp(`row 0 .*${COLS + 8} columns`));
   // two short runs whose combined reach is exactly the limit
-  assert.doesNotThrow(() => assertFits([{ runs: [{ col: 0, text: "ab" }, { col: 70, text: "cd" }] }]));
+  assert.doesNotThrow(() => assertFits([{ runs: [{ col: 0, text: "ab" }, { col: COLS - 2, text: "cd" }] }]));
 });
 
 test("the error names the offending row and shows its text, not its neighbours", () => {
-  const offender: Row = { runs: [{ col: 0, text: "x".repeat(70) }, { col: 70, text: "END" }] };
+  const offender: Row = { runs: [{ col: 0, text: "x".repeat(COLS - 2) }, { col: COLS - 2, text: "END" }] };
   const rows = [row(0, 10), row(0, 20), offender, row(0, 5)];
   assert.throws(() => assertFits(rows), (e: Error) => {
-    assert.match(e.message, /row 2 needs 73 columns/);
+    assert.match(e.message, new RegExp(`row 2 needs ${COLS + 1} columns`));
     assert.doesNotMatch(e.message, /row [013]\b/);
     assert.match(e.message, /END/);
     return true;

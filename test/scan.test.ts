@@ -101,24 +101,45 @@ const defs = (a: Activity = activity, theme: ThemeName = "dark", row = ROW): Nod
 // The geometry
 // ---------------------------------------------------------------------------------------------
 
-test("the grid is 53 week-columns by 7 day-rows on a 12-unit pitch, with square cells", () => {
+test("the grid is 53 week-columns by 7 day-rows on a 14-unit pitch, with square cells", () => {
   assert.equal(WEEKS, 53);
   assert.equal(DAYS, 7);
-  assert.equal(PITCH, CELL_W, "one week is one grid column, so the pitch is the text cell's width");
-  assert.equal(CELL, 10);
+  // THE PITCH IS THE SWEEP'S OWN NOW, not the text cell's. The cells are geometry rather than glyphs,
+  // so when the Session went to 84 columns they did not have to shrink with the text; 14 is
+  // `12 * 84 / 72`, which keeps the band's rendered size exactly what it was at 72 columns.
+  assert.notEqual(PITCH, CELL_W, "the sweep is back to following the text cell, so it shrinks with the font");
+  assert.equal(PITCH, 14);
+  assert.equal(CELL, 12);
   assert.equal(GAP, 2);
   assert.equal(CELL + GAP, PITCH, "the cell and its gap must fill the pitch exactly");
-  // Square is the point: the same pitch on both axes. A 12 x 24 cell would read as a bar chart.
+  assert.equal(BEAM_W, GAP, "the beam must be the gutter it travels in, read off GAP rather than retyped");
+  // Square is the point: the same pitch on both axes. A 14 x 24 cell would read as a bar chart.
   assert.equal(GRID_W, WEEKS * PITCH);
   assert.equal(GRID_H, DAYS * PITCH);
-  assert.equal(GRID_W, 636);
-  assert.equal(GRID_H, 84);
+  assert.equal(GRID_W, 742);
+  assert.equal(GRID_H, 98);
+});
+
+test("the pitch holds the band at the size it rendered before the Session widened", () => {
+  // The whole rule behind 14, checked rather than asserted in prose. 84 columns exists to make the
+  // TEXT smaller (18.9px is not a terminal); the sweep was never too big, so it keeps its size.
+  const rendered = (pitch: number, canvas: number, width = 846): number => (width / canvas) * pitch;
+  const before = rendered(CELL_W, PAD + 72 * CELL_W + PAD);
+  const after = rendered(PITCH, CANVAS_W);
+  assert.ok(Math.abs(after - before) < 0.1, `the band renders at ${after.toFixed(2)}px where it was ${before.toFixed(2)}px`);
+  // And it still fills the row the way it did: the band against the columns from its own to the margin.
+  const share = (pitch: number, cols: number): number => (WEEKS * pitch) / ((cols - SCAN_COL) * CELL_W);
+  assert.ok(Math.abs(share(PITCH, 84) - share(CELL_W, 72)) < 0.02,
+    `the band fills ${(share(PITCH, 84) * 100).toFixed(1)}% of the row where it filled ${(share(CELL_W, 72) * 100).toFixed(1)}%`);
 });
 
 test("the grid fits the band it is given, with room for the beam's overhang at both ends", () => {
   const band = SCAN_ROWS * CELL_H;
-  assert.equal(band, 96);
-  assert.equal(GRID_H / CELL_H, 3.5, "three and a half rows of ink");
+  assert.equal(band, 120);
+  // Just over four rows of ink, which is exactly why the band is five. No pitch above 12 fits four
+  // rows at all, so the fifth row is structural rather than padding and `src/scan.ts` throws without it.
+  assert.ok(GRID_H / CELL_H > 4 && GRID_H / CELL_H < 5, `${GRID_H / CELL_H} rows of ink`);
+  assert.ok(DAYS * PITCH > 4 * CELL_H, "seven cells at this pitch would still fit a four-row band");
   const slack = band - GRID_H;
   assert.ok(slack >= 2 * BEAM_OVERHANG, `${slack} units of slack cannot hold a beam overhanging ${BEAM_OVERHANG} at each end`);
   // Split evenly, so the overhang does not reach into the row above or the result line below.
@@ -134,7 +155,7 @@ test("the grid starts on the column the result text starts on, and ends inside t
   assert.equal(scanX(), PAD + SCAN_COL * CELL_W);
   assert.equal(scanX(), 76);
   assert.ok(scanX() + GRID_W <= CANVAS_W - PAD, "the grid runs past the window's inner edge");
-  assert.equal(scanX() + GRID_W, 712);
+  assert.equal(scanX() + GRID_W, 818);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -556,7 +577,7 @@ test("base css is the finished still frame, and every stop at the end of the cro
     assert.deepEqual(base, end.split(";").map((d) => d.trim()).filter(Boolean), `${sel}: base is not where the animation lands`);
   }
   // Which in words: fully probed, nothing dim left, no flare and no beam.
-  assert.match(baseOf(".sweep .probed"), /inset\(0 184px 0 0\)/);
+  assert.match(baseOf(".sweep .probed"), new RegExp(`inset\\(0 ${CANVAS_W - (scanX() + GRID_W)}px 0 0\\)`));
   assert.match(baseOf(".sweep .unprobed"), new RegExp(`inset\\(0 0 0 ${scanX() + GRID_W}px\\)`));
   assert.match(baseOf(".sweep .hits"), new RegExp(`inset\\(0 0 0 ${scanX() + GRID_W}px\\)`));
   assert.match(baseOf(".sweep .head"), /opacity:\s*0/);

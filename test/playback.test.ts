@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { COLS } from "../src/grid.ts";
 import {
   BANNER_FLICKER_OPACITY, BANNER_FRAME, MAX_SLICE_SECONDS, ROW_REVEAL, ROW_RISE, ROW_STEP,
   SHIMMER_SECONDS, SHIMMER_SWEEP, SPINNER_SECONDS,
@@ -476,7 +477,9 @@ test("adding them to a real Session keeps the row legal and keeps the transcript
 test("a verb too long for the row fails the build rather than overflowing the Session", () => {
   const content = loadContent();
   const { rows, verbRow } = composeSession(content, fixtureActivity());
-  rows[verbRow].runs.push(...verbRuns([{ text: "x".repeat(80), from: 0, to: 36 }], 2));
+  // Measured from the grid rather than written down, so it stays a verb that cannot fit whatever
+  // the Session is wide: one character past the columns the spinner's own indent leaves.
+  rows[verbRow].runs.push(...verbRuns([{ text: "x".repeat(COLS - 1), from: 0, to: 36 }], 2));
   assert.throws(() => assertFits(rows), /columns/);
 });
 

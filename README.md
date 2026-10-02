@@ -20,7 +20,7 @@
                          red cat with lazy effort · self hosted
                          agents working · operator horizontal
 
-────────────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────────
 ❯ /whoami
 ● offensive security. agentic ai systems.
 ● i build agents that do the recon, the triage and the paperwork,
@@ -62,17 +62,18 @@
 
 
 
+
   ╰  scan complete: 98/365 days up · 1047 contributions
 
 ✶ Loafing…
-────────────────────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────────────────────────────────
 
 Effort
-            Faster                           Smarter    │
-            ────────────────────────────────────▲───    │
-               low   medium   high    xhigh   lazy      │
-            Ultrachill: dynamic nap on every task       │ Ultrachill  on
-                                                          Tab to toggle
+        Faster                               Smarter    │
+        ────────────────────────────────────────▲───    │ Ultrachill  on
+           low    medium    high    xhigh     lazy      │ Tab to toggle
+                                                        │
+        Ultrachill: dynamic nap on every task           │
 
   ←/→ to adjust · Enter to confirm · Esc to cancel
 ```

@@ -34,15 +34,19 @@ export type Session = {
 /**
  * Rows kept empty under /activity for the Scan Sweep.
  *
- * The contribution calendar is 53 week-columns by 7 day-rows. One week per grid column makes
- * it 53 columns wide, which fits inside the Session's 72. Square cells, which is what GitHub's
- * own calendar uses, then want CELL_W of height each, so 7 days is 7 x 12 = 84 units; at
- * CELL_H = 24 that is 3.5 rows. Four rows hold the sweep, with the spare half-row as breathing
- * room. Cells of 12 x 24 would read as a bar chart instead of a grid, so the height follows the
- * width rather than the row pitch. The "N/365 days up" result line stays a text row of its own:
- * a status colour is always paired with a word, so the sweep needs its printed result.
+ * The contribution calendar is 53 week-columns by 7 day-rows, and the sweep's pitch is its own
+ * rather than the text cell's (`src/scan.ts`): 14 units, which keeps the band the size it rendered
+ * at before the Session went to 84 columns. Square cells, which is what GitHub's own calendar uses,
+ * then want the same 14 units of height each, so 7 days is 98 units; at CELL_H = 24 that is just
+ * over four rows. FIVE rows hold the sweep, with 22 units of slack split above and below it for the
+ * beam's overhang. Cells of 14 x 24 would read as a bar chart instead of a grid, so the height
+ * follows the width rather than the row pitch, and that squareness is what makes the fifth row
+ * structural rather than padding: `src/scan.ts` refuses to load a band the grid does not fit in.
+ *
+ * The "N/365 days up" result line stays a text row of its own: a status colour is always paired
+ * with a word, so the sweep needs its printed result.
  */
-export const SCAN_ROWS = 4;
+export const SCAN_ROWS = 5;
 
 /**
  * Row hook on the /activity result line. The Scan Sweep's result arrives after the beam has
@@ -116,13 +120,50 @@ const BODY_COL = 2;
 /** Where a language name or a tool label starts, under the result glyph. */
 const LIST_COL = 5;
 /**
- * Blank columns between the effort panel's columns, and so the indent its track block sits at.
+ * Blank columns between the effort panel's columns: the gutter between the scale and the toggle pane,
+ * which the pane divider is drawn inside.
  *
  * The owner's reference panel sets a 40px grid gap at a 12px font. A monospace cell at that size is
  * 12 x 0.6 = 7.2px wide, so 40px is 5.56 cells and six columns is that gap on this grid. It is the
  * gap and not a hand-picked indent, which is why the number is derived here rather than guessed.
+ *
+ * It is NOT the track's own indent any more; that is `TRACK_INDENT`, which is a different measurement
+ * for a different relationship and used to borrow this one.
  */
 const PANEL_GAP = 6;
+
+/**
+ * Columns the effort track is drawn in, whatever anything else on the panel says.
+ *
+ * THIS IS THE INVERSION THE OWNER CALLS E44, and the point of it is which way the dependency runs.
+ * The track used to end at `toggleCol - PANEL_GAP`, and `toggleCol` was `COLS` less the toggle's own
+ * width, so THE SCALE'S WIDTH WAS A FUNCTION OF THE TOGGLE'S WORDING: renaming `Ultrachill` to
+ * anything longer silently shrank the scale, and the five levels lost a column each to a word that
+ * has nothing to do with them. That is backwards. The scale is the panel's content and the toggle is
+ * a secondary readout beside it, so the track declares its width here and the toggle pane takes
+ * whatever is left of the row.
+ *
+ * 44, compared against 40 rendered at both widths and chosen by the owner. At 40 the five levels sit
+ * on 8-column slots and `medium` and `xhigh`, which are six and five columns wide, leave one or two
+ * blank columns between neighbours, so the scale reads as a list of words again, which is the exact
+ * complaint the panel exists to answer. 44 gives 8.8-column slots and three to four blank columns
+ * between levels, which is the reference's rhythm.
+ *
+ * Both guards below are errors rather than overflow, and both name their numbers: a track too narrow
+ * for the levels, and a remaining pane too narrow for the toggle or its hint.
+ */
+const TRACK_COLS = 44;
+
+/**
+ * Blank columns between the heading word and the track block that follows it.
+ *
+ * The track is indented past `effortWord`, so a longer heading still pushes the scale along, and the
+ * indent itself is two columns. It is NOT `PANEL_GAP`: that is the gutter BETWEEN the panel's columns,
+ * and the heading sits on a row of its own above the scale rather than beside it, so the six-column
+ * grid gap was never the right measure of the step from a heading to the block it heads. With the
+ * track's width now fixed, six columns of indent also pushed the whole panel right for no reason.
+ */
+const TRACK_INDENT = 2;
 
 /**
  * Blank columns between the toggle's word and the state it reads. The reference writes two
@@ -245,8 +286,24 @@ export function effortLabelCols(labels: string[], trackCol: number, trackEnd: nu
   const width = trackEnd - trackCol;
   if (n === 0) throw new Error("the effort scale has no levels to place");
   if (width < n) throw new Error(`${n} effort levels do not fit in the ${width} columns between ${trackCol} and ${trackEnd}`);
+  // THE TRACK'S WIDTH IS NOW FIXED (TRACK_COLS), so the levels are what has to fit it rather than
+  // the other way round, and a scale that does not fit says so with its numbers. Checked before the
+  // columns are computed, because the arithmetic below places a label that cannot fit just as
+  // willingly as one that can, and `assertNoCollisions` would then report two overlapping words
+  // without saying that the scale is the thing that is too wide.
+  const needed = labels.reduce((w, label) => w + cells(label), 0) + (n - 1);
+  if (needed > width) {
+    throw new Error(`the ${n} effort levels ${JSON.stringify(labels.join(" "))} do not fit the track: they need ${needed} columns with one blank between each pair, and the track is ${width} (columns ${trackCol} to ${trackEnd})`);
+  }
   const slot = width / n;
-  return labels.map((label, i) => Math.round(trackCol + slot * (i + 0.5) - cells(label) / 2));
+  const cols = labels.map((label, i) => Math.round(trackCol + slot * (i + 0.5) - cells(label) / 2));
+  // And where they land, not only how wide they are. A long label on a narrow slot is placed past
+  // its own slot's edges even when the total fits, so the ends of the track are checked too.
+  const last = cols[n - 1] + cells(labels[n - 1]);
+  if (cols[0] < trackCol || last > trackEnd) {
+    throw new Error(`the effort levels run from column ${cols[0]} to ${last}, outside the ${width}-column track between ${trackCol} and ${trackEnd}`);
+  }
+  return cols;
 }
 
 /**
@@ -576,44 +633,52 @@ export function composeSession(c: Content, a: Activity): Session {
   // The heading, far left and on a row of its own.
   rows.push({ runs: [{ col: 0, text: s.effortWord, style: "accent" }] });
 
-  // THE THREE COLUMNS. The reference builds them as `grid-template-columns: 1fr auto 1fr` with a
-  // 40px gap: a heading column, the track block, and the toggle column. Each outer column here is
-  // its own content's width and the track is everything between them less one gap at each side, so
-  // nothing below is a chosen column number. Change the toggle's wording, the heading or the gap
-  // and the whole panel re-lays itself.
+  // ---- THE PANEL'S GEOMETRY, ALL OF IT, BEFORE A SINGLE ROW OF IT IS PUSHED ----
   //
-  // The reference's two outer columns are `1fr` and therefore EQUAL, and that is the one thing not
-  // carried over. Copied literally it makes the heading column as wide as the toggle, which on 72
-  // columns leaves the track 32 and the five levels one blank column between them in places: the
-  // scale then reads as a list of words rather than as a distributed scale, which is the exact
-  // complaint this panel exists to answer. The reference's own panel is about 136 character cells
-  // wide, so its proportions do not survive the trip to 72; its RHYTHM does, and three to four
-  // blank columns between levels is what it looks like. Rendered at 846px and 308px both ways.
-  // The right column holds two lines, the toggle and the hint under it, left-aligned with each
-  // other and the block flush with the Session's right edge. Its width is therefore the wider of
-  // the two and not the toggle's alone: a hint longer than the toggle would otherwise be placed
-  // from the toggle's column and run off the grid.
-  const toggleWidth = cells(s.toggle.word) + TOGGLE_GAP + cells(s.toggle.state);
-  const toggleCol = COLS - Math.max(toggleWidth, cells(s.toggleHint));
-  const trackCol = cells(s.effortWord) + PANEL_GAP;
-  const trackEnd = toggleCol - PANEL_GAP;
-  const tiers = s.effortLabels;
-  const levelCols = effortLabelCols(tiers, trackCol, trackEnd);
+  // The order is load-bearing rather than tidy. The toggle now sits on the TRACK's row and its hint
+  // on the LEVELS row, so the runs that used to be built last, once every column they needed was
+  // known, are needed by the first rows the panel pushes. Computing the columns here and pushing the
+  // rows afterwards is the only arrangement in which nothing reads a value declared below it; two
+  // attempts to lift the runs in place instead failed with "cannot access before initialization",
+  // which is the shape of the problem rather than a typo.
+  //
+  // THE THREE COLUMNS. The reference builds them as `grid-template-columns: 1fr auto 1fr` with a
+  // 40px gap: a heading column, the track block, and the toggle column. The reference's two outer
+  // columns are `1fr` and therefore EQUAL, and that is the one thing not carried over: copied
+  // literally it makes the heading column as wide as the toggle and leaves the five levels one blank
+  // column between them in places, so the scale reads as a list of words rather than as a distributed
+  // scale, which is the exact complaint this panel exists to answer. The reference's own panel is
+  // about 136 character cells wide, so its proportions do not survive the trip to this grid; its
+  // RHYTHM does, and three to four blank columns between levels is what it looks like.
+  //
+  // WHAT CHANGED IS WHICH WAY THE DEPENDENCY RUNS (TRACK_COLS, the owner's E44). The track declares
+  // its own width and everything to its right follows from the track's end: the gap, then the
+  // divider in it, then the toggle pane, which is simply whatever is left to the right edge. Before,
+  // the track ended where the toggle's wording happened to leave it, so the scale shrank when the
+  // joke got longer.
+  const trackCol = cells(s.effortWord) + TRACK_INDENT;
+  const trackEnd = trackCol + TRACK_COLS;
+  const toggleCol = trackEnd + PANEL_GAP;
   // Immediately left of the toggle block, one clear column away from it, so the divider belongs to
-  // the boundary rather than to either pane. Derived from the toggle's own column, which is itself
-  // derived from the toggle's wording, so re-wording the toggle carries the divider with it.
+  // the boundary rather than to either pane. Still derived, and still from the toggle's own column;
+  // what the toggle's column is derived FROM is what changed, so the divider follows the track now.
   const dividerCol = toggleCol - (PANE_CLEAR + cells(PANE_DIVIDER));
 
-  // THE SCALE'S OWN ROWS begin here. The divider spans exactly these, which is why the span is taken
-  // from where they start and end rather than written down: the heading above them sits outside both
-  // panes and the key hints below them run the full width under both.
-  const paneFrom = rows.length;
+  // THE TOGGLE PANE IS THE REMAINDER, and a remainder too small for what goes in it is an error with
+  // its numbers named rather than a word drawn off the edge of the grid. Both lines of the pane are
+  // checked, the toggle and the hint under it, because either can be the wider and `assertFits` would
+  // only report the row it happened to overflow.
+  const paneWidth = COLS - toggleCol;
+  const toggleWidth = cells(s.toggle.word) + TOGGLE_GAP + cells(s.toggle.state);
+  if (toggleWidth > paneWidth) {
+    throw new Error(`the toggle ${JSON.stringify(`${s.toggle.word}  ${s.toggle.state}`)} needs ${toggleWidth} columns and the pane right of the ${TRACK_COLS}-column track has ${paneWidth} (columns ${toggleCol} to ${COLS})`);
+  }
+  if (cells(s.toggleHint) > paneWidth) {
+    throw new Error(`the toggle's hint ${JSON.stringify(s.toggleHint)} needs ${cells(s.toggleHint)} columns and the pane right of the ${TRACK_COLS}-column track has ${paneWidth} (columns ${toggleCol} to ${COLS})`);
+  }
 
-  // The two ends of the axis, above the track: one flush with each end of it.
-  rows.push({ runs: [
-    { col: trackCol, text: s.effortEnds.start, style: "text" },
-    { col: trackEnd - cells(s.effortEnds.end), text: s.effortEnds.end, style: "text" },
-  ] });
+  const tiers = s.effortLabels;
+  const levelCols = effortLabelCols(tiers, trackCol, trackEnd);
 
   // THE MARKER IS PLACED FROM THE SELECTED LEVEL'S OWN COLUMN, never from the track's midpoint.
   // The shipped scale selects its LAST level and an earlier one selected the middle of five, so a
@@ -628,7 +693,6 @@ export function composeSession(c: Content, a: Activity): Session {
   if (trackEnd > markerCol + 1) {
     track.push({ col: markerCol + 1, text: "─".repeat(trackEnd - markerCol - 1), style: "muted", piece: PIECE_TRACK });
   }
-  rows.push({ runs: track });
 
   // The levels. The selected one is accent and bold, the rest muted. The brackets are gone: the
   // marker above is a SHAPE carrying the selection, so colour is not doing it alone, and a bracketed
@@ -649,14 +713,18 @@ export function composeSession(c: Content, a: Activity): Session {
       levels.push({ col: levelCols[i], text: label, style: picked ? "accent-bold" : "muted" });
     }
   });
-  rows.push({ runs: levels });
 
-  // The toggle, in the right column where the reference puts it, with the owner's one-line gloss on
-  // it in the middle column beside it. OFF the scale's row deliberately: sharing one row is what
-  // made the scale and the toggle both read as cramped. The gloss is the only string in the Session
-  // that describes what the viewer is literally watching, so it is the owner's and not the
-  // generator's, and it is allowed to run past the track into the gap, which is why it is placed
-  // from the track's left edge and only its collision with the toggle is checked.
+  // THE TOGGLE, LIFTED TWO ROWS ONTO THE TRACK'S OWN ROW, with its hint on the levels row beneath it.
+  //
+  // It sat on the GLOSS row, the fourth of the pane's four, with the hint on a fifth row below the
+  // panes entirely, and the owner's reading of that is exactly right: the right pane had sunk to the
+  // bottom of a block whose own content started three rows higher, so `Ultrachill on` read as having
+  // fallen off the scale rather than as sitting beside it. Level with the track it toggles, the two
+  // panes start on the same floor and the eye pairs them.
+  //
+  // THIS IS A DELIBERATE DEPARTURE FROM THE REFERENCE, which puts its own toggle on the LABELS row,
+  // one lower. The owner has looked at both rendered and prefers this one; it is recorded in
+  // docs/spec.md so nobody corrects it back to the reference later.
   //
   // The word is drawn twice at one position. The base copy is split into one run per character, each
   // carrying its own point on a muted-to-accent ramp, so the word is A GRADIENT WITH NOTHING
@@ -665,20 +733,56 @@ export function composeSession(c: Content, a: Activity): Session {
   // each character to it in turn, so the sheen now travels the ramp and dissolves into its bright
   // end instead of being the only thing that makes the word worth looking at.
   const { word, state } = s.toggle;
-  const closing: Run[] = [{ col: trackCol, text: s.toggleNote, style: "muted" }];
-  [...word].forEach((ch, i) => closing.push({
+  const toggleRuns: Run[] = [];
+  [...word].forEach((ch, i) => toggleRuns.push({
     col: toggleCol + i, text: ch, style: "accent-bold", cls: gradientClass(i), piece: PIECE_TOGGLE,
   }));
-  [...word].forEach((ch, i) => closing.push({
+  [...word].forEach((ch, i) => toggleRuns.push({
     col: toggleCol + i, text: ch, style: "accent-bold", cls: shimmerClass(i),
   }));
-  closing.push({ col: toggleCol + cells(word) + TOGGLE_GAP, text: state, style: "accent" });
-  rows.push({ runs: closing });
+  toggleRuns.push({ col: toggleCol + cells(word) + TOGGLE_GAP, text: state, style: "accent" });
+
+  // ---- THE PANEL'S ROWS, now that every column in them is known ----
+  //
+  // THE SCALE'S OWN ROWS begin here. The divider spans exactly these, which is why the span is taken
+  // from where they start and end rather than written down: the heading above them sits outside both
+  // panes and the key hints below them run the full width under both.
+  const paneFrom = rows.length;
+
+  // The two ends of the axis, above the track: one flush with each end of it.
+  rows.push({ runs: [
+    { col: trackCol, text: s.effortEnds.start, style: "text" },
+    { col: trackEnd - cells(s.effortEnds.end), text: s.effortEnds.end, style: "text" },
+  ] });
+
+  // The track, with the toggle beside it in the right pane.
+  rows.push({ runs: [...track, ...toggleRuns] });
+
+  // The levels, with the toggle's hint beside them. Both are affordances of a terminal the Session
+  // DEPICTS rather than is: `❯ /whoami` is no more pressable than `Tab`, so printing them is part of
+  // the fiction rather than a claim inside it.
+  rows.push({ runs: [...levels, { col: toggleCol, text: s.toggleHint, style: "muted" }] });
+
+  // ONE ROW OF AIR, INSIDE THE PANE, between the scale and the gloss. The owner's call, and the
+  // reason is what the two things are: the two end labels, the track and the levels are ONE object,
+  // a scale read top to bottom, and the gloss is a separate statement about a different control.
+  // Butted together they read as a four-row block whose fourth row is an orphan; with a row between
+  // them the scale is a unit and the gloss is its caption. The divider runs THROUGH this row, because
+  // the row is inside the pane and a boundary that broke across a gap would read as two rules.
+  rows.push(blank());
+
+  // The owner's one-line gloss on the toggle, in the middle column. It is the only string in the
+  // Session that describes what the viewer is literally watching, so it is the owner's and not the
+  // generator's, and it is allowed to run past the track into the gap, which is why it is placed from
+  // the track's left edge and only its collision with the divider is checked.
+  rows.push({ runs: [{ col: trackCol, text: s.toggleNote, style: "muted" }] });
 
   // THE DIVIDER, down every row the two panes share and no others, placed last so the span is read
-  // off the rows that were actually pushed rather than counted out in advance.
+  // off the rows that were actually pushed rather than counted out in advance. That is what makes the
+  // row of air above free: the gloss was the last pane row before and it still is, so the span grew
+  // by itself when the blank went in.
   //
-  // It carries the gloss row as well as the three above it, which was decided by rendering both and
+  // It carries the gloss row as well as the rows above it, which was decided by rendering both and
   // looking: the gloss is the longest line in the left pane and a divider that stopped at the levels
   // left it as the one row reaching across the boundary with nothing marking it, so the pane looked
   // as though it had sprung a leak at the bottom. Beside the full span the gloss reads as the left
@@ -693,12 +797,6 @@ export function composeSession(c: Content, a: Activity): Session {
     rows[r].runs.push({ col: dividerCol, text: PANE_DIVIDER, style: "muted" });
   }
 
-  // The toggle's hint, directly beneath it in the same column, and then the key hints for the panel
-  // as a whole. Both are affordances of a terminal the Session DEPICTS rather than is: `❯ /whoami`
-  // is no more pressable than `Tab`, so printing them is part of the fiction rather than a claim
-  // inside it. Assembled from labelled fragments with the generator supplying the separator, which
-  // is the rule docs/spec.md 4.1 sets for a sentence made of several pieces of copy.
-  rows.push({ runs: [{ col: toggleCol, text: s.toggleHint, style: "muted" }] });
   rows.push(blank());
   // THE KEY HINTS CLOSE THE SESSION, and that is the whole Statusline now.
   //

@@ -26,7 +26,7 @@ The build fails with a clear message if something will not render, so a mistake 
 ## Rules the build enforces
 
 1. **Nothing blank, nothing missing.** Every field above must be present and be text. Only a `stackRows` label may be empty. `whoami` takes at most three lines, `lanes` and `stackRows` cannot be empty, and every lane needs repos.
-2. **72 columns.** Nothing may be wider. Long blurbs are the usual cause; the error names the row.
+2. **84 columns.** Nothing may be wider. Long blurbs are the usual cause; the error names the row.
 3. **Drawable characters only.** Plain text and Vietnamese are fine. Emoji are not, and the error names the field and the character with its code, for example `content.json: startup.status: character ... (U+1F642) is not in the font`. A short list of symbols the font lacks is refused too; it is `FORBIDDEN_GLYPHS` in `src/font.ts`.
 4. **No forbidden names.** The build refuses to write anything containing one, whichever field it is in, and matches without regard to case. The error names the field but never repeats the name.
 

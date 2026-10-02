@@ -1,4 +1,4 @@
-import { CANVAS_W, CELL_H, CELL_W, PAD, colX } from "./grid.ts";
+import { CANVAS_W, CELL_H, PAD, colX } from "./grid.ts";
 import { MASTER_SECONDS } from "./timeline.ts";
 import { PALETTES } from "./tokens.ts";
 import type { Palette, ThemeName } from "./tokens.ts";
@@ -29,12 +29,30 @@ export const WEEKS = 53;
 export const DAYS = 7;
 
 /**
- * One week is one grid column, so the sweep is 53 columns wide and fits inside the Session's 72.
- * Square cells, which is what GitHub's calendar uses, then set the row pitch from the column
- * pitch rather than from the text grid: 12 x 24 cells would read as a bar chart, not a grid.
+ * THE SWEEP'S PITCH IS ITS OWN, AND IT NO LONGER FOLLOWS THE TEXT CELL.
+ *
+ * It was `CELL_W`, one week per text column, which made the band 53 of the Session's 72 columns.
+ * When the Session went to 84 columns (src/grid.ts) that stopped working: the cells are GEOMETRY and
+ * not glyphs, so they do not have to shrink when the text does, and at a 12-unit pitch on a wider
+ * canvas the band fell from 79% of the row to 67% and read as stranded, ending before the two-thirds
+ * point while every rule above it ran the full width.
+ *
+ * 14 is `12 x 84 / 72`, so the band's RENDERED SIZE IS UNCHANGED: at 846px a 12-unit pitch on the
+ * old 896-unit canvas was 11.33px and a 14-unit pitch on the 1040-unit canvas is 11.38px. That is
+ * the whole rule, and it is the right one here. 84 columns exists to make the TEXT smaller, because
+ * 18.9px is not a terminal; the sweep was never too big, so it keeps the size it had and the row
+ * it fills: 742 of the 948 units from its own column to the margin, 78.3%, against 79.1% before.
+ *
+ * Square cells, which is what GitHub's calendar uses, then set the row pitch from the column pitch
+ * rather than from the text grid: 12 x 24 cells would read as a bar chart, not a grid. That squareness
+ * is what makes this cost a row. 7 days at a 14-unit pitch is 98 units and a four-row band is 96, so
+ * `SCAN_ROWS` went to 5; no pitch above 12 fits four rows, and the check below is what says so.
+ *
+ * `CELL` grows with the pitch and the 2-unit gutter does not, because the gutter is the beam's own
+ * width: `BEAM_W` sits in it exactly, and a hit closing it is the band's loudest signal.
  */
-export const PITCH = CELL_W;
-export const CELL = 10;
+export const PITCH = 14;
+export const CELL = 12;
 export const GAP = PITCH - CELL;
 export const GRID_W = WEEKS * PITCH;
 export const GRID_H = DAYS * PITCH;
@@ -42,8 +60,15 @@ export const GRID_H = DAYS * PITCH;
 /** Where the grid sits: under the result glyph, on the column the result text starts at. */
 export const SCAN_COL = 5;
 
-/** The beam, and how far it overhangs the grid at each end so it reads as passing over it. */
-export const BEAM_W = 2;
+/**
+ * The beam, and how far it overhangs the grid at each end so it reads as passing over it.
+ *
+ * Its width is the GUTTER, read off `GAP` rather than written down beside it: the beam is the bright
+ * leading edge at a cell's far side and it has to land exactly in the blank between that cell and
+ * the next, never over either. The two were both 2 before the pitch changed and nothing noticed
+ * they were the same number twice.
+ */
+export const BEAM_W = GAP;
 export const BEAM_OVERHANG = 3;
 
 /**
@@ -54,9 +79,14 @@ export const BEAM_OVERHANG = 3;
 export const SWEEP_SECONDS = 2.5;
 
 /**
- * The band reserves 4 rows (96 units) for 84 units of grid. The 12 units of slack are split
+ * The band reserves 5 rows (120 units) for 98 units of grid. The 22 units of slack are split
  * evenly, which is what keeps the beam's overhang inside the band instead of reaching into the
  * descenders of the /activity line above it.
+ *
+ * THIS CHECK IS WHAT SETS `SCAN_ROWS`, and it is the reason the pitch change cost a row. Seven
+ * square cells at a 14-unit pitch are 98 units; four rows are 96, so the grid would not even fit,
+ * let alone leave room for the overhang. No pitch above 12 fits four rows. The failure is loud on
+ * purpose: a band that silently overflowed would draw the sweep into the row above it.
  */
 const SLACK = SCAN_ROWS * CELL_H - GRID_H;
 if (SLACK < 2 * BEAM_OVERHANG) {

@@ -79,11 +79,12 @@ test("the five approved letterforms are drawn exactly as the owner approved them
   }
 });
 
-test("bannerWidthCols(\"LAZIE\") is 34, inside the 38 columns the Mascot leaves", () => {
+test("bannerWidthCols(\"LAZIE\") is 34, inside the columns the Mascot leaves", () => {
   assert.equal(bannerWidthCols("LAZIE"), 34);
-  // Derived from the Mascot rather than written down, so widening the Mascot fails here.
+  // Derived from the Mascot rather than written down, so widening the Mascot fails here. The budget
+  // grew with the Session's own width; what the test is for is that 34 still fits inside it.
   const budget = COLS - (MASCOT_COLS + 2);
-  assert.equal(budget, 38);
+  assert.equal(budget, 50);
   assert.ok(bannerWidthCols("LAZIE") <= budget, `34 must fit in ${budget}`);
 });
 
