@@ -28,8 +28,8 @@ github.com/saltless-bruh
 │  │     role line                                                                │ │
 │  │ ───────────────────────────────────────────────────────────────────────────  │ │
 │  │ > /whoami     three lines of copy                                            │ │
-│  │ > /ops        three Lanes, seven repos, one line each                        │ │
-│  │ > /stack      languages by size + tool rows                                  │ │
+│  │ > /ops        three Lanes as a tree, seven repos, one line each              │ │
+│  │ > /stack      languages as bars + percentages, bracketed tool rows           │ │
 │  │ > /activity   Scan Sweep + "N/365 days up - M contributions"                 │ │
 │  │ * <verb>...   spinner, loops forever                                         │ │
 │  │ ───────────────────────────────────────────────────────────────────────────  │ │
@@ -207,6 +207,12 @@ against the vendored faces rather than against a character chart: `assertCovered
 and Bold reports them present. They are listed because the glyph set is a record of what was
 checked; a glyph used but unlisted is indistinguishable from one nobody checked.
 
+**Named individually on 2026-10-02, for the same reason:** `├` (U+251C) and `└` (U+2514), which
+draw the `/ops` tree, and the eighth blocks `▏▎▍▌▋▊▉` (U+258F down to U+2589) with `█` (U+2588),
+which draw the `/stack` bars. All nine are inside the "box-drawing" and "block" families the line
+above already claims, and all nine were put through `assertCovered` on both faces rather than
+inferred from that claim.
+
 Verified **absent**, and therefore forbidden: `⎿ ✻ ✢ ✽ ✔ ✘ ◼ ◻ ⏵ ⏸`. The substitutes above replace them.
 
 Text is rendered as `<text>`. The Mascot and the Scan Sweep are **geometry**, not glyphs: block art compiled to merged paths per colour, with `shape-rendering="crispEdges"`, which avoids seam hairlines at fractional scale and gives the Mascot per-part groups to animate.
@@ -224,9 +230,39 @@ A consequence worth recording, because it removed a special case rather than add
 used to need a `textOnly` run shimmed onto the Banner's row to reach the transcript at all, since
 block art carries no text. In the prompt it is real text, so one run draws it and transcribes it.
 
+**The `/stack` language rows are drawn as well as printed.** Each row is the language, a bar, and
+the whole percentage right-aligned at the far end of the bar's field. The bar is `BAR_COLS = 34`
+columns at a full 100%, a named constant rather than whatever is left over between the longest
+name and the margin, because a figure whose drawn length changed with the data would mean 90% was a
+different length in two builds of the same profile. It is drawn to the nearest **eighth** of a
+column: a bar rounded to whole columns could say only 34 things, so 3% and 5% would be the same
+picture, where an eighth is 0.37 of a point and the length a reader sees is the figure beside it.
+The length is taken from the printed whole percentage and not from the raw byte share, so the
+drawing and the number cannot disagree; the rounding is done once, in eighths, with the whole
+blocks as the whole part of it, because flooring to columns and rounding the remainder separately
+carries past the end of the glyph table at shares like 47%.
+
+The constant costs the name field: a language name has 25 columns before the row overruns, against
+61 before. That is stated here and pinned by a test so a build failing on a long language name is a
+known price rather than a surprise.
+
+**A language whose share rounds away keeps its row, printed `<1%`.** The owner's decision. An empty
+bar beside `<1%` says present and too small to draw, which is true; `0%` beside the same blank
+reads as a language that failed to measure, which is the one reading that is false, and an earlier
+copy audit flagged exactly that. With no bytes at all the figure stays `0%`, because `<1%` is a
+claim that something is there.
+
+**The `/stack` tool rows are bracketed**, `[metasploit] [burp]`, one column between tags. Two words
+separated by spaces read as prose, so `peass-ng pspy` is one tool or two depending on the reader;
+brackets make each one a unit. They cost two columns a tool and buy back one from the separator,
+and every shipped row still lands on a single row, the widest at 64 of 72 columns. A row too wide
+is refused and names itself rather than wrapping.
+
 **Weight.** Both Regular and Bold are vendored and subset, and each gets its own `@font-face`. A single face with `font-weight: 400 700` would make the browser synthesise fake bold, which smears a monospace grid. Emphasis otherwise comes from the Accent, not from weight.
 
-**Two-row repo entries.** A repo name and its description cannot share a row: a name at column 7 leaves only 37 columns for the description, which no useful sentence fits. The name sits on one row and the description is indented on the next, which also reads more like real command output.
+**Two-row repo entries, drawn as a tree.** A repo name and its description cannot share a row: a name at column 7 leaves only 37 columns for the description, which no useful sentence fits. A two-column name-and-blurb table was costed again on 2026-10-02 and rejected on the owner's own copy: the blurbs run 40 to 61 characters against a longest name of 25, so six or seven of the seven overflow at any sensible gutter, and the only way to make it fit is to rewrite the owner's sentences, which is not a layout fix. The name sits on one row and the description is indented on the next, which also reads more like real command output.
+
+Containment is **drawn** rather than implied by that indent: `├─` on every repo but the last in its Lane, `└─` on the last, and a `│` carried down the description row of a non-last repo, with that column left blank under the last, which is what closes the branch. Every connector comes from the repo's position in its Lane, so a Lane of one gets `└─` for the same reason the last of seven does. This is what `tree(1)` prints, which makes it terminal-native rather than decorative, and it is the same alphabet as the Header prompt's `┌─`/`└─`. It costs no rows and no columns: the connectors go at column 4, which the indent was already leaving blank, and the name and description stay at columns 7 and 9.
 
 ### 3.4 Palette
 
@@ -339,7 +375,9 @@ so ten rows arrived in one day and each one costs 26ms. Four more rows reach two
 > instead of discovering it in a render.
 
 The startup block beside the Mascot cost nothing, because it prints into rows the sprite had already
-reserved. That is the shape to prefer when there is a choice.
+reserved. That is the shape to prefer when there is a choice, and the `/ops` tree and the `/stack`
+bars were both built to it: each draws into columns their own section was already leaving blank, so
+three changes landed on 2026-10-02 for **zero extra rows** and the figure above is unmoved.
 
 **There is no Banner reveal any more.** It resolved the wordmark letter by letter over 0.45s and was the
 Session's one moment of spectacle; the wordmark was retired with the Header (3.3), so the spectacle went
@@ -411,11 +449,11 @@ is the same for every value it decorates belongs to the generator (the spinner's
 | `handle` | The nickname the prompt spells, in the Accent |
 | `login` | The GitHub account name the API is queried by, e.g. `saltless-bruh`. It is a different value from `handle`, which is the nickname (CONTEXT.md: the Handle is both). The prompt's path is this with a `~/` in front of it, which is why **there is no `cwd` key**: a path kept in a second field is a path that can disagree with the account the figures came from, and printed in the prompt and again on its own row it is the same fact twice |
 | `prompt` | `host`, the machine the Handle is logged in to, and `command`, the one whose output the Mascot is. The prompt's own marks are Session Grammar and stay in the generator |
-| `startup` | The three lines printed beside the Mascot, as labelled fragments: `version` (after the Handle on the first line), `colourWord` and `model` (the second), and `status` (the third). The split in the middle line is not decoration: `colourWord` is DRAWN IN THE COLOUR IT NAMES, so it has to be a run of its own, and the generator supplies only the space between the two halves. The block's column is measured from the Mascot's own ink, so retouching the art moves the text instead of colliding with it |
+| `startup` | The three lines printed beside the Mascot, as labelled fragments: `version` (after the Handle on the first line), `colourWord` and `model` (the second), and `status` (the third). The split in the middle line is not decoration: `colourWord` is DRAWN IN THE COLOUR IT NAMES, so it has to be a run of its own, and the generator supplies only the space between the two halves. The block's column is measured from the Mascot's own ink, so retouching the art moves the text instead of colliding with it, and its rows are measured from the band's foot: the block is GROUNDED on the sprite, its last line level with the sprite's last row |
 | `role` | The one-line role under the Mascot |
 | `whoami` | Up to 3 lines of copy |
 | `lanes[]` | Each has a `label` and `repos[]`, each repo a `name` and a one-line `blurb` |
-| `stackRows[]` | Each has a `label` and `items[]`, printed as plain text |
+| `stackRows[]` | Each has a `label` and `items[]`. Each item is printed in brackets, which are Session Grammar and belong to the generator; a row with an empty `label` is a continuation of the one above it and its items stay in the same column |
 | `verbs` | Spinner words, grouped by Mascot state. Every state in `MASCOT_TIMELINE` needs at least one: `sleep`, `yawn`, `stretch`, `settle`, `peek`, and the alarm's `alert`, `swat-up`, `swat-down`, `glare`, `butt-up`, `butt-down`, `recover`. A state with several words rotates through them while that state is on screen. Giving the two halves of a blow the same word is deliberate: the spinner then holds one phrase across the whole gesture instead of flickering between two |
 | `activityLine` | The words of the `/activity` result line, as labelled fragments: `label` (`scan complete:`), `daysUp` (`days up`) and `contributions`. The generator supplies the order, the numbers and the `·` |
 | `statusline` | The effort panel's copy. `effortWord` is the heading, and the panel's track is indented by its length, so a longer word still pushes the scale along. `effortEnds` is `start` and `end`, the two words above the ends of the track (`Faster` / `Smarter`). `effortLabels` are the levels, left to right, and the LAST of them is the scale's top tier, which is drawn as a rainbow. `effortSelected` names one of them. `toggle` is the shimmering word and the state it reads (`Ultrachill` / `on`), `toggleNote` is the one-line gloss under the scale, and `toggleHint` the line under the toggle. `help` is the key hints as labelled fragments, which the generator joins with its own `·`. `modeBadge` and `note` close the Session |
@@ -617,6 +655,12 @@ fix waiting on the owner (3.4).
 The 2.2.2 gap is mitigated, not ignored: `prefers-reduced-motion` removes all motion, every loop is low-amplitude, and the content is fully available as text in the transcript regardless of motion state. Nothing in the Session depends on seeing the animation.
 
 The 1.4.11 gap costs the window's edge and nothing else. Every text role still clears 4.5:1 at every width, and the Session's content, hierarchy and figures are unaffected; what a phone reader loses is the sense of a bounded terminal rather than anything they need to read.
+
+The `/stack` bars are graphical objects conveying information, so 1.4.11 applies to them and they
+meet it: a bar is the Accent on the window, which measures 6.51:1 in dark and 4.77:1 in light, well
+clear of 3:1. Nothing rests on seeing them, because every bar is paired with the same figure printed
+as text at the end of its own row, and the transcript carries both. The one case where the drawing
+says nothing is a share that rounds away, and that row prints `<1%` rather than relying on a blank.
 
 A day with no activity is drawn, not omitted: it sits at 0.45 opacity of the `border` token, which measures 1.60:1 against the window in dark and 1.54:1 in light. It is below 3:1 by design, because a quiet day being quiet is itself the meaning; the figures that matter are printed as text on the result line. Before the beam reaches it the same cell sits at 0.30 of that token (1.35:1 and 1.32:1), so an unprobed cell and a probed silent one are deliberately close: what the sweep reveals about a quiet day is that there was nothing to reveal.
 

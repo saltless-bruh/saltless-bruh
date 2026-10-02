@@ -112,9 +112,16 @@ Two standing weaknesses, both accepted for now and recorded so they are not disc
   not text. If body-text colour is ever retuned, the cat changes with it. The clean fix is art-role tokens
   (`art-body`, `art-panel`) that alias today's values. Low value while the palette is locked; worth doing before any
   palette change.
-- **The accent carries many jobs**: the shell prompt's Handle, the command glyph, tool bullet, rack LEDs, cat speckles, scan hits, the effort marker and success. In a
+- **The accent carries many jobs**: the shell prompt's Handle, the command glyph, tool bullet, rack LEDs, cat speckles, scan hits, the `/stack` language bars, the effort marker and success. In a
   terminal this largely reads as "the system's colour" and is coherent, but the decorative cat speckles are the
   weakest use and the first thing to drop if the accent starts feeling noisy.
+  **The language bars were weighed against that on 2026-10-02 and rendered both ways before being kept.**
+  They are by some distance the largest accent object in the Session, a 31-cell slab on the Python row, which
+  is the argument against. Drawn in `muted` instead, which is the obvious quieter answer, the block reads as
+  inert, closer to a redaction bar than to a measurement, and it dims the one figure in the row that IS the
+  content, which `tui-design` warns against directly. The accent is right on meaning as well: a language share
+  is fetched data, the same family as the scan hits and the `/activity` result line, which are already drawn in
+  it. Kept, and recorded here so the next person reads a decision rather than an oversight.
 
 ## Pixel art
 
@@ -222,6 +229,39 @@ otherwise be decided by the order the stylesheets happen to be concatenated in.
 **The spinner's verbs are not subject to the playback.** They are on the Mascot's clock, undelayed, because
 the whole point of them is that the word names the pose on screen; any offset would slide the words off the
 picture by exactly that offset. They are invisible during the playback anyway, because their row is.
+
+## The startup block is grounded, decided by rendering both, 2026-10-02
+
+The three lines beside the Mascot were CENTRED on the sprite's band, and that was decided from
+theory at a point when the brief for the block had explicitly forbidden deciding it that way.
+Rendered both ways at 846px and looked at, grounded wins, and the artwork says why.
+
+**The band's geometric centre is not the sprite's optical centre.** Measured from the pose files:
+the sprite paints 818 ink pixels, and their centroid sits **4.35 rows down a 7-row band**, because
+the top two rows carry only **47 of the 818** (a narrow cat and two wisps of a dream bubble) while
+the four below are a full-width rack slab. A block centred on the BAND therefore sits a row and a
+third above the centre of the thing it is beside, which is exactly what reads as high, and it
+leaves the sprite's whole lower right empty.
+
+Grounded, the block's last line is level with the sprite's last row. Three things follow, and all
+three were visible in the render rather than argued for:
+
+- The block and the sprite **end on one floor**, so the blank row and the role line below close both
+  of them together instead of closing the art and leaving the text hanging.
+- The three lines land **one per rack unit**, which is a real relationship rather than a tidier
+  rectangle: the lines are the machine's own startup output and they now sit on the machine.
+- The air that is left goes to the **top right**, where the dream bubble already floats, so it reads
+  as sky over a sleeping cat rather than as a hole under the text. Centred, the bubble's wisps come
+  up almost against the Handle.
+
+A third option was rendered and rejected, so it is not re-derived: placing the block on the measured
+ink centroid, which comes to one row higher than grounded. It is closer to the centroid by two
+thirds of a row and it loses both of the first two points above, and its rule is a number only the
+arithmetic knows, where "level with the sprite's last row" is a rule a reader can see.
+
+The project's prior for grounded over centred is real (the wordmark this Header replaced went the
+same way) but it did not decide this; the renders did, and the centroid figure is what makes the
+reading checkable rather than a matter of taste.
 
 ## Verifying while another agent may be mutating
 
