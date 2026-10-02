@@ -381,6 +381,29 @@ The work is done when all of these pass:
 
 Checked by the owner after publishing, because they cannot be tested here: Safari, iOS, and the GitHub mobile app.
 
+Everything above that can be checked by a machine is checked by one: `npm run gates` (`scripts/gates.ts`),
+which the refresh workflow runs before it commits anything. It adds the gates that only exist because a
+failure would be invisible rather than because the list above asked for them: no em-dash or en-dash in
+visible copy, no control character in generated output, none of the ten absent glyphs (3.3), the
+reduced-motion rule present and actually zeroing animation, SVG structural integrity (duplicate ids,
+references with no target, a missing `viewBox`, a box the art is letterboxed in), the README referencing
+both assets and the transcript block and carrying none of the HTML GitHub strips, no token-shaped string
+anywhere in the tree, and `npm run typecheck` at exit 0.
+
+**It reports three states, not two.** A gate passes, fails, or is `absent` because the thing it reads has
+not been built yet, and the run exits 0, 1 and 3 for the three. Until the first authenticated refresh there
+is no cache and no asset (5.3), and a gate that failed identically for "this output is wrong" and "this
+output does not exist yet" would be useless on the first real run, which is the one time somebody has to
+tell them apart.
+
+**Gate 6 reads the private half of the forbidden-name list.** `FORBIDDEN_NAMES` is a committed placeholder
+plus whatever `PROFILE_FORBIDDEN_NAMES` adds (4.2). The committed entry is published in `src/content.ts` by
+design, so scanning the tree for it reports the gate's own source and the tests that exercise it and nothing
+about anybody's privacy; the private half is what a tree scan is for. With nothing configured the gate
+reports `absent` rather than clean, because "nothing was checked" must not read as "the tree is clean". The
+committed placeholder is still scanned for in the generated output, where finding it means a placeholder
+reached a published surface.
+
 ## 7. Accessibility
 
 Targets WCAG 2.1 AA, with one documented exception.
