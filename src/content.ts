@@ -10,9 +10,21 @@ export type Lane = { label: string; repos: Repo[] };
 export type StackRow = { label: string; items: string[] };
 /** The Statusline toggle: the owner's word and the state it reads, e.g. "Ultrachill" and "on". */
 export type Toggle = { word: string; state: string };
+/**
+ * The two ends of the effort axis, which the panel prints above the track: `start` sits at its left
+ * end and `end` at its right. Named for the positions rather than for the words, because the words
+ * are the owner's and the positions are the layout's.
+ */
+export type EffortEnds = { start: string; end: string };
 export type Statusline = {
-  effortWord: string; effortLabels: string[]; effortSelected: string;
+  effortWord: string; effortEnds: EffortEnds; effortLabels: string[]; effortSelected: string;
   modeBadge: string; note: string; toggle: Toggle;
+  /** The one-line gloss on the toggle, under the scale. The only string that describes the picture. */
+  toggleNote: string;
+  /** The hint under the toggle, e.g. "Tab to toggle". */
+  toggleHint: string;
+  /** The panel's key hints, as labelled fragments; the generator supplies the separator between them. */
+  help: string[];
 };
 /**
  * The /activity result line as labelled fragments: `<label> N/365 <daysUp> · M <contributions>`.
@@ -178,13 +190,26 @@ function assertShape(c: unknown): asserts c is Content {
   text(c.activityLine.contributions, "activityLine.contributions");
 
   if (!isObj(c.statusline)) fail("statusline must be an object");
-  const { effortWord, effortLabels, effortSelected, modeBadge, note, toggle } = c.statusline;
+  const {
+    effortWord, effortEnds, effortLabels, effortSelected,
+    modeBadge, note, toggle, toggleNote, toggleHint, help,
+  } = c.statusline;
   text(effortWord, "statusline.effortWord");
+  // The axis is labelled at both ends, so both words are the owner's and both are checked here.
+  if (!isObj(effortEnds)) fail("statusline.effortEnds must be an object");
+  text(effortEnds.start, "statusline.effortEnds.start");
+  text(effortEnds.end, "statusline.effortEnds.end");
   if (!Array.isArray(effortLabels) || effortLabels.length === 0) fail("statusline.effortLabels must not be empty");
   effortLabels.forEach((label, i) => text(label, `statusline.effortLabels[${i}]`));
   if (!effortLabels.includes(effortSelected)) fail("statusline.effortSelected must be one of effortLabels");
   text(modeBadge, "statusline.modeBadge");
   text(note, "statusline.note");
+  // The gloss, the hint and the key fragments are all words a reader reads aloud, so all of them
+  // are copy by the docs/spec.md 4.1 test and none of them may live in the generator.
+  text(toggleNote, "statusline.toggleNote");
+  text(toggleHint, "statusline.toggleHint");
+  if (!Array.isArray(help) || help.length === 0) fail("statusline.help must list at least one fragment");
+  help.forEach((fragment, i) => text(fragment, `statusline.help[${i}]`));
   // The toggle is its own copy, not one of the effort labels, so it needs its own home here:
   // every visible word belongs to the owner, and the copy audit only reads this file.
   if (!isObj(toggle)) fail("statusline.toggle must be an object");

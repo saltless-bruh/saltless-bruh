@@ -294,14 +294,19 @@ test("the drawn verbs sit at the column the transcript's verb sits at", async ()
   assert.equal([...xs][0], String(16 + col * 12), "the drawn verbs are not where the transcript's verb is");
 });
 
-test("the Statusline toggle shimmers across its own characters", async () => {
+test("the Statusline toggle rests on a gradient and shimmers across its own characters", async () => {
   const word = [...loadContent().statusline.toggle.word];
   for (const [name, svg] of await svgsOf()) {
     word.forEach((ch, i) => {
-      assert.ok(svg.includes(`class="accent shimmer-${i}"`), `${name}: character ${i} of the toggle has no highlight copy`);
+      // The resting copy: its own colour per character, and no animation anywhere near it.
+      assert.ok(svg.includes(`class="accent-bold gradient-${i}"`), `${name}: character ${i} of the toggle has no gradient copy`);
+      assert.match(svg, new RegExp(`\\.gradient-${i} \\{ fill: #[0-9a-f]{6} \\}`), `${name}: character ${i} has no ramp colour`);
+      // The travelling copy over it.
+      assert.ok(svg.includes(`class="accent-bold shimmer-${i}"`), `${name}: character ${i} of the toggle has no highlight copy`);
       assert.ok(svg.includes(`.shimmer-${i} {`), `${name}: character ${i} has no shimmer rule`);
     });
     assert.ok(!svg.includes(`.shimmer-${word.length} {`), `${name}: a shimmer rule exists for a character the word does not have`);
+    assert.ok(!svg.includes(`.gradient-${word.length} {`), `${name}: a ramp colour exists for a character the word does not have`);
   }
 });
 

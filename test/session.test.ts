@@ -46,8 +46,11 @@ function altered(): Content {
   c.stackRows = [{ label: "tools", items: ["aa", "bb"] }, { label: "", items: ["cc"] }];
   c.activityLine = { label: "recon done,", daysUp: "live days", contributions: "commits" };
   c.statusline = {
-    effortWord: "Budget", effortLabels: ["one", "two", "three"], effortSelected: "two",
+    effortWord: "Budget", effortEnds: { start: "Cheaper", end: "Better" },
+    effortLabels: ["one", "two", "three"], effortSelected: "two",
     modeBadge: "manual", note: "a short note", toggle: { word: "Hypermellow", state: "idle" },
+    toggleNote: "Hypermellow: a different gloss", toggleHint: "Space to flip",
+    help: ["j/k to move", "q to quit"],
   };
   return c;
 }
@@ -121,6 +124,8 @@ test("the glyphs the session draws exist in both faces of the font", () => {
 test("in each face of the Session, no two runs overlap or touch, apart from a highlight copy", () => {
   // A run can only collide with what is shown beside it, so the picture (everything but the
   // text-only runs) and the transcript (everything but the drawn-only ones) are checked apart.
+  // Fragments of one drawn thing, a track broken by its marker or a word split so each character
+  // can carry its own colour, may TOUCH each other and nothing else; they still may not overlap.
   const faces: [string, (run: Run) => boolean][] = [
     ["the picture", (run) => !run.textOnly],
     ["the transcript", (run) => !run.drawOnly],
@@ -132,8 +137,9 @@ test("in each face of the Session, no two runs overlap or touch, apart from a hi
         const runs = row.runs.filter((r) => shown(r) && !isShimmer(r.cls)).sort((a, b) => a.col - b.col);
         runs.slice(1).forEach((run, k) => {
           const prev = runs[k];
+          const gap = prev.piece !== undefined && prev.piece === run.piece ? 0 : 1;
           assert.ok(
-            prev.col + [...prev.text].length < run.col,
+            prev.col + [...prev.text].length + gap <= run.col,
             `row ${i} in ${face}: ${JSON.stringify(prev.text)} runs into ${JSON.stringify(run.text)}`,
           );
         });
@@ -214,6 +220,46 @@ test("alternatives share columns only with their own layer, and still collide wi
   }
 });
 
+test("fragments of one drawn thing may touch, and still may not overlap", () => {
+  // `piece` names the group, like `layer` does, so renaming a class cannot quietly stop the row
+  // model protecting the row. Fragments are a track broken by its marker, and a word split so each
+  // character can carry its own colour.
+  const frag = (col: number, text: string, piece?: string): Run =>
+    ({ col, text, ...(piece === undefined ? {} : { piece }) });
+
+  // Positive: the track, its marker and the rest of the track, shoulder to shoulder.
+  assert.doesNotThrow(() => assertNoCollisions([{ runs: [
+    frag(0, "───", "track"), frag(3, "▲", "track"), frag(4, "──", "track"),
+  ] }]), "fragments of one piece may touch");
+  // Positive: a word split into one run per character.
+  assert.doesNotThrow(() => assertNoCollisions([{ runs: [
+    frag(0, "l", "word"), frag(1, "a", "word"), frag(2, "z", "word"), frag(3, "y", "word"),
+  ] }]));
+
+  // Negative: touching is as far as it goes. Overlapping fragments could spell something other
+  // than what the transcript reads, which is the whole reason the exemption is not simply "skip".
+  assert.throws(() => assertNoCollisions([{ runs: [
+    frag(0, "───", "track"), frag(2, "▲", "track"),
+  ] }]), /row 0 in the picture: "───" runs into "▲"; they overlap/);
+  // Negative: two different pieces are not one group, so they still need a blank column.
+  assert.throws(() => assertNoCollisions([{ runs: [frag(0, "──", "track"), frag(2, "x", "word")] }]), /runs into/);
+  // Negative: either side carrying no piece at all.
+  for (const runs of [[frag(0, "──", "track"), frag(2, "x")], [frag(0, "──"), frag(2, "x", "track")]]) {
+    assert.throws(() => assertNoCollisions([{ runs }]), /runs into/);
+  }
+  // Negative: an empty name forms no group, so a piece that came out blank exempts nothing.
+  assert.throws(() => assertNoCollisions([{ runs: [frag(0, "──", ""), frag(2, "x", "")] }]), /runs into/);
+  // Negative: a fragment still needs a blank column before whatever sits outside its group.
+  assert.throws(() => assertNoCollisions([{ runs: [
+    frag(0, "───", "track"), frag(3, "▲", "track"), frag(4, "x"),
+  ] }]), /row 0 in the picture: "▲" runs into "x"/);
+
+  // And the composed Session's own pieces are exactly the three the panel builds.
+  const names = new Set(composeSession(loadContent(), busy).rows.flatMap((r) => r.runs.map((run) => run.piece)));
+  names.delete(undefined);
+  assert.deepEqual([...names].sort(), ["effort-top-tier", "effort-track", "statusline-toggle"]);
+});
+
 test("no run is empty, so no empty element is drawn", () => {
   for (const [, make] of CONTENTS) {
     for (const row of composeSession(make(), busy).rows) {
@@ -244,13 +290,18 @@ test("each part of the session wears its own style", () => {
   assert.deepEqual(stylesOf(stack.label), ["muted"]);
   assert.deepEqual(stylesOf(stack.items.join("  ")), ["text"]);
   assert.deepEqual(stylesOf(resultLine(c, busy)), ["accent"]);
-  assert.deepEqual(stylesOf("─".repeat(COLS)), ["muted", "muted"]);
+  // Two full-width rules: the one closing the header, and the Statusline panel's accent top border.
+  assert.deepEqual(stylesOf("─".repeat(COLS)), ["muted", "accent"]);
   assert.deepEqual(stylesOf("✶"), ["accent"]);
-  assert.deepEqual(stylesOf("Effort"), ["muted"]);
+  assert.deepEqual(stylesOf("Effort"), ["accent"]);
+  assert.deepEqual(stylesOf(c.statusline.effortEnds.start), ["text"]);
+  assert.deepEqual(stylesOf(c.statusline.effortEnds.end), ["text"]);
+  assert.deepEqual(stylesOf("▲"), ["accent"]);
   assert.deepEqual(stylesOf(`▶▶ ${c.statusline.modeBadge}`), ["muted"]);
   assert.deepEqual(stylesOf(c.statusline.note), ["muted"]);
-  assert.deepEqual(stylesOf(c.statusline.toggle.word), ["muted"], "the base copy of the toggle word");
-  assert.deepEqual(stylesOf(c.statusline.toggle.state), ["muted"]);
+  assert.deepEqual(stylesOf(c.statusline.toggleNote), ["muted"]);
+  assert.deepEqual(stylesOf(c.statusline.toggleHint), ["muted"]);
+  assert.deepEqual(stylesOf(c.statusline.toggle.state), ["accent"]);
 });
 
 // ---- the header ----
@@ -627,12 +678,12 @@ test("the Session is exactly the rows its parts need", () => {
     + 1 + activity.languages.length + c.stackRows.length + 1  // /stack, languages, tool rows, a blank
     + 1 + SCAN_ROWS + 1 + 1            // /activity, the sweep's rows, the result line, a blank
     + 1                                // the spinner
-    + 1 + 2;                           // the closing rule, the effort row, the mode row
+    + PANEL_ROWS;                      // the Statusline, which is a panel and not a line
   assert.equal(rows.length, expected, "a row was added or lost somewhere in the composition");
   // Pinned absolutely as well, so every change to the budget is deliberate. The sweep reserving
   // 4 rows rather than the first draft's 8 took the Session from 57 to 53; the blank row the
-  // artwork needs under it puts one back.
-  assert.equal(rows.length, 54);
+  // artwork needs under it puts one back; the Statusline becoming a panel adds eight more.
+  assert.equal(rows.length, 62);
 });
 
 test("the Scan Sweep gets its own rows right under /activity, and the result line follows them", () => {
@@ -670,65 +721,207 @@ for (const [label, make] of CONTENTS) {
   });
 }
 
-test("a rule closes the spinner section and the statusline follows it", () => {
+test("a rule closes the spinner section and the statusline panel follows it", () => {
   const { rows, verbRow } = composeSession(loadContent(), activity);
   assert.equal(rowsToText([rows[verbRow + 1]]), "─".repeat(COLS));
-  assert.equal(rows.length, verbRow + 4, "rule, effort row, mode row, and nothing after");
+  assert.equal(rows.length, verbRow + 1 + PANEL_ROWS, "the panel, and nothing after it");
+  assert.equal(verbRow + 1, rows.length + PANEL.border, "the rule that closes the spinner IS the panel's top border");
 });
 
-// ---- the statusline ----
+// ---- the statusline panel ----
+//
+// The Statusline is a PANEL, not a line: an accent top border, its padding, a heading, the axis's
+// two ends, a track carrying a marker, the five levels, the toggle with its gloss and hint, and the
+// key hints under all of it. The rows are addressed from the END of the Session, because everything
+// above them can grow and the panel is always the last thing printed.
+
+/** Where each of the panel's rows sits, counted back from the last row of the Session. */
+const PANEL = {
+  border: -11, padding: -10, heading: -9, ends: -8, track: -7,
+  levels: -6, toggle: -5, hint: -4, gap: -3, help: -2, mode: -1,
+} as const;
+/** How many rows the panel occupies, derived from the row furthest back. */
+const PANEL_ROWS = -Math.min(...Object.values(PANEL));
+
+const rowAt = (rows: Row[], at: number): Row => rows[rows.length + at];
+const lineAt = (rows: Row[], at: number): string => rowsToText([rowAt(rows, at)]);
+const panelOf = (c: Content): Row[] => composeSession(c, activity).rows;
+
+/**
+ * Every run of non-blank characters in a line, with the column it starts at.
+ *
+ * Read off the painted transcript rather than out of the runs on purpose: the top tier is drawn as
+ * one run per character so that each can carry its own hue, so there is no single run to ask, and a
+ * test that asked the runs would be checking the generator against itself.
+ */
+function tokensOf(line: string): { text: string; col: number }[] {
+  return [...line.matchAll(/\S+/g)].map((m) => ({ text: m[0], col: [...line.slice(0, m.index)].length }));
+}
+
+/** The span of columns the track covers, and where its marker sits. */
+function trackOf(rows: Row[]): { from: number; to: number; marker: number } {
+  const line = [...lineAt(rows, PANEL.track)];
+  const marker = line.indexOf("▲");
+  const from = line.findIndex((ch) => ch !== " ");
+  return { from, to: line.length, marker };
+}
 
 for (const [label, make] of CONTENTS) {
-  test(`the effort row is the content's word, three columns, then every level in order (${label})`, () => {
+  test(`the panel is a border, a heading, the axis, the track, the levels and the toggle (${label})`, () => {
     const c = make();
-    const lines = linesOf(composeSession(c, activity).rows);
-    const effort = lines[lines.length - 2];
-    const shown = c.statusline.effortLabels.map((l) => (l === c.statusline.effortSelected ? `[${l}]` : l));
-    assert.ok(effort.startsWith(`${c.statusline.effortWord}   ${shown.join("  ")}`), effort);
-  });
+    const rows = panelOf(c);
+    const s = c.statusline;
+    assert.equal(lineAt(rows, PANEL.border), "─".repeat(COLS), "the panel's top border is a full-width rule");
+    assert.equal(rowAt(rows, PANEL.border).runs[0].style, "accent", "and it is the Accent, which is what makes it a panel edge");
+    assert.deepEqual(rowAt(rows, PANEL.padding).runs, [], "a blank row of padding under the border");
+    assert.deepEqual(rowAt(rows, PANEL.heading).runs, [{ col: 0, text: s.effortWord, style: "accent" }]);
+    assert.deepEqual(rowAt(rows, PANEL.gap).runs, [], "a blank row before the key hints");
 
+    const ends = tokensOf(lineAt(rows, PANEL.ends));
+    assert.deepEqual(ends.map((t) => t.text), [s.effortEnds.start, s.effortEnds.end], "the axis is labelled at both ends");
+    const { from, to, marker } = trackOf(rows);
+    assert.equal(ends[0].col, from, "the first end sits at the track's left end");
+    assert.equal(ends[1].col + [...s.effortEnds.end].length, to, "the second ends with the track");
+    assert.ok(marker >= from && marker < to, "the marker is on the track");
+    assert.equal(lineAt(rows, PANEL.track).replace(/[─▲]/g, "").trim(), "", "the track is the rule and its marker, nothing else");
+
+    assert.deepEqual(tokensOf(lineAt(rows, PANEL.levels)).map((t) => t.text), s.effortLabels, "every level in order");
+    assert.ok(lineAt(rows, PANEL.toggle).startsWith(" ".repeat(from) + s.toggleNote), "the gloss starts where the track does");
+    assert.ok(lineAt(rows, PANEL.toggle).endsWith(`${s.toggle.word}  ${s.toggle.state}`), "the toggle closes the row");
+    assert.equal(lineAt(rows, PANEL.hint).trim(), s.toggleHint);
+    assert.equal(lineAt(rows, PANEL.help), `  ${s.help.join(" · ")}`, "the hints, joined by the generator's own mark");
+  });
+}
+
+test("the marker is placed from the selected level's own column, wherever on the scale it sits", () => {
+  const c = loadContent();
+  const labels = [...c.statusline.effortLabels];
+  // EVERY selection, first and last included. The owner's scale selects its LAST level and an
+  // earlier one selected the middle of five, so a marker fixed at the track's midpoint would have
+  // looked right for one of them and been silently wrong for the other. Only a selection that is
+  // not the middle can tell the two apart, which is why this loops rather than checking one.
+  for (const selected of labels) {
+    c.statusline.effortSelected = selected;
+    const rows = panelOf(c);
+    const level = tokensOf(lineAt(rows, PANEL.levels)).find((t) => t.text === selected)!;
+    const { from, to, marker } = trackOf(rows);
+    const last = level.col + [...selected].length - 1;
+    assert.ok(marker >= level.col && marker <= last, `${selected}: the marker is at ${marker}, outside ${level.col}..${last}`);
+    assert.ok(Math.abs((marker - level.col) - (last - marker)) <= 1, `${selected}: the marker is not centred on its level`);
+    assert.equal([...lineAt(rows, PANEL.track)].filter((ch) => ch === "▲").length, 1, "exactly one marker");
+    // and the midpoint of the track is not where it is, for the levels that are not in the middle
+    if (selected !== labels[(labels.length - 1) / 2]) {
+      assert.notEqual(marker, Math.round((from + to - 1) / 2), `${selected}: the marker sits at the track's midpoint`);
+    }
+  }
+});
+
+test("the levels are evenly distributed across the track, and the track spans them", () => {
+  for (const [, make] of CONTENTS) {
+    const c = make();
+    const rows = panelOf(c);
+    const { from, to } = trackOf(rows);
+    const levels = tokensOf(lineAt(rows, PANEL.levels));
+    assert.ok(levels[0].col >= from, "a level starts before the track does");
+    assert.ok(levels.at(-1)!.col + [...levels.at(-1)!.text].length <= to, "a level runs past the end of the track");
+    // Each level is centred on its own slot, so the centres step by the slot width. Integer columns
+    // cannot land on a fractional width exactly, so neighbouring steps may differ by one and no more.
+    const centres = levels.map((t) => t.col + ([...t.text].length - 1) / 2);
+    const steps = centres.slice(1).map((x, i) => x - centres[i]);
+    const slot = (to - from) / levels.length;
+    for (const step of steps) assert.ok(Math.abs(step - slot) <= 1, `a gap of ${step} where the slot is ${slot}`);
+  }
+});
+
+test("the selected level is bold and the Accent, the rest are muted, and no level is bracketed", () => {
+  const c = loadContent();
+  for (const selected of c.statusline.effortLabels) {
+    c.statusline.effortSelected = selected;
+    const rows = panelOf(c);
+    const line = lineAt(rows, PANEL.levels);
+    assert.ok(!line.includes("[") && !line.includes("]"), `brackets survive with ${selected} selected: ${line}`);
+    const runs = rowAt(rows, PANEL.levels).runs;
+    for (const label of c.statusline.effortLabels) {
+      const mine = runs.filter((r) => label.includes(r.text) && label.indexOf(r.text) >= 0 && r.text !== "");
+      assert.ok(mine.length > 0, `${label} draws nothing`);
+    }
+    // The run that draws a level: one run for an ordinary level, one per character for the top tier.
+    const styleOf = (label: string): string[] => {
+      const col = tokensOf(line).find((t) => t.text === label)!.col;
+      const width = [...label].length;
+      return runs.filter((r) => r.col >= col && r.col < col + width).map((r) => r.style!);
+    };
+    for (const label of c.statusline.effortLabels) {
+      const want = label === selected ? "accent-bold" : label === c.statusline.effortLabels.at(-1) ? "accent" : "muted";
+      assert.deepEqual([...new Set(styleOf(label))], [want], `${label} with ${selected} selected`);
+    }
+  }
+});
+
+test("the top tier is drawn as a rainbow, one run per character, whichever level is selected", () => {
+  const c = loadContent();
+  const top = c.statusline.effortLabels.at(-1)!;
+  for (const selected of c.statusline.effortLabels) {
+    c.statusline.effortSelected = selected;
+    const rows = panelOf(c);
+    const line = lineAt(rows, PANEL.levels);
+    const col = tokensOf(line).find((t) => t.text === top)!.col;
+    const chars = [...top];
+    const painted = rowAt(rows, PANEL.levels).runs.filter((r) => r.cls?.startsWith("rainbow-"));
+    assert.equal(painted.length, chars.length, `${selected}: one run per character of the top tier`);
+    painted.forEach((r, i) => {
+      assert.equal(r.cls, `rainbow-${i}`);
+      assert.equal(r.text, chars[i]);
+      assert.equal(r.col, col + i, `character ${i} sits on its own column`);
+    });
+    // It is the TOP of the scale that earns the rainbow, not the selection, so no other level has it.
+    assert.equal(line.replace(top, "").includes("rainbow"), false);
+  }
+  // and the transcript still reads the word once, as one word
+  assert.ok(lineAt(panelOf(loadContent()), PANEL.levels).includes(top));
+});
+
+for (const [label, make] of CONTENTS) {
   test(`the mode row has the badge on the left and the note flush to the right edge (${label})`, () => {
     const c = make();
-    const lines = linesOf(composeSession(c, activity).rows);
-    const mode = lines[lines.length - 1];
+    const mode = lineAt(composeSession(c, activity).rows, PANEL.mode);
     assert.ok(mode.startsWith(`▶▶ ${c.statusline.modeBadge}`), mode);
     assert.ok(mode.endsWith(c.statusline.note), mode);
     assert.equal([...mode].length, COLS, "the note ends on the last column");
   });
 }
 
-test("the statusline marks the selected effort and carries the note", () => {
+test("every word of the panel comes from content.json, and none of them from the generator", () => {
   const c = loadContent();
-  const text = rowsToText(composeSession(c, activity).rows);
-  assert.match(text, new RegExp(`\\[${c.statusline.effortSelected}\\]`));
-  assert.ok(text.includes(c.statusline.note));
-});
-
-test("whichever effort is selected is the only one marked, and the others stay plain", () => {
-  const c = loadContent();
-  for (const selected of c.statusline.effortLabels) {
-    c.statusline.effortSelected = selected;
-    const { rows } = composeSession(c, activity);
-    const effort = rows[rows.length - 2];
-    const text = rowsToText([effort]);
-    for (const label of c.statusline.effortLabels) {
-      assert.equal(text.includes(`[${label}]`), label === selected, `[${label}] with ${selected} selected`);
-      assert.ok(text.includes(label), `${label} is missing`);
-    }
-    const run = (label: string) => effort.runs.find((r) => r.text === (label === selected ? `[${label}]` : label));
-    for (const label of c.statusline.effortLabels) {
-      assert.equal(run(label)?.style, label === selected ? "accent" : "muted", `style of ${label} with ${selected} selected`);
-    }
+  const s = c.statusline;
+  const before = rowsToText(composeSession(c, activity).rows);
+  for (const word of [s.effortEnds.start, s.effortEnds.end, s.toggleNote, s.toggleHint, ...s.help]) {
+    assert.ok(before.includes(word), `${word} is not drawn`);
+  }
+  const changed = loadContent();
+  changed.statusline.effortEnds = { start: "Quicker", end: "Wiser" };
+  changed.statusline.toggleNote = "a different gloss entirely";
+  changed.statusline.toggleHint = "Space to flip";
+  changed.statusline.help = ["one hint", "another hint"];
+  const after = rowsToText(composeSession(changed, activity).rows);
+  for (const word of ["Quicker", "Wiser", "a different gloss entirely", "Space to flip", "one hint · another hint"]) {
+    assert.ok(after.includes(word), `${word} did not reach the Session`);
+  }
+  for (const word of [s.effortEnds.start, s.effortEnds.end, s.toggleNote, s.toggleHint, ...s.help]) {
+    assert.ok(!after.includes(word), `${word} is still written into the generator`);
   }
 });
 
-test("a longer effort word pushes the levels along rather than running into them", () => {
+test("a longer effort word pushes the track along rather than leaving it where it was", () => {
   const c = loadContent();
-  const shown = c.statusline.effortLabels.map((l) => (l === c.statusline.effortSelected ? `[${l}]` : l));
-  for (const word of ["E", "Effort", "Reasoning budget"]) {
+  c.statusline.toggleNote = "a short gloss";   // the gloss shares the toggle's row, not the track's
+  const widths = ["E", "Effort", "Reasoning budget"].map((word) => {
     c.statusline.effortWord = word;
-    const effort = linesOf(composeSession(c, activity).rows).at(-2)!;
-    assert.ok(effort.startsWith(`${word}   ${shown.join("  ")}`), `${word}: ${effort}`);
+    return { word, from: trackOf(panelOf(c)).from };
+  });
+  for (let i = 1; i < widths.length; i++) {
+    const grew = [...widths[i].word].length - [...widths[i - 1].word].length;
+    assert.equal(widths[i].from - widths[i - 1].from, grew, `${widths[i].word} did not push the track by its own length`);
   }
 });
 
@@ -743,20 +936,22 @@ test("a note that would run into the badge, or touch it, is rejected rather than
   assert.throws(() => composeSession(c, activity), /runs into/);
 });
 
-test("effort labels that would run into the toggle, or touch it, are rejected", () => {
+test("a gloss that would run into the toggle, or touch it, is rejected", () => {
   const c = loadContent();
-  const { effortLabels, effortSelected } = c.statusline;
-  const start = c.statusline.effortWord.length + 3
-    + effortLabels.reduce((s, l) => s + (l === effortSelected ? l.length + 2 : l.length) + 2, 0);
-  const toggleCol = COLS - `${c.statusline.toggle.word} ${c.statusline.toggle.state}`.length;
-  const withLast = (len: number): Content => {
-    const copy = loadContent();
-    copy.statusline.effortLabels = [...effortLabels, "x".repeat(len)];
-    return copy;
-  };
-  assert.doesNotThrow(() => composeSession(withLast(toggleCol - 1 - start), activity), "one blank column before the toggle");
-  assert.throws(() => composeSession(withLast(toggleCol - start), activity), /runs into/);
-  assert.throws(() => composeSession(withLast(toggleCol - start + 5), activity), /runs into/);
+  const room = COLS - `${c.statusline.toggle.word}  ${c.statusline.toggle.state}`.length - trackOf(panelOf(c)).from;
+  c.statusline.toggleNote = "g".repeat(room - 1);
+  assert.doesNotThrow(() => composeSession(c, activity), "one blank column before the toggle");
+  c.statusline.toggleNote = "g".repeat(room);
+  assert.throws(() => composeSession(c, activity), /runs into/);
+  c.statusline.toggleNote = "g".repeat(room + 5);
+  assert.throws(() => composeSession(c, activity), /runs into/);
+});
+
+test("levels too wide for the track are rejected rather than drawn over one another", () => {
+  const c = loadContent();
+  c.statusline.effortLabels = c.statusline.effortLabels.map((l) => l + "x".repeat(10));
+  c.statusline.effortSelected = c.statusline.effortLabels[0];
+  assert.throws(() => composeSession(c, activity), /runs into|do not fit/);
 });
 
 test("a note wider than the whole Session is rejected, not drawn off the left edge", () => {
@@ -765,12 +960,7 @@ test("a note wider than the whole Session is rejected, not drawn off the left ed
   assert.throws(() => composeSession(c, activity), /runs into/);
 });
 
-// ---- the shimmer word ----
-
-function effortRow(c: Content): Row {
-  const { rows } = composeSession(c, activity);
-  return rows[rows.length - 2];
-}
+// ---- the toggle: a gradient standing still, and a sheen that travels it ----
 
 test("the toggle's word and its state are the owner's copy, read from content.json", () => {
   const shipped = JSON.parse(readFileSync(new URL("../content.json", import.meta.url), "utf8"));
@@ -781,53 +971,55 @@ test("the toggle's word and its state are the owner's copy, read from content.js
   // The generator spells neither of them: change the file and the Statusline changes with it.
   const c = loadContent();
   c.statusline.toggle = { word: "Overcaffeinated", state: "warm" };
-  const text = rowsToText([effortRow(c)]);
-  assert.ok(text.endsWith("Overcaffeinated warm"), text);
+  c.statusline.toggleNote = "a gloss with no old word in it";
+  const text = lineAt(composeSession(c, activity).rows, PANEL.toggle);
+  assert.ok(text.endsWith("Overcaffeinated  warm"), text);
   assert.ok(!text.includes("Ultrachill"), "the old word is still written into the generator");
-  assert.ok(!/ on$/.test(text), "the old state is still written into the generator");
 });
 
-test("the shimmer is a per-character stagger over a base copy, for a word of any length", () => {
+test("the resting word is a gradient: one run per character, each with its own ramp colour", () => {
   for (const word of ["x", "Ultrachill", "Supercalifragilistic"]) {
     const c = loadContent();
     c.statusline.toggle = { word, state: "on" };
-    const row = effortRow(c);
+    c.statusline.toggleNote = "g";   // a long toggle leaves the gloss little room, and it shares its row
+    const row = rowAt(composeSession(c, activity).rows, PANEL.toggle);
     const chars = [...word];
-    const base = row.runs.filter((r) => r.text === word && r.cls === undefined);
-    assert.equal(base.length, 1, `${word}: exactly one base copy`);
-    assert.equal(base[0].style, "muted");
-    const copy = row.runs.filter((r) => isShimmer(r.cls));
-    assert.equal(copy.length, chars.length, `${word}: one highlight run per character`);
-    copy.forEach((r, i) => {
-      assert.equal(r.cls, `shimmer-${i}`, `${word}: character ${i}`);
+    const base = row.runs.filter((r) => r.cls?.startsWith("gradient-"));
+    assert.equal(base.length, chars.length, `${word}: one gradient run per character`);
+    base.forEach((r, i) => {
+      assert.equal(r.cls, `gradient-${i}`, `${word}: character ${i}`);
       assert.equal(r.text, chars[i]);
-      assert.equal(r.style, "accent");
-      assert.equal(r.col, base[0].col + i, `${word}: character ${i} sits over its own letter of the base`);
+      assert.equal(r.style, "accent-bold", "the toggle is bold, and its ramp paints over the role's fill");
+      assert.equal(r.col, base[0].col + i, `${word}: character ${i} sits on its own column`);
     });
+    // Nothing hides it: the gradient is the STILL FRAME, so it carries no animation hook at all.
+    assert.ok(base.every((r) => !isShimmer(r.cls)), "the gradient copy is animated");
     const text = rowsToText([row]);
-    assert.ok(text.endsWith(`${word} on`), text);
-    assert.equal([...text].length, COLS, `${word}: the state ends on the last column`);
+    // The right column is flush with the Session's right edge, so the wider of the toggle and the
+    // hint beneath it ends on the last column. For a word shorter than its own hint that is the
+    // hint, which is why this measures the block rather than assuming it is the toggle.
+    assert.ok(text.endsWith(`${word}  on`), text);
+    const hint = lineAt(composeSession(c, activity).rows, PANEL.hint);
+    assert.equal(Math.max([...text].length, [...hint].length), COLS, `${word}: the right column is not flush right`);
+    assert.equal([...text].length - [...`${word}  on`].length, [...hint].length - [...c.statusline.toggleHint].length,
+      `${word}: the toggle and its hint do not start in the same column`);
   }
 });
 
 for (const [label, make] of CONTENTS) {
-  test(`the word is drawn twice at one position, a muted base and an accent copy split per character (${label})`, () => {
+  test(`the sheen is a second copy over the gradient, one run per character (${label})`, () => {
     const c = make();
     const word = c.statusline.toggle.word;
-    const row = effortRow(c);
+    const row = rowAt(composeSession(c, activity).rows, PANEL.toggle);
     const chars = [...word];
-    const base = row.runs.filter((r) => r.text === word);
-    assert.equal(base.length, 1, "exactly one base copy");
-    assert.equal(base[0].style, "muted");
-    assert.equal(base[0].cls, undefined);
-
+    const base = row.runs.filter((r) => r.cls?.startsWith("gradient-"));
     const copy = row.runs.filter((r) => isShimmer(r.cls));
     assert.equal(copy.length, chars.length, "one highlight run per character");
     copy.forEach((r, i) => {
       assert.equal(r.cls, `shimmer-${i}`);
       assert.equal(r.text, chars[i]);
-      assert.equal(r.style, "accent");
-      assert.equal(r.col, base[0].col + i, `character ${i} sits over its own letter of the base`);
+      assert.equal(r.style, "accent-bold", "the sheen is the top of the ramp, at the word's own weight");
+      assert.equal(r.col, base[i].col, `character ${i} sits over its own letter of the gradient`);
     });
   });
 }
@@ -836,12 +1028,14 @@ for (const [label, make] of CONTENTS) {
   test(`the word reads once in the transcript, followed by its state, flush with the right edge (${label})`, () => {
     const c = make();
     const { word, state } = c.statusline.toggle;
-    const lines = linesOf(composeSession(c, activity).rows);
-    const text = lines.join("\n");
-    assert.equal(text.split(word).length - 1, 1, "the word is written twice but must read once");
-    const effort = lines[lines.length - 2];
-    assert.ok(effort.endsWith(`${word} ${state}`), effort);
-    assert.equal([...effort].length, COLS);
+    const line = lineAt(composeSession(c, activity).rows, PANEL.toggle);
+    // Drawn twice over, once as the gradient and once as the sheen, and it must read once. The
+    // gloss beside it is the owner's own copy and names the toggle on purpose, so the count is
+    // taken on the toggle's own columns rather than over the whole row.
+    const toggled = line.slice(COLS - [...`${word}  ${c.statusline.toggle.state}`].length);
+    assert.equal(toggled.split(word).length - 1, 1, "the word is drawn many times but must read once");
+    assert.ok(line.endsWith(`${word}  ${state}`), line);
+    assert.equal([...line].length, COLS);
   });
 }
 
@@ -850,7 +1044,15 @@ test("the highlight copy lives in the same row as the word, in no other row", ()
   const { rows } = composeSession(c, activity);
   const withShimmer = rows.filter((r) => r.runs.some((run) => isShimmer(run.cls)));
   assert.equal(withShimmer.length, 1);
-  assert.ok(withShimmer[0].runs.some((run) => run.text === c.statusline.toggle.word));
+  assert.ok(withShimmer[0].runs.some((run) => run.cls?.startsWith("gradient-")));
+});
+
+test("the toggle is off the scale's own row, which is what sharing one made cramped", () => {
+  const c = loadContent();
+  const rows = panelOf(c);
+  assert.ok(!lineAt(rows, PANEL.levels).includes(c.statusline.toggle.word), "the toggle is back on the scale's row");
+  assert.ok(lineAt(rows, PANEL.toggle).includes(c.statusline.toggle.word));
+  assert.ok(lineAt(rows, PANEL.hint).includes(c.statusline.toggleHint));
 });
 
 // ---- the identity gate ----

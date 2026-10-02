@@ -43,9 +43,10 @@ const VALID: Content = {
   },
   activityLine: { label: "fixture done:", daysUp: "days seen", contributions: "pushes" },
   statusline: {
-    effortWord: "Fixtureffort",
+    effortWord: "Fixtureffort", effortEnds: { start: "Fixturestart", end: "Fixtureend" },
     effortLabels: ["low", "mid", "lazy", "max"], effortSelected: "lazy", modeBadge: "autopilot on",
     note: "fixture note", toggle: { word: "Fixtureword", state: "off" },
+    toggleNote: "fixture gloss", toggleHint: "fixture hint", help: ["fixture key", "fixture other key"],
   },
   readme: { imageAlt: "a fixture picture of a fixture session", transcriptSummary: "Fixture transcript" },
 };
@@ -175,8 +176,10 @@ test("the smallest valid document loads: one of everything", () => {
     },
     activityLine: { label: "a", daysUp: "d", contributions: "c" },
     statusline: {
-      effortWord: "e", effortLabels: ["only"], effortSelected: "only",
+      effortWord: "e", effortEnds: { start: "f", end: "s" },
+      effortLabels: ["only"], effortSelected: "only",
       modeBadge: "m", note: "n", toggle: { word: "t", state: "s" },
+      toggleNote: "g", toggleHint: "h", help: ["k"],
     },
     readme: { imageAlt: "a", transcriptSummary: "t" },
   };
@@ -343,11 +346,13 @@ test("a file that is not JSON is rejected, and the message says so", () => {
 const EDITABLE = leaves(VALID).filter((p) => p !== "statusline.effortSelected" && p !== "login");
 
 test("the sweep covers every string in the document, so it cannot pass vacuously", () => {
-  assert.equal(leaves(VALID).length, 48);
+  assert.equal(leaves(VALID).length, 54);
   for (const expected of [
     "handle", "whoami[2]", "lanes[1].repos[0].blurb", "stackRows[1].items[0]", "verbs.sleep[1]",
     "verbs.swat-down[0]", "verbs.recover[0]",
     "statusline.note", "statusline.toggle.word", "statusline.toggle.state", "statusline.effortWord",
+    "statusline.effortEnds.start", "statusline.effortEnds.end",
+    "statusline.toggleNote", "statusline.toggleHint", "statusline.help[1]",
     "activityLine.label", "activityLine.daysUp", "activityLine.contributions",
     "readme.imageAlt", "readme.transcriptSummary",
   ]) {

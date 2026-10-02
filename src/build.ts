@@ -14,6 +14,7 @@ import { buildSvg } from "./svg.ts";
 import { bannerLetters } from "./banner.ts";
 import { mascotCss, mascotDefs } from "./mascot.ts";
 import { scanCss, scanDefs } from "./scan.ts";
+import { rampCss } from "./ramp.ts";
 import { renderReadme } from "./readme.ts";
 import {
   bannerLetterClass, bannerRevealCss, bannerRevealSeconds,
@@ -122,17 +123,24 @@ export async function build(opts?: BuildOptions): Promise<BuildResult> {
   // class with no rule behind it, and more to the point must not look as though it were scheduled.
   const scheduled = new Set(marks.map((m) => m.row));
   const letters = bannerLetters(content.handle, bannerCol, bannerRow);
-  const css = [
+  const tiers = content.statusline.effortLabels;
+  const toggleChars = [...content.statusline.toggle.word].length;
+  const topTierChars = [...tiers[tiers.length - 1]].length;
+  // Everything here is the same in both variants, so it is built once.
+  const motion = [
     playbackCss(marks),
     bannerRevealCss(letters.length),
     spinnerCss(schedule),
-    shimmerCss([...content.statusline.toggle.word].length),
+    shimmerCss(toggleChars),
     mascotCss(),
     scanCss(),
   ].join("\n");
 
   const variants = {} as Record<ThemeName, string>;
   for (const theme of ["dark", "light"] as ThemeName[]) {
+    // The two Statusline ramps are the one part of the stylesheet that is NOT shared: both are
+    // computed from the variant's own `muted` and `accent`, so each file carries its own.
+    const css = `${motion}\n${rampCss(theme, toggleChars, topTierChars)}`;
     const banner = letters
       .map((l, i) => `<path class="${bannerLetterClass(i)}" d="${l.d}" fill="${PALETTES[theme].accent}"/>`)
       .join("\n");

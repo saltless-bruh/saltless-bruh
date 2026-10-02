@@ -57,6 +57,21 @@ const SHIMMER_PREFIX = "shimmer-";
 export const shimmerClass = (index: number): string => `${SHIMMER_PREFIX}${index}`;
 
 /**
+ * Per-character colour hooks for the two polychrome words in the Statusline. The colours themselves
+ * are computed from the palette in `src/ramp.ts`; these are only the names the two sides agree on.
+ *
+ * `gradient-N` paints the toggle word's resting gradient, which is the STILL FRAME: a reduced-motion
+ * reader sees the whole ramp and nothing else. `rainbow-N` paints the effort scale's top tier.
+ */
+export const gradientClass = (index: number): string => `gradient-${index}`;
+export const rainbowClass = (index: number): string => `rainbow-${index}`;
+
+/** The track's fragments, and the two split words, each named so the collision check can tell them apart. */
+const PIECE_TRACK = "effort-track";
+const PIECE_TOP_TIER = "effort-top-tier";
+const PIECE_TOGGLE = "statusline-toggle";
+
+/**
  * What a spinner verb ends with. Exported so the motion layer, which draws one verb per
  * Mascot pose, spells them the same way as the verb the transcript names.
  */
@@ -68,8 +83,27 @@ const MASCOT_GAP = 2;
 const BODY_COL = 2;
 /** Where a language name or a tool label starts, under the result glyph. */
 const LIST_COL = 5;
-/** Blank columns between the effort word and the first level, so a longer word pushes them along. */
-const EFFORT_GAP = 3;
+/**
+ * Blank columns between the effort panel's columns, and so the indent its track block sits at.
+ *
+ * The owner's reference panel sets a 40px grid gap at a 12px font. A monospace cell at that size is
+ * 12 x 0.6 = 7.2px wide, so 40px is 5.56 cells and six columns is that gap on this grid. It is the
+ * gap and not a hand-picked indent, which is why the number is derived here rather than guessed.
+ */
+const PANEL_GAP = 6;
+
+/**
+ * Blank columns between the toggle's word and the state it reads. The reference writes two
+ * non-breaking spaces there, so the state reads as a value beside the word rather than as part of it.
+ */
+const TOGGLE_GAP = 2;
+
+/**
+ * What goes between two fragments of the panel's key-hint line. A mark rather than a word, so it is
+ * Session Grammar and belongs here, exactly as the `·` on the /activity result line does
+ * (docs/spec.md 4.1).
+ */
+const HELP_SEPARATOR = "·";
 /** Columns between two things in a list that sit on the same row. */
 const SPACING = 2;
 const REPO_NAME_COL = 7;
@@ -77,8 +111,35 @@ const REPO_BLURB_COL = 9;
 
 const cells = (s: string): number => [...s].length;
 const blank = (): Row => ({ runs: [] });
-const rule = (): Row => ({ runs: [{ col: 0, text: "─".repeat(COLS), style: "muted" }] });
+const rule = (style: Run["style"] = "muted"): Row => ({ runs: [{ col: 0, text: "─".repeat(COLS), style }] });
 const isHighlight = (r: Run): boolean => r.cls?.startsWith(SHIMMER_PREFIX) ?? false;
+
+/**
+ * The column a drawn word's own glyphs centre on.
+ *
+ * This is what the effort marker is placed from. An even-length word has no exact centre column, so
+ * it takes the left of the two middle ones; what matters is that the number comes from the word's
+ * own position and width and from nothing else.
+ */
+export const centreCol = (col: number, text: string): number => col + Math.round((cells(text) - 1) / 2);
+
+/**
+ * Where the effort scale's levels are drawn: the track is divided into `labels.length` slots of
+ * equal width and each label is centred on its own slot, which is the five-column label grid of the
+ * owner's reference and is what makes the track span the levels rather than merely sit near them.
+ *
+ * The slot width is kept FRACTIONAL and only the final column is rounded. Rounding each slot edge
+ * first and centring inside the integer slot is the obvious alternative and it drifts: the rounding
+ * error accumulates along the row and the last few labels sit visibly off their own slots.
+ */
+export function effortLabelCols(labels: string[], trackCol: number, trackEnd: number): number[] {
+  const n = labels.length;
+  const width = trackEnd - trackCol;
+  if (n === 0) throw new Error("the effort scale has no levels to place");
+  if (width < n) throw new Error(`${n} effort levels do not fit in the ${width} columns between ${trackCol} and ${trackEnd}`);
+  const slot = width / n;
+  return labels.map((label, i) => Math.round(trackCol + slot * (i + 0.5) - cells(label) / 2));
+}
 
 /**
  * Whole percentages that always total 100, by largest remainder: every language gets the
@@ -116,6 +177,12 @@ export function languageShares(langs: { name: string; bytes: number }[]): { name
  * so by sharing a `layer` name, and then collides with everything except its own group. Every
  * pair is compared rather than only neighbours, because skipping a pair inside a layer could
  * otherwise hide the collision between its longest member and the run after it.
+ *
+ * Fragments of one drawn thing say so by sharing a `piece` name, and are then allowed to touch,
+ * because a track broken by its marker and a word split so each character can carry its own colour
+ * are both one thing wearing several runs. They are still refused if they OVERLAP, which is the
+ * part that keeps the exemption from being a hole: a split word whose runs were free to sit on top
+ * of one another could spell something other than what the transcript reads.
  */
 export function assertNoCollisions(rows: Row[]): void {
   const faces: [string, (run: Run) => boolean][] = [
@@ -132,8 +199,11 @@ export function assertNoCollisions(rows: Row[]): void {
           // Two alternatives are never shown together. An empty name forms no group, so a layer
           // that came out blank exempts nothing instead of quietly exempting everything.
           if (prev.layer && prev.layer === next.layer) continue;
-          if (prev.col + cells(prev.text) >= next.col) {
-            throw new Error(`row ${i} in ${face}: ${JSON.stringify(prev.text)} runs into ${JSON.stringify(next.text)}; they need a blank column between them`);
+          // Fragments of one thing may touch; a blank column is required of everything else.
+          const gap = prev.piece && prev.piece === next.piece ? 0 : 1;
+          if (prev.col + cells(prev.text) + gap > next.col) {
+            const why = gap === 0 ? "they overlap" : "they need a blank column between them";
+            throw new Error(`row ${i} in ${face}: ${JSON.stringify(prev.text)} runs into ${JSON.stringify(next.text)}; ${why}`);
           }
         }
       }
@@ -237,33 +307,121 @@ export function composeSession(c: Content, a: Activity): Session {
     { col: 0, text: "✶", style: "accent", cls: "spinner-glyph" },
     { col: BODY_COL, text: `${c.verbs[MASCOT_TIMELINE[0].state][0]}${VERB_SUFFIX}`, textOnly: true },
   ] });
-  rows.push(rule());
+  // ---- the Statusline, built as a PANEL rather than as a line ----
+  //
+  // The accent rule is the panel's top border and the blank row under it is its padding: the
+  // reference builds the same shape from a 2px accent border, 14px of padding and a three-column
+  // grid with 40px gaps. One cramped row with the scale at one margin and the toggle at the other is
+  // what this replaces, and the five extra rows are the cost of it not reading as cramped.
+  const s = c.statusline;
+  rows.push(rule("accent"));
+  rows.push(blank());
 
-  // Statusline: the effort picker on the left, the shimmering toggle on the right.
-  const effort: Run[] = [{ col: 0, text: c.statusline.effortWord, style: "muted" }];
-  let col = cells(c.statusline.effortWord) + EFFORT_GAP;
-  for (const label of c.statusline.effortLabels) {
-    const selected = label === c.statusline.effortSelected;
-    const shown = selected ? `[${label}]` : label;
-    effort.push({ col, text: shown, style: selected ? "accent" : "muted" });
-    col += cells(shown) + SPACING;
+  // The heading, far left and on a row of its own.
+  rows.push({ runs: [{ col: 0, text: s.effortWord, style: "accent" }] });
+
+  // THE THREE COLUMNS. The reference builds them as `grid-template-columns: 1fr auto 1fr` with a
+  // 40px gap: a heading column, the track block, and the toggle column. Each outer column here is
+  // its own content's width and the track is everything between them less one gap at each side, so
+  // nothing below is a chosen column number. Change the toggle's wording, the heading or the gap
+  // and the whole panel re-lays itself.
+  //
+  // The reference's two outer columns are `1fr` and therefore EQUAL, and that is the one thing not
+  // carried over. Copied literally it makes the heading column as wide as the toggle, which on 72
+  // columns leaves the track 32 and the five levels one blank column between them in places: the
+  // scale then reads as a list of words rather than as a distributed scale, which is the exact
+  // complaint this panel exists to answer. The reference's own panel is about 136 character cells
+  // wide, so its proportions do not survive the trip to 72; its RHYTHM does, and three to four
+  // blank columns between levels is what it looks like. Rendered at 846px and 308px both ways.
+  // The right column holds two lines, the toggle and the hint under it, left-aligned with each
+  // other and the block flush with the Session's right edge. Its width is therefore the wider of
+  // the two and not the toggle's alone: a hint longer than the toggle would otherwise be placed
+  // from the toggle's column and run off the grid.
+  const toggleWidth = cells(s.toggle.word) + TOGGLE_GAP + cells(s.toggle.state);
+  const toggleCol = COLS - Math.max(toggleWidth, cells(s.toggleHint));
+  const trackCol = cells(s.effortWord) + PANEL_GAP;
+  const trackEnd = toggleCol - PANEL_GAP;
+  const tiers = s.effortLabels;
+  const levelCols = effortLabelCols(tiers, trackCol, trackEnd);
+
+  // The two ends of the axis, above the track: one flush with each end of it.
+  rows.push({ runs: [
+    { col: trackCol, text: s.effortEnds.start, style: "text" },
+    { col: trackEnd - cells(s.effortEnds.end), text: s.effortEnds.end, style: "text" },
+  ] });
+
+  // THE MARKER IS PLACED FROM THE SELECTED LEVEL'S OWN COLUMN, never from the track's midpoint.
+  // The shipped scale selects its LAST level and an earlier one selected the middle of five, so a
+  // midpoint or a written-down column would have looked correct for one of those and been silently
+  // wrong for the other. `effortSelected` is validated to be one of the labels, so the index is real.
+  const chosen = tiers.indexOf(s.effortSelected);
+  const markerCol = centreCol(levelCols[chosen], tiers[chosen]);
+  const track: Run[] = [{ col: markerCol, text: "▲", style: "accent", piece: PIECE_TRACK }];
+  if (markerCol > trackCol) {
+    track.unshift({ col: trackCol, text: "─".repeat(markerCol - trackCol), style: "muted", piece: PIECE_TRACK });
   }
-  // The toggle's word and its state are the owner's copy, so both come from content.json.
-  // The word is drawn twice at one position: a muted base copy, and an accent copy split into
-  // one run per character. Staggering the copy's opacity character by character is what sweeps
-  // a bright band across the letters, for a word of any length. Nothing is animated here.
-  const { word, state } = c.statusline.toggle;
-  const toggleCol = COLS - cells(`${word} ${state}`);
-  effort.push({ col: toggleCol, text: word, style: "muted" });
-  [...word].forEach((ch, i) => {
-    effort.push({ col: toggleCol + i, text: ch, style: "accent", cls: shimmerClass(i) });
+  if (trackEnd > markerCol + 1) {
+    track.push({ col: markerCol + 1, text: "─".repeat(trackEnd - markerCol - 1), style: "muted", piece: PIECE_TRACK });
+  }
+  rows.push({ runs: track });
+
+  // The levels. The selected one is accent and bold, the rest muted. The brackets are gone: the
+  // marker above is a SHAPE carrying the selection, so colour is not doing it alone, and a bracketed
+  // label would also make the scale's own spacing depend on which level happened to be picked.
+  //
+  // The TOP TIER is drawn as a rainbow, one run per character so each can carry its own hue. It is
+  // the top of the scale that earns that, not the selection, so it keeps the rainbow when something
+  // else is picked and the selection stays carried by the bold weight and the marker.
+  const levels: Run[] = [];
+  tiers.forEach((label, i) => {
+    const picked = i === chosen;
+    if (i === tiers.length - 1) {
+      [...label].forEach((ch, k) => levels.push({
+        col: levelCols[i] + k, text: ch,
+        style: picked ? "accent-bold" : "accent", cls: rainbowClass(k), piece: PIECE_TOP_TIER,
+      }));
+    } else {
+      levels.push({ col: levelCols[i], text: label, style: picked ? "accent-bold" : "muted" });
+    }
   });
-  effort.push({ col: toggleCol + cells(word) + 1, text: state, style: "muted" });
-  rows.push({ runs: effort });
+  rows.push({ runs: levels });
+
+  // The toggle, in the right column where the reference puts it, with the owner's one-line gloss on
+  // it in the middle column beside it. OFF the scale's row deliberately: sharing one row is what
+  // made the scale and the toggle both read as cramped. The gloss is the only string in the Session
+  // that describes what the viewer is literally watching, so it is the owner's and not the
+  // generator's, and it is allowed to run past the track into the gap, which is why it is placed
+  // from the track's left edge and only its collision with the toggle is checked.
+  //
+  // The word is drawn twice at one position. The base copy is split into one run per character, each
+  // carrying its own point on a muted-to-accent ramp, so the word is A GRADIENT WITH NOTHING
+  // RUNNING: that is the still frame, which is what a reduced-motion reader and most visitors ever
+  // see. The second copy is the accent top of the same ramp at zero opacity, and the shimmer lifts
+  // each character to it in turn, so the sheen now travels the ramp and dissolves into its bright
+  // end instead of being the only thing that makes the word worth looking at.
+  const { word, state } = s.toggle;
+  const closing: Run[] = [{ col: trackCol, text: s.toggleNote, style: "muted" }];
+  [...word].forEach((ch, i) => closing.push({
+    col: toggleCol + i, text: ch, style: "accent-bold", cls: gradientClass(i), piece: PIECE_TOGGLE,
+  }));
+  [...word].forEach((ch, i) => closing.push({
+    col: toggleCol + i, text: ch, style: "accent-bold", cls: shimmerClass(i),
+  }));
+  closing.push({ col: toggleCol + cells(word) + TOGGLE_GAP, text: state, style: "accent" });
+  rows.push({ runs: closing });
+
+  // The toggle's hint, directly beneath it in the same column, and then the key hints for the panel
+  // as a whole. Both are affordances of a terminal the Session DEPICTS rather than is: `❯ /whoami`
+  // is no more pressable than `Tab`, so printing them is part of the fiction rather than a claim
+  // inside it. Assembled from labelled fragments with the generator supplying the separator, which
+  // is the rule docs/spec.md 4.1 sets for a sentence made of several pieces of copy.
+  rows.push({ runs: [{ col: toggleCol, text: s.toggleHint, style: "muted" }] });
+  rows.push(blank());
+  rows.push({ runs: [{ col: BODY_COL, text: s.help.join(` ${HELP_SEPARATOR} `), style: "muted" }] });
 
   rows.push({ runs: [
-    { col: 0, text: `▶▶ ${c.statusline.modeBadge}`, style: "muted" },
-    { col: COLS - cells(c.statusline.note), text: c.statusline.note, style: "muted" },
+    { col: 0, text: `▶▶ ${s.modeBadge}`, style: "muted" },
+    { col: COLS - cells(s.note), text: s.note, style: "muted" },
   ] });
 
   // A Session that does not fit is not returned: the message names the row and its text.

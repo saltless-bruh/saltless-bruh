@@ -80,11 +80,15 @@
   },
   "statusline": {
     "effortWord": "Effort",
-    "effortLabels": ["low", "medium", "lazy", "xhigh", "max"],
+    "effortEnds": { "start": "Faster", "end": "Smarter" },
+    "effortLabels": ["low", "medium", "high", "xhigh", "lazy"],
     "effortSelected": "lazy",
     "modeBadge": "autopilot on",
     "note": "terminal-style design, not affiliated with Anthropic",
-    "toggle": { "word": "Ultrachill", "state": "on" }
+    "toggle": { "word": "Ultrachill", "state": "on" },
+    "toggleNote": "Ultrachill: dynamic nap on every task",
+    "toggleHint": "Tab to toggle",
+    "help": ["←/→ to adjust", "Enter to confirm", "Esc to cancel"]
   },
   "readme": {
     "imageAlt": "A terminal session, drawn as one picture. The same words are in the transcript below it.",
