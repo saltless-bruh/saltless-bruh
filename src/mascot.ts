@@ -193,10 +193,25 @@ ${leds}
 /** Seconds to a percentage of the master loop, to the millisecond. */
 const pct = (seconds: number): string => `${Number(((seconds / MASTER_SECONDS) * 100).toFixed(3))}%`;
 
-const BREATHS_PER_LOOP = 16;
-const BREATH_SECONDS = MASTER_SECONDS / BREATHS_PER_LOOP;
+/** 20 breaths a minute, inside a sleeping cat's range. The master loop must be a whole number of them so it joins on a breath. */
+const BREATH_SECONDS = 3;
+if (MASTER_SECONDS % BREATH_SECONDS !== 0) throw new Error(`the ${MASTER_SECONDS}s loop is not a whole number of ${BREATH_SECONDS}s breaths`);
 const EAR_SECONDS = 17;
 const TAIL_SECONDS = 23;
+
+/**
+ * The shape of one gesture inside its own cycle, as percentages of that cycle. These describe a gesture, not a moment in
+ * the story, so they have no counterpart in MASCOT_TIMELINE and stay literal. Every move is under one art pixel (a test holds
+ * it there): the cat's feet are continued only that far behind the frame.
+ */
+const BREATH_MOVE = { awayAt: 46.7, backAt: 93.3, by: -1 };   // rises for the middle of the breath, then eases back down
+const EAR_MOVE = { awayAt: 0.5, backAt: 1.2, by: -1 };        // a quick flick near the start of its cycle
+const TAIL_MOVE = { awayAt: 1, backAt: 2.5, by: 1 };          // a quick flick near the start of its cycle
+const LED_FLASH = { litAt: 3, dimAt: 8, dim: 0.25 };          // dim for most of the cycle, lit briefly, never dark
+
+/** One gesture: rest, away by `by` units along an axis, and back to rest. */
+const move = (name: string, axis: "X" | "Y", g: { awayAt: number; backAt: number; by: number }): string =>
+  `@keyframes ${name} { 0% { transform: translate${axis}(0) } ${g.awayAt}% { transform: translate${axis}(${g.by}px) } ${g.backAt}% { transform: translate${axis}(0) } }`;
 
 type Span = [number, number];
 
@@ -255,9 +270,9 @@ ${LED_PERIODS.map((s, i) => `.led-${i} { animation: led ${s}s step-end infinite 
 ${poses.map((s) => showDuring(`m-${s}`, spansOf(s))).join("\n")}
 ${steps.map((span, k) => showDuring(`bubble-${k}`, [span])).join("\n")}
 ${showDuring("burst", [burst])}
-@keyframes breathe { 0% { transform: translateY(0) } 46.7% { transform: translateY(-1px) } 93.3% { transform: translateY(0) } }
-@keyframes ear { 0% { transform: translateY(0) } 0.5% { transform: translateY(-1px) } 1.2% { transform: translateY(0) } }
-@keyframes tail { 0% { transform: translateX(0) } 1% { transform: translateX(1px) } 2.5% { transform: translateX(0) } }
-@keyframes led { 0% { opacity: 0.25 } 3% { opacity: 1 } 8% { opacity: 0.25 } }
+${move("breathe", "Y", BREATH_MOVE)}
+${move("ear", "Y", EAR_MOVE)}
+${move("tail", "X", TAIL_MOVE)}
+@keyframes led { 0% { opacity: ${LED_FLASH.dim} } ${LED_FLASH.litAt}% { opacity: 1 } ${LED_FLASH.dimAt}% { opacity: ${LED_FLASH.dim} } }
 `;
 }

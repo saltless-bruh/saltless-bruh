@@ -558,7 +558,7 @@ test("the base stylesheet leaves every layer untransformed and the LEDs lit", as
 });
 
 // ---------------------------------------------------------------------------------------------
-// The 60 second loop is derived from MASCOT_TIMELINE
+// The master loop is derived from MASCOT_TIMELINE
 // ---------------------------------------------------------------------------------------------
 
 type Window = { state: string; from: number; to: number };
@@ -619,15 +619,15 @@ function withTimeline(replacement: Window[], fn: () => void): void {
   assert.deepEqual(MASCOT_TIMELINE, original, "the timeline was restored");
 }
 
-// Hand-derived alternative: 20 s is 33.333% of 60 s and 50 s is 83.333%; neither is in the committed table.
+// Hand-derived alternative inside the same 36 s loop: 12 s is 33.333% of it and 32 s is 88.889%; neither is in the committed table.
 const MOVED: Window[] = [
-  { state: "sleep", from: 0, to: 12 },
-  { state: "yawn", from: 12, to: 20 },
-  { state: "stretch", from: 20, to: 30 },
-  { state: "settle", from: 30, to: 36 },
-  { state: "sleep", from: 36, to: 50 },
-  { state: "startle", from: 50, to: 52 },
-  { state: "sleep", from: 52, to: MASTER_SECONDS },
+  { state: "sleep", from: 0, to: 9 },
+  { state: "yawn", from: 9, to: 12 },
+  { state: "stretch", from: 12, to: 18 },
+  { state: "settle", from: 18, to: 21 },
+  { state: "sleep", from: 21, to: 32 },
+  { state: "startle", from: 32, to: 34 },
+  { state: "sleep", from: 34, to: MASTER_SECONDS },
 ];
 
 test("the committed timeline is what the keyframes show, instant by instant", () => {
@@ -639,8 +639,9 @@ test("the keyframes follow the timeline when it changes, so they are derived and
     assertLoopShowsTimeline(MOVED);
     const css = mascotCss();
     assert.match(css, /33\.333%/);
-    assert.match(css, /83\.333%/);
-    assert.ok(!css.includes("30.667%"), "the committed 18.4 s hand-off must not survive");
+    assert.match(css, /88\.889%/);
+    assert.ok(!css.includes("30.278%"), "the committed 10.9 s hand-off must not survive");
+    assert.ok(!css.includes("83.333%"), "the committed 30 s pop must not survive");
   });
 });
 
@@ -674,6 +675,7 @@ function assertBubbleFollowsTimeline(timeline: Window[]): void {
   // The pop: the last step is on screen a millisecond before startle, and only the burst a millisecond after.
   assert.deepEqual(visible(pop.from - 0.001), [steps[steps.length - 1]]);
   assert.deepEqual(visible(pop.from + 0.001), ["burst"]);
+  assert.deepEqual(visible(pop.from + (pop.to - pop.from) / 4), ["burst"], "the burst is still up a quarter of the way into the startle");
   assert.deepEqual(visible(pop.to - 0.001), [], "a burst ring, then nothing");
 
   for (let k = 0; k < MASTER_SECONDS * 10; k++) {
@@ -694,7 +696,7 @@ test("the bubble inflates in four steps across the long sleep and pops exactly w
   // The instant itself, read straight off the committed timeline rather than through the sampler's own arithmetic.
   const startle = MASCOT_TIMELINE.find((w) => w.state === "startle");
   assert.ok(startle);
-  assert.equal(startle.from, 48.75);
+  assert.equal(startle.from, 30);
   const css = mascotCss();
   assert.equal(opacityAt(css, "bubble-3", startle.from - 0.001), 1);
   assert.equal(opacityAt(css, "bubble-3", startle.from + 0.001), 0);
@@ -776,7 +778,7 @@ test("every animation rule has keyframes, cuts frames, loops forever and targets
   for (const name of kfNames) assert.ok(anims.some((a) => a.name === name), `@keyframes ${name} is never used`);
 });
 
-test("every pose, bubble step and the burst swap on the 60 second master clock", () => {
+test("every pose, bubble step and the burst swap on the master clock", () => {
   const anims = animationsOf(mascotCss());
   const master = anims.filter((a) => a.seconds === MASTER_SECONDS).map((a) => a.cls).sort();
   const expected = [...states().map((s) => `pose-${s}`), ...bubbleSteps(parseXml(mascotDefs(0, 0, "dark"))), "burst"].sort();
@@ -788,7 +790,8 @@ test("the breath divides the loop exactly, lifts the cat and its bubble in every
   assert.ok(anim, "no breathe animation");
   const breaths = MASTER_SECONDS / anim.seconds;
   assert.ok(Number.isInteger(breaths), `${breaths} breaths per loop: the loop would not join on a breath`);
-  assert.equal(anim.seconds, 3.75);
+  assert.equal(anim.seconds, 3, "20 breaths a minute");
+  assert.equal(breaths, 12, "36 seconds is twelve breaths");
 
   const root = parseXml(mascotDefs(0, 0, "dark"));
   const inside = walk(find(root, anim.cls)).flatMap(classesOf);
@@ -815,6 +818,46 @@ test("nothing that moves the cat downward can push it into the rack it rests on"
   for (const state of states()) {
     const bottom = Math.max(...[...inkOf([find(root, `pose-${state}`)], ["foot"]).keys()].map((p) => xy(p)[1]));
     assert.ok((top - bottom - 1) * PX >= down, `pose-${state}: a downward move of ${down}px sinks it into the rack`);
+  }
+});
+
+test("every translation in the breath, the ear flick and the tail flick stays under one art pixel, on both axes and both ways", () => {
+  // The cat's feet are continued only one art pixel deep behind the frame, so a larger move would expose the strip of window that
+  // continuation closes, and a runaway value would tear the sprite apart. Both axes, positive and negative, every stop.
+  const css = mascotCss();
+  for (const cls of ["breath", "ear", "tail"]) {
+    const anim = animationsOf(css).find((a) => a.cls === cls);
+    assert.ok(anim, `no animation for .${cls}`);
+    const kf = keyframesOf(css).find((k) => k.name === anim.name);
+    assert.ok(kf, `no keyframes for .${cls}`);
+    let biggest = 0;
+    let moves = 0;
+    for (const stop of kf.stops) {
+      const transform = stop.decls.transform;
+      assert.ok(transform !== undefined, `${kf.name} at ${stop.at} sets no transform`);
+      for (const m of transform.matchAll(/(\w+)\(([^)]*)\)/g)) {
+        assert.ok(["translateX", "translateY"].includes(m[1]), `${kf.name}: ${m[1]} is not a plain translate`);
+        const v = m[2].trim().match(/^(-?[\d.]+)(px)?$/);
+        assert.ok(v, `${kf.name}: ${m[0]} is not a number of pixels`);
+        assert.ok(Math.abs(Number(v[1])) < PX, `${kf.name} ${m[0]} is as big as an art pixel (${PX} units)`);
+        biggest = Math.max(biggest, Math.abs(Number(v[1])));
+        moves++;
+      }
+    }
+    assert.equal(moves, 3, `${kf.name}: away, and back to rest`);
+    assert.ok(biggest > 0, `${kf.name} never moves`);
+  }
+});
+
+test("the LEDs flicker between a dim level and fully lit, and never go dark", () => {
+  const css = mascotCss();
+  for (const cls of ["led-0", "led-1", "led-2"]) {
+    const anim = animationsOf(css).find((a) => a.cls === cls);
+    assert.ok(anim, `no animation for .${cls}`);
+    const kf = keyframesOf(css).find((k) => k.name === anim.name);
+    assert.ok(kf);
+    const levels = [...new Set(kf.stops.map((s) => Number(s.decls.opacity)))].sort((a, b) => a - b);
+    assert.deepEqual(levels, [0.25, 1], `${cls}: dim and lit, and nothing else`);
   }
 });
 
