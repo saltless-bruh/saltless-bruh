@@ -1,0 +1,30 @@
+{
+  "//": [
+    "Type checking only. Node 26 runs the .ts sources directly by STRIPPING types, never by compiling them, so this",
+    "config must describe that runtime rather than a build: noEmit, .ts kept in the import paths, and",
+    "erasableSyntaxOnly to refuse the syntax stripping cannot erase (enum, namespace, parameter properties, decorators,",
+    "import assignment). Without that flag the check would pass on code Node then refuses to run.",
+    "Run it with `npm run typecheck`; Task 11's acceptance gate calls the same script."
+  ],
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["es2023"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": false,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts", "types/**/*.d.ts"]
+}
