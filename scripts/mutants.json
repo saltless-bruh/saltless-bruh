@@ -1944,8 +1944,8 @@
     "tests": [
       "test/ramp.test.ts"
     ],
-    "find": "    const L = lightnessFor(hue, chroma, target);",
-    "replace": "    const L = linearToOklab(accent)[0];"
+    "find": "    if (cieLightness(at(mid)) < target) lo = mid;",
+    "replace": "    if (linearToOklab(at(mid))[0] * 100 < target) lo = mid;"
   },
   {
     "id": "C5 ramp: the rainbow sweeps half the wheel, so two characters nearly share a hue",
@@ -1953,8 +1953,8 @@
     "tests": [
       "test/ramp.test.ts"
     ],
-    "find": "  const hues = Array.from({ length }, (_, i) => Math.atan2(b, a) + (2 * Math.PI * i) / length);",
-    "replace": "  const hues = Array.from({ length }, (_, i) => Math.atan2(b, a) + (Math.PI * i) / length);"
+    "find": "  const hues = Array.from({ length }, (_, i) => hue0 + (2 * Math.PI * i) / length);",
+    "replace": "  const hues = Array.from({ length }, (_, i) => hue0 + (Math.PI * i) / length);"
   },
   {
     "id": "C6 ramp: chroma is reduced for the one hue that needs it rather than for all of them",
