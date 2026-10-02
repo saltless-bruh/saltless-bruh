@@ -172,14 +172,33 @@ const HIT = { token: "text" as keyof Palette, alpha: 1 };
 /** Levels bright enough to be worth calling a hit: the top two bands of the ramp. */
 export const HIT_LEVELS = [3, 4];
 
+/**
+ * A hit fills its whole pitch, gap included, instead of sitting inside it like every other cell.
+ *
+ * Colour alone could not carry this. The accent at full IS level 4, and `text`, the only token
+ * brighter than it in either variant, measures 1.25:1 against level 4 in dark and 1.13:1 in light:
+ * a hue shift most viewers would never register, on the very days the band exists to announce.
+ * The palette has nothing brighter left, so the lever is geometry.
+ *
+ * It is also the better lever. By the time the beam arrives the eye has learned the grid's rhythm,
+ * 53 columns of evenly gapped squares, and a cell that momentarily closes its gaps breaks that
+ * rhythm. A broken rhythm is far more visible than a 25% luminance change on a 10-unit square.
+ * Consecutive busy days in one column merge into a short solid bar, which is wanted rather than
+ * tolerated: a run of busy days reading as one strong response is what a scanner would show.
+ *
+ * It stays inside the grid at the edges: a hit in the last week reaches exactly the grid's right
+ * edge, and one on the last day exactly its bottom, because the grid is a whole number of pitches.
+ */
+const HIT_SIZE = PITCH;
+
 export const levelAlpha = (level: number): number => 0.35 + 0.65 * (level / MAX_LEVEL);
 
 const paintOf = (level: number): { token: keyof Palette; alpha: number } =>
   level === 0 ? PROBED_SILENT : { token: LIT_TOKEN, alpha: levelAlpha(level) };
 
-/** One square per cell. Cells never touch, so there is nothing to merge; the saving is one path per level. */
-function cellsToPath(cells: ScanCell[], x0: number, y0: number): string {
-  return cells.map((c) => `M${x0 + c.week * PITCH} ${y0 + c.day * PITCH}h${CELL}v${CELL}h-${CELL}z`).join("");
+/** One square per cell, `size` units on a side. Cells never touch, so the saving is one path per layer. */
+function cellsToPath(cells: ScanCell[], x0: number, y0: number, size: number): string {
+  return cells.map((c) => `M${x0 + c.week * PITCH} ${y0 + c.day * PITCH}h${size}v${size}h-${size}z`).join("");
 }
 
 const rect = (cls: string, x: number, y: number, w: number, h: number, p: Palette, paint: { token: keyof Palette; alpha: number }): string =>
@@ -202,15 +221,18 @@ export function scanDefs(a: Activity, row: number, theme: ThemeName): string {
   const x0 = scanX();
   const y0 = scanY(row);
 
-  const unprobed = path("unprobed", cellsToPath(cells, x0, y0), p, UNPROBED);
+  const unprobed = path("unprobed", cellsToPath(cells, x0, y0, CELL), p, UNPROBED);
   const levels = Array.from({ length: MAX_LEVEL + 1 }, (_, level) =>
-    path(`lv${level}`, cellsToPath(cells.filter((c) => c.level === level), x0, y0), p, paintOf(level)),
+    path(`lv${level}`, cellsToPath(cells.filter((c) => c.level === level), x0, y0, CELL), p, paintOf(level)),
   ).filter(Boolean).join("\n");
-  const busy = path("busy", cellsToPath(cells.filter((c) => HIT_LEVELS.includes(c.level)), x0, y0), p, HIT);
+  const busy = path("busy", cellsToPath(cells.filter((c) => HIT_LEVELS.includes(c.level)), x0, y0, HIT_SIZE), p, HIT);
 
   // The trail is the cell body the beam has just entered; the beam is the bright leading edge at
   // that cell's far side, which lands in the 2-unit gutter between that cell and the next, so it
   // never covers a cell. Both sit inside the grid at every step, so neither hangs off the end.
+  // A hit fills that gutter, and is painted over the head, so where a busy day is being crossed
+  // the beam and the hit merge into one bright block. Both are `text` within 0.05 of each other,
+  // so there is no seam, and the beam reading as absorbed into the hit is the effect wanted.
   const head = [
     rect("trail", x0, y0, CELL, GRID_H - GAP, p, TRAIL),
     rect("beam", x0 + CELL, y0 - BEAM_OVERHANG, BEAM_W, GRID_H - GAP + 2 * BEAM_OVERHANG, p, BEAM),

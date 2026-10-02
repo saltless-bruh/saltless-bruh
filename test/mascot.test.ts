@@ -1218,6 +1218,26 @@ test("the artwork carries an empty left margin, which is why placing it by its g
   }
 });
 
+/*
+ * KNOWN-EQUIVALENT MUTANTS, recorded so nobody re-derives this and reaches for a refactor.
+ *
+ * Three mutations of the placement survive this suite, and all three are equivalent rather than
+ * gaps: replacing `sharedInkLeft(Object.values(POSES))` with the literal 10, replacing
+ * `MASCOT_INK_LEFT * PX` with `5 * CELL_W`, and replacing `sharedInkLeft`'s `return first.left`
+ * with a minimum over the edges (which the agreement check above it has already proven equal).
+ * Each produces identical output for the committed artwork, so no assertion can separate them
+ * without editing art/ mid-run.
+ *
+ * They do not leave the real risk uncovered. The scenario that matters is somebody retouching the
+ * art so the left margin stops being 10, and the test below catches that the moment it happens:
+ * the derivation follows the art and a literal does not, so the rendered left edge stops matching
+ * the column asked for. The measuring itself is pinned separately by six killed mutants against
+ * synthetic grids in test/pixelart.test.ts.
+ *
+ * Making them killable would mean adding an art-directory injection seam to src/mascot.ts for no
+ * behaviour anyone can observe, which is contorting the design to satisfy the measurement rather
+ * than the risk. Deliberately not done.
+ */
 test("the offset the scene is placed by is the artwork's own margin, measured not written down", () => {
   // Read from every pose file here. A module that hard-codes the current offset passes this only
   // for as long as the art keeps that margin, which is the failure the derivation exists to stop.

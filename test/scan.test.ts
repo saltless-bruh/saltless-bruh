@@ -383,6 +383,12 @@ test("the hits band carries the top two levels only, at full brightness", () => 
     assert.equal(squares(busy.attrs.d).length, want.length);
     assert.ok(want.length > 0 && want.length < cells.length, "a hit must be some days, not none and not all");
     assert.equal(busy.attrs["fill-opacity"], "1", "a hit is at full brightness or it is not a flare");
+    // Size is the lever that actually does the work; colour alone measured 1.25:1 against level 4.
+    for (const sq of squares(busy.attrs.d)) {
+      assert.equal(sq.w, PITCH, "a hit must fill its whole pitch, gaps included");
+      assert.equal(sq.h, PITCH, "a hit must fill its whole pitch, gaps included");
+      assert.ok(sq.w > CELL, "a hit the size of an ordinary cell breaks no rhythm and reads as nothing");
+    }
     // The accent at full IS level 4, so a hit painted in it would do nothing on the busiest day in
     // the grid. `text` is the only token brighter than the accent in either variant.
     assert.equal(busy.attrs.fill, PALETTES[theme].text);
@@ -631,4 +637,52 @@ test("the sweep moves when the band moves, and only vertically", () => {
   const first = (n: Node): { x: number; y: number } => squares(find(n, "unprobed").attrs.d)[0];
   assert.equal(first(b).x, first(a).x, "a different band moved the grid sideways");
   assert.equal(first(b).y - first(a).y, CELL_H, "a different band did not move the grid down a row");
+});
+
+test("a hit closes the gaps an ordinary cell leaves, which is what makes it visible at all", () => {
+  // The grid's rhythm is 53 columns of evenly gapped squares, learned by the eye before the beam
+  // arrives. A cell that momentarily closes its own gaps breaks that rhythm, and a broken rhythm
+  // is far more visible than the 25% luminance change the palette had left to offer.
+  const root = defs();
+  const cell = squares(find(find(root, "probed"), "lv4").attrs.d)[0];
+  const hit = squares(find(root, "busy").attrs.d)[0];
+  assert.equal(hit.w - cell.w, GAP, "a hit must grow by exactly the gap it closes");
+  assert.equal(hit.h - cell.h, GAP);
+  assert.equal(cell.w + GAP, PITCH, "an ordinary cell leaves a gap; that is the rhythm being broken");
+});
+
+test("a hit abuts its neighbours exactly and never reaches outside the grid", () => {
+  // Filling the pitch takes a hit right up to the next cell's edge. One unit more would overlap a
+  // neighbour and paint it bright too; at the last week or the last day it would leave the grid.
+  const x0 = scanX();
+  const y0 = scanY(ROW);
+  const cells = calendarCells(calendar);
+  const hits = squares(find(defs(), "busy").attrs.d);
+  assert.ok(hits.length > 0);
+  for (const h of hits) {
+    const wk = (h.x - x0) / PITCH;
+    const dy = (h.y - y0) / PITCH;
+    assert.ok(Number.isInteger(wk) && Number.isInteger(dy), "a hit is off the cell lattice");
+    // Right and bottom land exactly on the next cell's origin, so neighbours abut and never overlap.
+    assert.equal(h.x + h.w, x0 + (wk + 1) * PITCH);
+    assert.equal(h.y + h.h, y0 + (dy + 1) * PITCH);
+    assert.ok(h.x + h.w <= x0 + GRID_W, `a hit in week ${wk} reaches past the grid's right edge`);
+    assert.ok(h.y + h.h <= y0 + GRID_H, `a hit on day ${dy} reaches past the grid's bottom`);
+  }
+  // The edges are really exercised: this fixture has a hit in the last week and on the last day.
+  const busy = cells.filter((c) => HIT_LEVELS.includes(c.level));
+  assert.ok(busy.some((c) => c.week === WEEKS - 1), "no hit in the last column, so the edge is untested");
+  assert.ok(busy.some((c) => c.day === DAYS - 1), "no hit on the last day row, so the edge is untested");
+});
+
+test("a hit stays inside the one-column window that travels with the beam", () => {
+  // A hit is a pitch wide and the window is a pitch wide, so a busy day flares only while the beam
+  // is on its column. One unit wider and it would bleed into the column after it had settled.
+  const left = (k: number) => boundary(k) - PITCH;
+  const cells = calendarCells(calendar).filter((c) => HIT_LEVELS.includes(c.level));
+  for (const c of cells.slice(0, 40)) {
+    const x = scanX() + c.week * PITCH;
+    assert.equal(x, left(c.week), `a hit in week ${c.week} does not start where its window does`);
+    assert.equal(x + PITCH, boundary(c.week), `a hit in week ${c.week} does not end where its window does`);
+  }
 });

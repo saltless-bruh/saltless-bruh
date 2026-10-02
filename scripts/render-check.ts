@@ -51,7 +51,10 @@ writeFileSync(
 try {
   execFileSync("google-chrome-stable", [
     "--headless=new", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
-    `--window-size=${width + 40},2400`, "--virtual-time-budget=6000",
+    `--window-size=${width + 40},2400`,
+    // Lets the page settle (fonts, first paint). It does NOT select an animation frame: see the
+    // note at the top of this file, and use --freeze for that.
+    "--virtual-time-budget=6000",
     ...(reduced ? ["--force-prefers-reduced-motion"] : []),
     `--screenshot=${resolve(out)}`, pathToFileURL(page).href,
   ], { stdio: "inherit" });
