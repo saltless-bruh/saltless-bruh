@@ -585,3 +585,32 @@ export function bannerWidthCols(text: string): number {
 export function bannerPath(text: string, col: number, row: number): string {
   return artToPath(bannerArt(text), col, row);
 }
+
+/**
+ * The same drawing, split one path per letter, so the Banner's reveal can resolve the name letter
+ * by letter. The union of these paths is `bannerPath`'s, subpath for subpath: a letter is never
+ * horizontally adjacent to its neighbour, because GAP keeps a blank column between them, so no run
+ * `artToPath` merges ever spans two letters and splitting the word cannot change what is drawn.
+ *
+ * GAP is MEASURED here rather than read, so that the letter columns stay in step with
+ * `bannerWidthCols` by construction: the gap is whatever is left of the word's width once the
+ * letters have taken theirs. Writing the spacing down a second time is the drift this avoids.
+ */
+export function bannerLetters(text: string, col: number, row: number): { ch: string; col: number; d: string }[] {
+  const letters = [...text];
+  if (letters.length === 0) throw new Error("the banner has no letters to draw");
+  const widths = letters.map((ch) => bannerWidthCols(ch));
+  const ink = widths.reduce((a, b) => a + b, 0);
+  const gaps = letters.length - 1;
+  const spare = bannerWidthCols(text) - ink;
+  const gap = gaps === 0 ? 0 : spare / gaps;
+  if (!Number.isInteger(gap) || gap < 0) {
+    throw new Error(`the banner for ${JSON.stringify(text)} leaves ${spare} columns over ${gaps} gaps, which is not a whole gap per letter`);
+  }
+  let at = col;
+  return letters.map((ch, i) => {
+    const d = bannerPath(ch, at, row);
+    at += widths[i] + gap;
+    return { ch, col: at - widths[i] - gap, d };
+  });
+}

@@ -12,12 +12,27 @@ export type BuildSvgOptions = {
   css?: string;    // animation layer, appended after the base stylesheet
   defs?: string;   // geometry: Banner, Mascot, Scan Sweep
   title: string;   // accessible name
+  /**
+   * A hook per row, by row index, for motion that addresses rows rather than runs: the playback.
+   *
+   * It belongs here rather than in `renderRows`, because the index a rule has to name is the row's
+   * place in the Session and NOT its place among the elements that get drawn. A blank row emits no
+   * element, so `text:nth-of-type()` counts a different sequence from the one the schedule is
+   * built on, and the `<text>` elements a caller adds through `defs` are in that sequence too.
+   */
+  rowClass?: (row: number) => string | undefined;
 };
 
 export async function buildSvg(o: BuildSvgOptions): Promise<string> {
   const p = PALETTES[o.theme];
   const h = canvasH(o.rows.length);
   const title = esc(o.title);
+  // The row's own hook comes first, so a row that already carries one keeps it and the added one
+  // is only ever an extra name for the same element.
+  const rows = o.rowClass === undefined ? o.rows : o.rows.map((row, i) => {
+    const added = o.rowClass!(i);
+    return added === undefined ? row : { ...row, cls: [row.cls, added].filter(Boolean).join(" ") };
+  });
   // Base styles are the FINAL STILL FRAME. Animations in o.css drive away from this,
   // so `animation: none` under reduced motion lands exactly here.
   const base = `
@@ -41,6 +56,6 @@ ${base}${o.css ?? ""}
 <rect width="${CANVAS_W}" height="${h}" fill="${p.bg}"/>
 <rect x="0.5" y="0.5" width="${CANVAS_W - 1}" height="${h - 1}" fill="none" stroke="${p.border}" stroke-width="1"/>
 ${o.defs ?? ""}
-${renderRows(o.rows)}
+${renderRows(rows)}
 </svg>`;
 }
