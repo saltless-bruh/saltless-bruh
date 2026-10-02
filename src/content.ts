@@ -38,6 +38,29 @@ export type Content = {
 };
 
 /**
+ * The committed half of the list: a demonstration value, and public by definition.
+ *
+ * It is here so the machinery is testable with nothing configured, and it is the reason this
+ * file, `test/content.test.ts` and `test/readme.test.ts` all carry the literal. Being committed
+ * is exactly what makes it NOT a disclosure, which is why the tree scan in `scripts/gates.ts`
+ * cannot use it: a needle that is published in the gate's own source would report every file
+ * that tests the gate, and a gate whose output is mostly its own machinery is a gate people
+ * learn to ignore. The tree scan uses CONFIGURED_FORBIDDEN_NAMES; this half is still scanned
+ * for in the GENERATED output, where finding it means a placeholder reached a published surface.
+ */
+export const COMMITTED_FORBIDDEN_NAMES: string[] = ["Firstname Lastname"];
+
+/**
+ * The private half: real names, from the environment, never from a committed file.
+ *
+ * Set PROFILE_FORBIDDEN_NAMES to a comma-separated list, locally and in CI. Unset or empty
+ * changes nothing here, and `scripts/gates.ts` reports the tree scan as unchecked rather than as
+ * clean when this is empty, because the two are not the same thing.
+ */
+export const CONFIGURED_FORBIDDEN_NAMES: string[] =
+  (process.env.PROFILE_FORBIDDEN_NAMES ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+
+/**
  * Strings that must never reach a published file (ADR 0001).
  * Each entry is matched case-insensitively against all content and all fetched data.
  *
@@ -45,10 +68,7 @@ export type Content = {
  * Set PROFILE_FORBIDDEN_NAMES to a comma-separated list instead, locally and in CI.
  * It is merged with the committed entries; unset or empty changes nothing.
  */
-export const FORBIDDEN_NAMES: string[] = [
-  ...["Firstname Lastname"],
-  ...(process.env.PROFILE_FORBIDDEN_NAMES ?? "").split(",").map((s) => s.trim()).filter(Boolean),
-];
+export const FORBIDDEN_NAMES: string[] = [...COMMITTED_FORBIDDEN_NAMES, ...CONFIGURED_FORBIDDEN_NAMES];
 
 /**
  * Throws without echoing the name, so a build log never repeats what it is protecting.
