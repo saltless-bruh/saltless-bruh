@@ -223,7 +223,7 @@ const REPO_TREE_COL = REPO_NAME_COL - (cells(TREE_BRANCH) + 1);
  * vertical divides the two panes at the cost of no new vocabulary, where `┃`, `╎` or a box corner
  * would each be a mark a reader has to learn for a job this one already does.
  *
- * Without it the scale and the toggle share four rows with nothing but whitespace between them, and
+ * Without it the scale and the toggle share five rows with nothing but whitespace between them, and
  * the toggle reads as having drifted right rather than as occupying a pane of its own. That reading
  * got worse when the mode badge and the note were deleted: the panel is now the whole bottom of the
  * Session, so this is the only internal structure the last block on the page has.

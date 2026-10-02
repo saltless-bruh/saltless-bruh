@@ -321,15 +321,18 @@ is printed under it lands under three units away, and that clearance was never t
 `role` key is gone from `content.json` and from its validation; the SVG's accessible name, which was
 the only other reader of it, now reads `whoami[0]`.
 
-**The Statusline's two panes are divided by a `│`.** The effort scale and the toggle shared four rows
+**The Statusline's two panes are divided by a `│`.** The effort scale and the toggle shared their rows
 with nothing but whitespace between them, so the toggle read as having drifted right rather than as
 occupying a pane. The divider sits **immediately left of the toggle block with one clear column on
-each side**, derived from the toggle's own column (itself derived from the toggle's wording), so
-re-wording the toggle carries the divider with it. It is the `/ops` tree's own continuation mark, read
-off that constant rather than retyped: `┃`, `╎` and a box corner would each be a new mark to learn for
-a job the Session's existing alphabet already does. It spans the four rows the two panes share, from
-the `Faster`/`Smarter` row down to the gloss row, and not the `Effort` heading above them, which sits
-outside both panes, nor the key hints below, which run the full width under both. **The span was
+each side**, derived from the toggle's own column. **What that column is derived from changed on
+2026-10-03**: it used to be the toggle's wording, and it is now the track's end, so the divider follows
+the SCALE and a re-worded toggle no longer moves it (3.3, E44). It is the `/ops` tree's own continuation
+mark, read off that constant rather than retyped: `┃`, `╎` and a box corner would each be a new mark to
+learn for a job the Session's existing alphabet already does. It spans the **five** rows the two panes
+share, from the `Faster`/`Smarter` row down to the gloss row and through the row of air above it, and
+not the `Effort` heading above them, which sits outside both panes, nor the key hints below, which run
+the full width under both. The span is taken from where the pane's rows start and end rather than
+written down, which is why the row of air joined it with no edit. **The span was
 decided by rendering both** at 846px and 308px: stopped at the levels row, the gloss, which is the
 longest line in the left pane, is the one row reaching across the boundary with nothing marking it,
 and the toggle, which is the thing the divider exists to separate, is the one row not separated.
@@ -405,7 +408,8 @@ token would not be covered by any of this, and a test pins that there is exactly
 
 **Those three figures are the TOKENS. What renders is less, and at 308px the frame is not there at all.**
 Measured from rendered pixels in Task 12, which is the first time this pair was sampled rather than
-computed. The frame is `stroke-width="1"` in a 896-unit `viewBox` (`src/svg.ts`), so it is **0.94
+computed, on the 896-unit canvas of the time. The frame is `stroke-width="1"` in the `viewBox`
+(`src/svg.ts`), so it was **0.94
 device pixels at 846px and 0.34 at 308px**, and a sub-pixel stroke is antialiased into whatever it
 sits on:
 
@@ -429,10 +433,19 @@ terminal-window illusion rather than any legibility.
 `vector-effect="non-scaling-stroke"` to that rect renders the stroke at one device pixel whatever the
 scale, and at 308px it brings the light frame to **3.02:1 in both engines**, which is exactly the
 figure the token was chosen for. `stroke-width="2"` was tried as the obvious alternative and is worse
-and engine-dependent (2.06:1 Chrome, 3.02:1 Firefox), because it is still sub-pixel at 308px. The
-change is left for the owner because it alters published output and the assets would need rebuilding;
-the measurement is recorded here so the decision is made against numbers and the table above is not
-read as a compliance claim it does not support.
+and engine-dependent (2.06:1 Chrome, 3.02:1 Firefox), because it is still sub-pixel at 308px.
+
+**THAT ATTRIBUTE IS NOW IN `src/svg.ts`, so the table above describes a state the build no longer
+emits, and what it emits instead still misses 3:1.** Noticed while rendering the 84-column grid and
+re-measured rather than assumed, Chrome only, from the same rendered pixels the rest of this section
+comes from: the frame against its canvas is **3.84:1 at 846px dark and 3.02:1 at 846px light**, and
+**2.65:1 and 1.97:1 at 308px**. So the frame is no longer GONE at phone width, which is what the table
+above says, and it is not the 3.02:1 the attribute was expected to give either. The reason is the rect
+itself rather than the attribute: it is drawn at `x="0.5"` in the `viewBox`, which is not a whole
+device pixel once the canvas is scaled to 308px, so a one-pixel stroke still straddles two. The honest
+reading is that the 1.4.11 exception in section 7 **narrowed and did not close**, and the remaining
+lever is the rect's own coordinates, not its stroke. Left for the owner, like the attribute was,
+because it alters published output; recorded here so the numbers above are not read as current.
 
 ### 3.5 Motion
 
@@ -440,7 +453,7 @@ Every animation must justify itself in one sentence. Anything that cannot is cut
 
 | Element | Behaviour | Why it earns its place |
 |---|---|---|
-| Playback | Once on load, 1.87s measured against the owner's content: rows arrive 26ms apart, each settling over 180ms | Storytelling: establishes that this is a session being run, not a poster |
+| Playback | Once on load, 1.896s measured against the owner's content: rows arrive 26ms apart, each settling over 180ms | Storytelling: establishes that this is a session being run, not a poster |
 | Spinner | After playback, one spinner loops. Its verb names whatever the Mascot is doing right now, on the same 36s clock | State: it is a readout of the Mascot, not decoration, which is why it may loop at all |
 | Mascot | 36s master loop: breathing at 3.0s, with a yawn, a stretch, a settle, a one-second peek at the viewer, and an alarm she wakes to | Storytelling: the operator naps while the agents work, which is the whole metaphor |
 | Mascot micro-layers | Ear 17s, tail 23s. Co-prime periods mean the combined pattern does not visibly repeat | Keeps the loop from reading as a loop |
@@ -783,7 +796,8 @@ The 2.2.2 gap is mitigated, not ignored: `prefers-reduced-motion` removes all mo
 The 1.4.11 gap costs the window's edge and nothing else. Every text role still clears 4.5:1 at every width, and the Session's content, hierarchy and figures are unaffected; what a phone reader loses is the sense of a bounded terminal rather than anything they need to read.
 
 **The Statusline's pane divider is a structural graphical object, so 1.4.11 applies to it and it meets
-it.** The `│` between the effort scale and the toggle is drawn in `muted`, which measures **5.65:1 on
+it.** The `│` between the effort scale and the toggle, down the five rows the two panes share, is drawn
+in `muted`, which measures **5.65:1 on
 the dark window and 4.77:1 on the light one**, both well clear of 3:1. It is drawn as a `<text>` run
 rather than as a stroke, so unlike the window frame it is a whole glyph at any scale and does not
 antialias away at phone width; it was read at 308px in both variants. `border` was weighed as the
