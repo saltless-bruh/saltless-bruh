@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  cieLightness, contrastRatio, hexToLinear, inGamut, linearToHex, linearToOklab, oklabToLinear,
-  rampCss, toggleRamp, topTierRamp,
+  cieLightness, contrastRatio, hexToLinear, hueSweep, inGamut, linearToHex, linearToOklab,
+  oklabToLinear, rampCss, toggleRamp, topTierRamp,
 } from "../src/ramp.ts";
 import { PALETTES } from "../src/tokens.ts";
 import type { ThemeName } from "../src/tokens.ts";
@@ -181,6 +181,26 @@ for (const theme of THEMES) {
     }
   });
 }
+
+test("a chroma no hue can hold is reduced for the whole sweep, never for one character", () => {
+  // The reduction never fires on this palette, whose Accent is far too gentle to leave sRGB at any
+  // hue, so it is driven here directly. 0.3 is well outside sRGB at this lightness for most of the
+  // wheel, which is exactly the case the reduction exists for.
+  const target = cieLightness(hexToLinear(PALETTES.dark.accent));
+  const ramp = hueSweep(target, 0.3, 0, 6);
+  const chroma = ramp.map(chromaOf);
+  assert.ok(Math.max(...chroma) < 0.3, "nothing was reduced, so this no longer drives the branch");
+  assert.ok(Math.max(...chroma) - Math.min(...chroma) < 0.005, "the characters are not at one chroma");
+  for (const hex of ramp) {
+    // Reduced for all of them together, so every one is still exactly on the lightness asked for.
+    // Reducing only the offending hue leaves the others out of gamut, where the conversion clamps
+    // and the lightness goes with it, which is what this measures.
+    assert.ok(Math.abs(L(hex) - target) < 0.5, `${hex} is at L* ${L(hex).toFixed(2)}, not ${target.toFixed(2)}`);
+    assert.ok(inGamut(hexToLinear(hex)));
+  }
+  // And a chroma everything can hold is passed through untouched, to within the eight-bit grid.
+  for (const hex of hueSweep(target, 0.02, 0, 4)) assert.ok(Math.abs(chromaOf(hex) - 0.02) < 0.002, hex);
+});
 
 test("a rainbow of no characters is refused rather than returned empty", () => {
   assert.throws(() => topTierRamp("dark", 0), /at least one character/);

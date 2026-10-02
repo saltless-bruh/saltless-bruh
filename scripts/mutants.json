@@ -1962,7 +1962,7 @@
     "tests": [
       "test/ramp.test.ts"
     ],
-    "find": "  const fits = (chroma: number): boolean => hues.every((h) => inGamut(colourAt(h, chroma)));",
-    "replace": "  const fits = (chroma: number): boolean => hues.some((h) => inGamut(colourAt(h, chroma)));"
+    "find": "  const fits = (c: number): boolean => hues.every((h) => inGamut(colourAt(h, c)));",
+    "replace": "  const fits = (c: number): boolean => hues.some((h) => inGamut(colourAt(h, c)));"
   }
 ]

@@ -150,36 +150,46 @@ function lightnessFor(hue: number, chroma: number, target: number): number {
 }
 
 /**
- * The top tier's rainbow: `length` colours, hue swept evenly around the whole wheel from the
- * accent's own hue, every one of them at the accent's CIE L* and at one shared chroma.
+ * `length` colours at one CIE lightness, hue swept evenly around the whole wheel from `hue0`, all of
+ * them at the largest single chroma up to `chroma` that keeps every one inside sRGB.
  *
- * The chroma is the accent's, reduced for EVERY character together if any single hue would leave
- * sRGB at it. Reducing only the offending hue is the obvious alternative and it is wrong: the word
- * would then have one washed-out character, which reads as a mistake rather than as a sweep.
+ * The reduction is for EVERY character together. Reducing only the hue that needs it is the obvious
+ * alternative and it is wrong: the word would then have one washed-out character, which reads as a
+ * mistake rather than as a sweep.
+ *
+ * Exported because that reduction never fires on this palette, whose accent is far too gentle to
+ * leave sRGB at any hue, and a branch no test can reach is a branch nobody knows the shape of. A
+ * test drives it here with a chroma no sRGB colour has at this lightness.
  */
-export function topTierRamp(theme: ThemeName, length: number): string[] {
+export function hueSweep(targetLightness: number, chroma: number, hue0: number, length: number): string[] {
   if (!Number.isInteger(length) || length < 1) throw new Error(`a rainbow needs at least one character, not ${length}`);
-  const accent = hexToLinear(PALETTES[theme].accent);
-  const target = cieLightness(accent);
-  const [, a, b] = linearToOklab(accent);
-  const base = Math.hypot(a, b);
-  const hues = Array.from({ length }, (_, i) => Math.atan2(b, a) + (2 * Math.PI * i) / length);
-  const colourAt = (hue: number, chroma: number): Rgb => {
-    const L = lightnessFor(hue, chroma, target);
-    return oklabToLinear([L, chroma * Math.cos(hue), chroma * Math.sin(hue)]);
+  const hues = Array.from({ length }, (_, i) => hue0 + (2 * Math.PI * i) / length);
+  const colourAt = (hue: number, c: number): Rgb => {
+    const L = lightnessFor(hue, c, targetLightness);
+    return oklabToLinear([L, c * Math.cos(hue), c * Math.sin(hue)]);
   };
-  const fits = (chroma: number): boolean => hues.every((h) => inGamut(colourAt(h, chroma)));
-  let chroma = base;
-  if (!fits(chroma)) {
-    let lo = 0, hi = base;
+  const fits = (c: number): boolean => hues.every((h) => inGamut(colourAt(h, c)));
+  let shared = chroma;
+  if (!fits(shared)) {
+    let lo = 0, hi = chroma;
     for (let i = 0; i < STEPS; i++) {
       const mid = (lo + hi) / 2;
       if (fits(mid)) lo = mid;
       else hi = mid;
     }
-    chroma = lo;
+    shared = lo;
   }
-  return hues.map((h) => linearToHex(colourAt(h, chroma)));
+  return hues.map((h) => linearToHex(colourAt(h, shared)));
+}
+
+/**
+ * The top tier's rainbow: `length` colours, hue swept evenly around the whole wheel from the
+ * accent's own hue, every one of them at the accent's CIE L* and at the accent's chroma.
+ */
+export function topTierRamp(theme: ThemeName, length: number): string[] {
+  const accent = hexToLinear(PALETTES[theme].accent);
+  const [, a, b] = linearToOklab(accent);
+  return hueSweep(cieLightness(accent), Math.hypot(a, b), Math.atan2(b, a), length);
 }
 
 /**

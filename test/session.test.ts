@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { loadContent } from "../src/content.ts";
 import type { Content } from "../src/content.ts";
-import { assertNoCollisions, composeSession, languageShares, SCAN_ROWS, VERB_SUFFIX } from "../src/session.ts";
+import { assertNoCollisions, centreCol, composeSession, languageShares, SCAN_ROWS, VERB_SUFFIX } from "../src/session.ts";
 import type { Activity } from "../src/session.ts";
 import { assertFits, rowsToText, renderRows, charsUsed } from "../src/rows.ts";
 import type { Row, Run } from "../src/rows.ts";
@@ -816,6 +816,19 @@ test("the marker is placed from the selected level's own column, wherever on the
   }
 });
 
+test("the marker's column is its level's centre, and an even-width level breaks the tie one way", () => {
+  assert.equal(centreCol(10, "a"), 10);
+  assert.equal(centreCol(10, "abc"), 11, "an odd-width word has an exact centre column");
+  assert.equal(centreCol(10, "abcd"), 12, "an even-width word takes the right of its two middle columns");
+  assert.equal(centreCol(10, "abcdef"), 13);
+  // The tie is broken the same way at every width, so adding a character to a level moves the
+  // marker by a predictable half step instead of making it appear to jump back across the word.
+  for (let n = 2; n <= 9; n++) {
+    const text = "x".repeat(n);
+    assert.equal(centreCol(0, text) - centreCol(0, text.slice(0, -1)), n % 2 === 0 ? 1 : 0, `${n} characters`);
+  }
+});
+
 test("the levels are evenly distributed across the track, and the track spans them", () => {
   for (const [, make] of CONTENTS) {
     const c = make();
@@ -826,11 +839,30 @@ test("the levels are evenly distributed across the track, and the track spans th
     assert.ok(levels.at(-1)!.col + [...levels.at(-1)!.text].length <= to, "a level runs past the end of the track");
     // Each level is centred on its own slot, so the centres step by the slot width. Integer columns
     // cannot land on a fractional width exactly, so neighbouring steps may differ by one and no more.
-    const centres = levels.map((t) => t.col + ([...t.text].length - 1) / 2);
-    const steps = centres.slice(1).map((x, i) => x - centres[i]);
+    // Each level sits on its own slot, measured against the FRACTIONAL slot the track implies. A
+    // whole column cannot land on a fractional centre, so half a column is the whole tolerance;
+    // anything looser lets the rounding error accumulate along the row unnoticed, which is exactly
+    // what rounding each slot edge before placing the label does.
     const slot = (to - from) / levels.length;
-    for (const step of steps) assert.ok(Math.abs(step - slot) <= 1, `a gap of ${step} where the slot is ${slot}`);
+    levels.forEach((t, i) => {
+      const centre = t.col + [...t.text].length / 2;
+      const want = from + slot * (i + 0.5);
+      assert.ok(Math.abs(centre - want) <= 0.5, `level ${i} centres on ${centre} where its slot centres on ${want}`);
+    });
   }
+  // A scale long enough for a rounded slot width to drift visibly, which five levels on a track
+  // that happens to divide by five cannot show.
+  const many = loadContent();
+  many.statusline.effortLabels = ["a", "bb", "c", "dd", "e", "ff", "g"];
+  many.statusline.effortSelected = "a";
+  many.statusline.toggleNote = "short";
+  const rows = panelOf(many);
+  const { from, to } = trackOf(rows);
+  const slot = (to - from) / many.statusline.effortLabels.length;
+  tokensOf(lineAt(rows, PANEL.levels)).forEach((t, i) => {
+    const centre = t.col + [...t.text].length / 2;
+    assert.ok(Math.abs(centre - (from + slot * (i + 0.5))) <= 0.5, `level ${i} of seven drifted to ${centre}`);
+  });
 });
 
 test("the selected level is bold and the Accent, the rest are muted, and no level is bracketed", () => {
