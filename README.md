@@ -12,8 +12,8 @@
 
 
 
-                                  LAZIE
 
+                                  LAZIE
 
 
 
@@ -61,11 +61,19 @@ Offensive Security · Agentic AI Systems
 
 
 
-  ╰  scan complete: 97/365 days up · 949 contributions
+  ╰  scan complete: 98/365 days up · 1030 contributions
 
 ✶ Loafing…
 ────────────────────────────────────────────────────────────────────────
-Effort   low  medium  [lazy]  xhigh  max                   Ultrachill on
+
+Effort
+            Faster                           Smarter
+            ────────────────────────────────────▲───
+               low   medium   high    xhigh   lazy
+            Ultrachill: dynamic nap on every task         Ultrachill  on
+                                                          Tab to toggle
+
+  ←/→ to adjust · Enter to confirm · Esc to cancel
 ▶▶ autopilot on     terminal-style design, not affiliated with Anthropic
 ```
 
