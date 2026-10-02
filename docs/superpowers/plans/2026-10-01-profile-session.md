@@ -2103,6 +2103,18 @@ git commit -m "feat: generate README with picture block and transcript"
 **Interfaces:**
 - Consumes: everything.
 - Produces: `scanTreeForForbiddenNames(root: URL): string[]` (returns offending paths); `npm run gates`.
+- Produces also: `scanTreeForSecrets(root: URL): string[]`, rejecting any token-shaped string in the
+  tree. Added 2026-10-02, after a live token was pasted into a session: the gate exists so a credential
+  cannot be committed even once. The same discipline as the forbidden-name gate, for the same reason.
+- The token must never reach an error message, the Activity cache, or any generated asset. Auth is read
+  from `PROFILE_GH_TOKEN` in the environment (see `.env.example`), never from an argument, a flag, or a
+  committed file. The refresh workflow reads it from a repo secret of the same name.
+- Produces also: an SVG structural check over every generated asset, via
+  `~/.claude/skills/svg-foundry/scripts/check_svg.py`. It catches the failures that render as nothing
+  rather than as an error: a `url(#id)` whose target is missing, two elements sharing an `id`, a
+  malformed document, a missing `viewBox`. Today the generator emits **0 ids and 0 internal refs**, so
+  nothing can break this way; the Scan Sweep is the first thing that could introduce one, which is why
+  the gate goes in now rather than after the first silent blank. Run it on both Theme Variants.
 
 - [ ] **Step 1: Write the failing test**
 

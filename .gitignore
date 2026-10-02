@@ -9,3 +9,11 @@ docs/research/
 # SDD scratch
 .superpowers/
 preview/
+
+# Secrets. The contribution fetch needs a GitHub token; measured 2026-10-02, a user token
+# with `repo` scope is enough for the owner's own data, and read:user is NOT required.
+# See docs/spec.md 5.2. It lives in a repo secret for the workflow and in a local .env for
+# development, read by `npm run build` and `npm run gates`, and never in the tree.
+.env
+.env.*
+!.env.example
