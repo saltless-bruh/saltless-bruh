@@ -44,7 +44,7 @@
       "repos": [
         {
           "name": "saltnitor",
-          "blurb": "rust TUI command center for llama.cpp with live telemetry"
+          "blurb": "Rust TUI command center for llama.cpp with live telemetry"
         },
         {
           "name": "orchbiter",

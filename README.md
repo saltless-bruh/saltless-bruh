@@ -40,7 +40,7 @@ Offensive Security · Agentic AI Systems
          audits whether a feature really works through the running app
   ╰  model-infra/
        saltnitor
-         rust TUI command center for llama.cpp with live telemetry
+         Rust TUI command center for llama.cpp with live telemetry
        orchbiter
          kernel-level arbitration between local LLM and compute tasks
 

@@ -407,7 +407,7 @@
 <text class="pr-28" y="705.5" xml:space="preserve"><tspan x="124" class="muted">audits whether a feature really works through the running app</tspan></text>
 <text class="pr-29" y="729.5" xml:space="preserve"><tspan x="40" class="muted">╰</tspan><tspan x="76" class="accent">model-infra/</tspan></text>
 <text class="pr-30" y="753.5" xml:space="preserve"><tspan x="100" class="text">saltnitor</tspan></text>
-<text class="pr-31" y="777.5" xml:space="preserve"><tspan x="124" class="muted">rust TUI command center for llama.cpp with live telemetry</tspan></text>
+<text class="pr-31" y="777.5" xml:space="preserve"><tspan x="124" class="muted">Rust TUI command center for llama.cpp with live telemetry</tspan></text>
 <text class="pr-32" y="801.5" xml:space="preserve"><tspan x="100" class="text">orchbiter</tspan></text>
 <text class="pr-33" y="825.5" xml:space="preserve"><tspan x="124" class="muted">kernel-level arbitration between local LLM and compute tasks</tspan></text>
 <text class="pr-34" y="849.5" xml:space="preserve"></text>
