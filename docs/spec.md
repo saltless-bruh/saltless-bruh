@@ -163,6 +163,31 @@ Animation must only touch `opacity` and `transform`. No `filter`, `mask` or `blu
 
 **All visible wording lives in `content.json`. The generator contains none of it.** The repository ships that file with neutral placeholder values; the owner replaces them. The generator validates the file and fails the build on a violation rather than rendering something broken.
 
+### 4.1 Copy or Session Grammar: the test
+
+The rule, so the copy self-audit applies a definition instead of making a judgement:
+
+> If it is a word a reader could read aloud as part of a sentence about the owner or their
+> machine, it is **copy** and lives in `content.json`. If it is a glyph or a structural mark that
+> carries no lexical content, it is **Session Grammar** and stays in the generator.
+
+| In `content.json`, by that test | In the generator, by that test |
+|---|---|
+| `Effort`, the word before the levels | The glyph set `❯ ● ╰ ─ │ ▶▶ ✶` |
+| `scan complete:`, `days up`, `contributions` | The `·` between the two halves of the result line |
+| The `Ultrachill` toggle and the state it reads | The spinner's `…`, which is punctuation on a word rather than a word |
+| Every spinner verb | The command names `/whoami /ops /stack /activity`, which are the borrowed CLI shape, not the owner's prose |
+| The mode badge and the not-affiliated note | The order of the fragments in a sentence, and the columns they land on |
+
+A sentence assembled from several of these is built from **labelled fragments, never a template
+with placeholders**. Each fragment is then validated on its own like every other visible string,
+and the sentence's order stays structural, which is grammar. A placeholder syntax would mean a
+mini template engine, and would let the owner write a sentence the layout cannot fit. Punctuation
+that belongs to one fragment travels with it (`scan complete:` keeps its colon); punctuation that
+is the same for every value it decorates belongs to the generator (the spinner's `…`).
+
+### 4.2 The keys
+
 | Key | Meaning |
 |---|---|
 | `handle`, `cwd` | Identity line |
@@ -171,13 +196,16 @@ Animation must only touch `opacity` and `transform`. No `filter`, `mask` or `blu
 | `lanes[]` | Each has a `label` and `repos[]`, each repo a `name` and a one-line `blurb` |
 | `stackRows[]` | Each has a `label` and `items[]`, printed as plain text |
 | `verbs` | Spinner words, grouped by Mascot state (`sleep`, `yawn`, `stretch`, `settle`, `startle`). A state with several words rotates through them while that state is on screen |
-| `statusline` | Effort labels, the selected one, the mode badge, the note, and `toggle` (the shimmering word and the state it reads, e.g. `Ultrachill` / `on`). The toggle is not one of the effort labels, so it has its own key |
+| `activityLine` | The words of the `/activity` result line, as labelled fragments: `label` (`scan complete:`), `daysUp` (`days up`) and `contributions`. The generator supplies the order, the numbers and the `·` |
+| `statusline` | `effortWord` (the word before the levels, e.g. `Effort`; a longer word pushes the levels along), `effortLabels`, `effortSelected`, `modeBadge`, `note`, and `toggle` (the shimmering word and the state it reads, e.g. `Ultrachill` / `on`). The toggle is not one of the effort labels, so it has its own key |
 
 Validation rules, all enforced at build time:
 
 1. Every rendered row fits in 72 columns.
 2. Every codepoint used exists in the font subset.
-3. No string matches the forbidden-names list.
+3. No string matches the forbidden-names list. For a composed Session this is checked against the
+   **complete projection** of its rows (`rowsToFullText`), never the transcript: a run the picture
+   draws but the transcript omits, or the other way round, must not be able to hide a name.
 4. `lanes` and `stackRows` are non-empty; every repo has a non-empty blurb.
 
 ## 5. Data

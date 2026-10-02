@@ -1,9 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { colX, rowBaselineY } from "../src/grid.ts";
-import { rowWidth, assertFits, rowsToText, renderRows, charsUsed, esc } from "../src/rows.ts";
+import {
+  rowWidth, assertFits, rowsToText, rowsToDrawnText, rowsToFullText, renderRows, charsUsed, esc,
+} from "../src/rows.ts";
 import type { Row, Run } from "../src/rows.ts";
-import { assertNoForbiddenNames } from "../src/content.ts";
+import { assertNoForbiddenNames, assertRowsCarryNoForbiddenNames, FORBIDDEN_NAMES } from "../src/content.ts";
+
+/** Built from the committed placeholder, so no name is written into this file (ADR 0001). */
+const PLACEHOLDER = FORBIDDEN_NAMES[0];
 
 // U+1D11E lies outside the BMP: one cell on the grid, two UTF-16 code units in a JS string.
 const CLEF = "\u{1D11E}";
@@ -158,13 +163,80 @@ test("an empty row draws nothing, and the rows after it keep their own baselines
 
 test("a forbidden name carried by a text-only run is caught by the scan of the transcript", () => {
   // This is the point of the flag. Text the Session draws as art was invisible to rowsToText,
-  // so the ADR 0001 gate could not see what the art spelled. "Firstname Lastname" is the
-  // committed placeholder from src/content.ts, which is public on purpose.
-  const rows: Row[] = [{ runs: [{ col: 0, text: "Firstname Lastname", textOnly: true }] }];
-  assert.equal(rowsToText(rows), "Firstname Lastname");
+  // so the ADR 0001 gate could not see what the art spelled.
+  const rows: Row[] = [{ runs: [{ col: 0, text: PLACEHOLDER, textOnly: true }] }];
+  assert.equal(rowsToText(rows), PLACEHOLDER);
   assert.equal(renderRows(rows), "", "the name was drawn into the picture");
   assert.throws(() => assertNoForbiddenNames(rowsToText(rows), "the transcript"), /forbidden name/);
-  assert.doesNotThrow(() => assertNoForbiddenNames(rowsToText([{ runs: [{ col: 0, text: "Firstname", textOnly: true }] }]), "the transcript"));
+  const half = [...PLACEHOLDER].slice(0, 4).join("");
+  assert.doesNotThrow(() => assertNoForbiddenNames(rowsToText([{ runs: [{ col: 0, text: half, textOnly: true }] }]), "the transcript"));
+});
+
+// ---- drawn-only runs ----
+
+test("a drawn-only run is drawn, kept out of the transcript, and still occupies its columns", () => {
+  const rows: Row[] = [{ runs: [{ col: 0, text: "ink" }, { col: 4, text: "POSE", drawOnly: true }] }];
+  assert.equal(rowsToText(rows), "ink", "the transcript must not repeat a stacked variant");
+  const svg = renderRows(rows);
+  assert.ok(svg.includes(">POSE</tspan>"), "the drawn-only run was not drawn");
+  assert.equal([...svg.matchAll(/<tspan/g)].length, 2);
+  assert.equal(rowWidth(rows[0]), 8, "a drawn-only run still reaches its last column");
+  assert.deepEqual([...charsUsed(rows)].sort(), [..."inkPOSE"].sort(), "its glyphs still need the subset");
+});
+
+test("the two faces of one row: the picture shows the variants, the transcript shows the word", () => {
+  // What the motion layer will build on the spinner's row: one drawn verb per Mascot pose,
+  // stacked at the same columns and revealed one at a time. Painting them all into one line of
+  // text spells none of them, which is why the word the transcript says is carried separately.
+  const rows: Row[] = [{ runs: [
+    { col: 0, text: "✶", style: "accent" },
+    { col: 2, text: "Loafing…", textOnly: true },
+    { col: 2, text: "Loafing…", drawOnly: true, cls: "pose-sleep" },
+    { col: 2, text: "Resettling…", drawOnly: true, cls: "pose-settle" },
+  ] }];
+  assert.equal(rowsToText(rows), "✶ Loafing…", "the transcript says one verb");
+  assert.equal(rowsToDrawnText(rows), "✶ Resettling…", "painting the variants together spells only the last");
+  const svg = renderRows(rows);
+  assert.ok(svg.includes("pose-sleep") && svg.includes("pose-settle"), "both variants must be drawn");
+  assert.equal([...svg.matchAll(/<tspan/g)].length, 3, "the text-only copy must not be drawn");
+
+  // The same two faces where the runs do not overlap, so each projection is wrong on its own
+  // terms if it keeps the other's runs rather than merely being hidden by an overlay.
+  const split: Row[] = [{ runs: [{ col: 0, text: "ART", textOnly: true }, { col: 6, text: "ink", drawOnly: true }] }];
+  assert.equal(rowsToText(split), "ART");
+  assert.equal(rowsToDrawnText(split), "      ink");
+});
+
+// ---- the ADR 0001 gate reads the complete projection ----
+
+test("the gate's projection takes every run, so neither flag can hide a name from it", () => {
+  assert.ok(PLACEHOLDER && PLACEHOLDER.length > 2, "no committed placeholder to build the cases from");
+  const cases: [string, Row[]][] = [
+    ["a text-only run", [{ runs: [{ col: 0, text: PLACEHOLDER, textOnly: true }] }]],
+    ["a drawn-only run", [{ runs: [{ col: 0, text: PLACEHOLDER, drawOnly: true }] }]],
+    ["a run buried under a longer copy laid over it", [{ runs: [
+      { col: 0, text: PLACEHOLDER },
+      { col: 0, text: "x".repeat([...PLACEHOLDER].length + 4) },
+    ] }]],
+    ["a drawn-only run split into one per character, as the shimmer splits its word", [{
+      runs: [...PLACEHOLDER].map((ch, i): Run => ({ col: i, text: ch, drawOnly: true })),
+    }]],
+  ];
+  for (const [how, rows] of cases) {
+    assert.throws(() => assertRowsCarryNoForbiddenNames(rows, "the Session"), /forbidden name/, how);
+  }
+  assert.doesNotThrow(
+    () => assertRowsCarryNoForbiddenNames([{ runs: [{ col: 0, text: "nothing to see here" }] }], "the Session"),
+    "clean rows must pass, or the gate is simply always throwing",
+  );
+});
+
+test("the transcript alone cannot see a drawn-only run, which is the hole the projection closes", () => {
+  const rows: Row[] = [{ runs: [{ col: 0, text: PLACEHOLDER, drawOnly: true }] }];
+  assert.equal(rowsToText(rows), "", "the transcript would not show it");
+  assert.doesNotThrow(() => assertNoForbiddenNames(rowsToText(rows), "the transcript"));
+  assert.ok(rowsToFullText(rows).includes(PLACEHOLDER), "the complete projection must still carry it");
+  assert.throws(() => assertNoForbiddenNames(rowsToFullText(rows), "the Session"), /forbidden name/);
 });
 
 // ---- esc and renderRows ----

@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { loadContent } from "../src/content.ts";
 import type { Content } from "../src/content.ts";
-import { composeSession, languageShares, SCAN_ROWS, VERB_SUFFIX } from "../src/session.ts";
+import { assertNoCollisions, composeSession, languageShares, SCAN_ROWS, VERB_SUFFIX } from "../src/session.ts";
 import type { Activity } from "../src/session.ts";
 import { assertFits, rowsToText, renderRows, charsUsed } from "../src/rows.ts";
-import type { Row } from "../src/rows.ts";
+import type { Row, Run } from "../src/rows.ts";
 import { CELL_H, CELL_W, COLS } from "../src/grid.ts";
 import { MASCOT_COLS, MASCOT_ROWS } from "../src/mascot.ts";
 import { BANNER_ROWS, bannerWidthCols } from "../src/banner.ts";
@@ -42,9 +42,10 @@ function altered(): Content {
     { label: "beta/", repos: [{ name: "r-two", blurb: "second blurb" }, { name: "r-three", blurb: "third blurb" }] },
   ];
   c.stackRows = [{ label: "tools", items: ["aa", "bb"] }, { label: "", items: ["cc"] }];
+  c.activityLine = { label: "recon done,", daysUp: "live days", contributions: "commits" };
   c.statusline = {
-    effortLabels: ["one", "two", "three"], effortSelected: "two", modeBadge: "manual",
-    note: "a short note", toggle: { word: "Hypermellow", state: "idle" },
+    effortWord: "Budget", effortLabels: ["one", "two", "three"], effortSelected: "two",
+    modeBadge: "manual", note: "a short note", toggle: { word: "Hypermellow", state: "idle" },
   };
   return c;
 }
@@ -77,6 +78,12 @@ function languageRows(lines: string[]): { name: string; pct: number; pctCol: num
 
 const total = (xs: number[]): number => xs.reduce((s, x) => s + x, 0);
 
+/** The /activity result line as the content's fragments and this activity's numbers spell it. */
+function resultLine(c: Content, a: Activity): string {
+  const { label, daysUp, contributions } = c.activityLine;
+  return `${label} ${a.activeDays}/365 ${daysUp} · ${a.totalContributions} ${contributions}`;
+}
+
 // ---- the whole Session ----
 
 test("the whole session fits in 72 columns, with the owner's real content", () => {
@@ -98,17 +105,55 @@ test("the glyphs the session draws exist in both faces of the font", () => {
   assert.doesNotThrow(() => assertCovered(bold, charsUsed(boldRows)));
 });
 
-test("no two runs in a row overlap or touch, apart from a highlight copy laid over its word", () => {
+test("in each face of the Session, no two runs overlap or touch, apart from a highlight copy", () => {
+  // A run can only collide with what is shown beside it, so the picture (everything but the
+  // text-only runs) and the transcript (everything but the drawn-only ones) are checked apart.
+  const faces: [string, (run: Run) => boolean][] = [
+    ["the picture", (run) => !run.textOnly],
+    ["the transcript", (run) => !run.drawOnly],
+  ];
   for (const [, make] of CONTENTS) {
     const { rows } = composeSession(make(), busy);
-    rows.forEach((row, i) => {
-      const runs = row.runs.filter((r) => !isShimmer(r.cls)).sort((a, b) => a.col - b.col);
-      runs.slice(1).forEach((run, k) => {
-        const prev = runs[k];
-        assert.ok(prev.col + [...prev.text].length < run.col, `row ${i}: ${JSON.stringify(prev.text)} runs into ${JSON.stringify(run.text)}`);
+    for (const [face, shown] of faces) {
+      rows.forEach((row, i) => {
+        const runs = row.runs.filter((r) => shown(r) && !isShimmer(r.cls)).sort((a, b) => a.col - b.col);
+        runs.slice(1).forEach((run, k) => {
+          const prev = runs[k];
+          assert.ok(
+            prev.col + [...prev.text].length < run.col,
+            `row ${i} in ${face}: ${JSON.stringify(prev.text)} runs into ${JSON.stringify(run.text)}`,
+          );
+        });
       });
-    });
+    }
   }
+});
+
+test("the faces are checked apart, so a word drawn as art may share columns with the glyphs over it", () => {
+  const verb = (text: string, cls: string): Run => ({ col: 2, text, drawOnly: true, cls });
+  // What the motion layer will add to the spinner's row: the one verb the transcript says, and
+  // a drawn variant at the same columns. Neither is ever shown where the other is.
+  assert.doesNotThrow(() => assertNoCollisions([{ runs: [
+    { col: 0, text: "✶", style: "accent" },
+    { col: 2, text: `Loafing${VERB_SUFFIX}`, textOnly: true },
+    verb(`Loafing${VERB_SUFFIX}`, "pose-sleep"),
+  ] }]));
+  // A collision inside one face is still a collision, and the message names which face.
+  assert.throws(
+    () => assertNoCollisions([{ runs: [{ col: 0, text: "ab" }, { col: 2, text: "cd", drawOnly: true }] }]),
+    /row 0 in the picture: "ab" runs into "cd"/,
+  );
+  assert.throws(
+    () => assertNoCollisions([{ runs: [{ col: 0, text: "ab" }, { col: 2, text: "cd", textOnly: true }] }]),
+    /row 0 in the transcript: "ab" runs into "cd"/,
+  );
+  // And two drawn variants at one position are a collision in the picture: only the motion
+  // layer's clock keeps them apart, which is a fact about the clock, not about the row, so the
+  // set has to declare itself the way the Statusline's highlight copy does.
+  assert.throws(
+    () => assertNoCollisions([{ runs: [verb("Loafing", "pose-sleep"), verb("Resettling", "pose-settle")] }]),
+    /in the picture/,
+  );
 });
 
 test("no run is empty, so no empty element is drawn", () => {
@@ -140,7 +185,7 @@ test("each part of the session wears its own style", () => {
   assert.deepEqual(stylesOf("56%"), ["muted"]);
   assert.deepEqual(stylesOf(stack.label), ["muted"]);
   assert.deepEqual(stylesOf(stack.items.join("  ")), ["text"]);
-  assert.deepEqual(stylesOf("scan complete: 365/365 days up · 12345 contributions"), ["accent"]);
+  assert.deepEqual(stylesOf(resultLine(c, busy)), ["accent"]);
   assert.deepEqual(stylesOf("─".repeat(COLS)), ["muted", "muted"]);
   assert.deepEqual(stylesOf("✶"), ["accent"]);
   assert.deepEqual(stylesOf("Effort"), ["muted"]);
@@ -394,12 +439,28 @@ test("real activity numbers are printed, never invented", () => {
 });
 
 test("the result line carries this activity's own numbers", () => {
-  for (const [days, contributions] of [[12, 345], [365, 12345], [0, 0]]) {
-    const lines = linesOf(composeSession(loadContent(), { ...activity, activeDays: days, totalContributions: contributions }).rows);
-    assert.ok(
-      lines.includes(`  ╰  scan complete: ${days}/365 days up · ${contributions} contributions`),
-      `no result line for ${days} days and ${contributions} contributions`,
-    );
+  for (const [label, make] of CONTENTS) {
+    const c = make();
+    for (const [days, contributions] of [[12, 345], [365, 12345], [0, 0]]) {
+      const a = { ...activity, activeDays: days, totalContributions: contributions };
+      const lines = linesOf(composeSession(c, a).rows);
+      assert.ok(
+        lines.includes(`  ╰  ${resultLine(c, a)}`),
+        `${label}: no result line for ${days} days and ${contributions} contributions`,
+      );
+    }
+  }
+});
+
+test("every word of the result line comes from content.json; the order and the dot do not", () => {
+  const c = loadContent();
+  c.activityLine = { label: "sweep finished,", daysUp: "busy days", contributions: "pushes" };
+  const lines = linesOf(composeSession(c, activity).rows);
+  assert.ok(lines.includes("  ╰  sweep finished, 99/365 busy days · 950 pushes"), lines.join("\n"));
+  // and nothing of the shipped wording survives inside the generator
+  const text = rowsToText(composeSession(c, activity).rows);
+  for (const gone of ["scan complete", "days up", "contributions"]) {
+    assert.ok(!text.includes(gone), `${JSON.stringify(gone)} is still written into the generator`);
   }
 });
 
@@ -443,7 +504,7 @@ test("the Scan Sweep gets its own rows right under /activity, and the result lin
   const lines = linesOf(rows);
   assert.equal(lines[scanRow - 1], PROMPT + "/activity");
   assert.deepEqual(rows.slice(scanRow, scanRow + SCAN_ROWS).map((r) => r.runs.length), Array(SCAN_ROWS).fill(0));
-  assert.match(lines[scanRow + SCAN_ROWS], /^ {2}╰ {2}scan complete: 99\/365 days up/);
+  assert.equal(lines[scanRow + SCAN_ROWS], `  ╰  ${resultLine(loadContent(), activity)}`);
 });
 
 // ---- the spinner ----
@@ -482,12 +543,12 @@ test("a rule closes the spinner section and the statusline follows it", () => {
 // ---- the statusline ----
 
 for (const [label, make] of CONTENTS) {
-  test(`the effort row lists every label in order, two spaces apart, from column 9 (${label})`, () => {
+  test(`the effort row is the content's word, three columns, then every level in order (${label})`, () => {
     const c = make();
     const lines = linesOf(composeSession(c, activity).rows);
     const effort = lines[lines.length - 2];
     const shown = c.statusline.effortLabels.map((l) => (l === c.statusline.effortSelected ? `[${l}]` : l));
-    assert.ok(effort.startsWith("Effort   " + shown.join("  ")), effort);
+    assert.ok(effort.startsWith(`${c.statusline.effortWord}   ${shown.join("  ")}`), effort);
   });
 
   test(`the mode row has the badge on the left and the note flush to the right edge (${label})`, () => {
@@ -525,6 +586,16 @@ test("whichever effort is selected is the only one marked, and the others stay p
   }
 });
 
+test("a longer effort word pushes the levels along rather than running into them", () => {
+  const c = loadContent();
+  const shown = c.statusline.effortLabels.map((l) => (l === c.statusline.effortSelected ? `[${l}]` : l));
+  for (const word of ["E", "Effort", "Reasoning budget"]) {
+    c.statusline.effortWord = word;
+    const effort = linesOf(composeSession(c, activity).rows).at(-2)!;
+    assert.ok(effort.startsWith(`${word}   ${shown.join("  ")}`), `${word}: ${effort}`);
+  }
+});
+
 test("a note that would run into the badge, or touch it, is rejected rather than drawn over it", () => {
   const c = loadContent();
   const room = COLS - 3 - c.statusline.modeBadge.length;   // what is left after "▶▶ " and the badge
@@ -539,7 +610,8 @@ test("a note that would run into the badge, or touch it, is rejected rather than
 test("effort labels that would run into the toggle, or touch it, are rejected", () => {
   const c = loadContent();
   const { effortLabels, effortSelected } = c.statusline;
-  const start = 9 + effortLabels.reduce((s, l) => s + (l === effortSelected ? l.length + 2 : l.length) + 2, 0);
+  const start = c.statusline.effortWord.length + 3
+    + effortLabels.reduce((s, l) => s + (l === effortSelected ? l.length + 2 : l.length) + 2, 0);
   const toggleCol = COLS - `${c.statusline.toggle.word} ${c.statusline.toggle.state}`.length;
   const withLast = (len: number): Content => {
     const copy = loadContent();

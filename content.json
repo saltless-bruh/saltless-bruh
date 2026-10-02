@@ -65,7 +65,13 @@
     "settle": ["Resettling"],
     "startle": ["Startled"]
   },
+  "activityLine": {
+    "label": "scan complete:",
+    "daysUp": "days up",
+    "contributions": "contributions"
+  },
   "statusline": {
+    "effortWord": "Effort",
     "effortLabels": ["low", "medium", "lazy", "xhigh", "max"],
     "effortSelected": "lazy",
     "modeBadge": "autopilot on",

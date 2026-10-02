@@ -60,8 +60,8 @@ const MASCOT_GAP = 2;
 const BODY_COL = 2;
 /** Where a language name or a tool label starts, under the result glyph. */
 const LIST_COL = 5;
-/** Where the effort labels start, after the word Effort and a gap. */
-const EFFORT_COL = 9;
+/** Blank columns between the effort word and the first level, so a longer word pushes them along. */
+const EFFORT_GAP = 3;
 /** Columns between two things in a list that sit on the same row. */
 const SPACING = 2;
 const REPO_NAME_COL = 7;
@@ -95,16 +95,30 @@ export function languageShares(langs: { name: string; bytes: number }[]): { name
 
 /**
  * `assertFits` measures only where a row ends, so two runs placed on top of one another, or
- * butted together so they read as one word, would pass it. A highlight copy is meant to lie
- * over its word and is skipped; its word is still checked.
+ * butted together so they read as one word, would pass it.
+ *
+ * Each of the Session's two faces is checked on its own, because a run can only collide with
+ * what is shown beside it: the picture is every run but the `textOnly` ones, the transcript is
+ * every run but the `drawOnly` ones. A word the Banner draws as art may therefore share columns
+ * with the glyphs the motion layer stacks there, since the two are never on screen together.
+ * A highlight copy is meant to lie over its word and is skipped in both faces; its word is
+ * still checked. A set of drawn alternatives at one position, which only the motion layer's
+ * clock keeps apart, must declare itself the same way: that is a fact about the clock and not
+ * about the row, so this check cannot infer it.
  */
-function assertNoCollisions(rows: Row[]): void {
+export function assertNoCollisions(rows: Row[]): void {
+  const faces: [string, (run: Run) => boolean][] = [
+    ["the picture", (run) => !run.textOnly],
+    ["the transcript", (run) => !run.drawOnly],
+  ];
   rows.forEach((row, i) => {
-    const runs = row.runs.filter((r) => !isHighlight(r)).sort((a, b) => a.col - b.col);
-    for (let k = 1; k < runs.length; k++) {
-      const prev = runs[k - 1];
-      if (prev.col + cells(prev.text) >= runs[k].col) {
-        throw new Error(`row ${i}: ${JSON.stringify(prev.text)} runs into ${JSON.stringify(runs[k].text)}; they need a blank column between them`);
+    for (const [face, shown] of faces) {
+      const runs = row.runs.filter((r) => shown(r) && !isHighlight(r)).sort((a, b) => a.col - b.col);
+      for (let k = 1; k < runs.length; k++) {
+        const prev = runs[k - 1];
+        if (prev.col + cells(prev.text) >= runs[k].col) {
+          throw new Error(`row ${i} in ${face}: ${JSON.stringify(prev.text)} runs into ${JSON.stringify(runs[k].text)}; they need a blank column between them`);
+        }
       }
     }
   });
@@ -177,7 +191,14 @@ export function composeSession(c: Content, a: Activity): Session {
   command("/activity");
   const scanRow = rows.length;
   for (let r = 0; r < SCAN_ROWS; r++) rows.push(blank());
-  result(`scan complete: ${a.activeDays}/${WINDOW_DAYS} days up · ${a.totalContributions} contributions`, "accent");
+  // Labelled fragments, not a template: each one is validated on its own like every other
+  // visible string, and the order of the sentence stays here, where the layout can rely on it.
+  // The middle dot is a mark rather than a word, so it belongs to the generator.
+  const line = c.activityLine;
+  result(
+    `${line.label} ${a.activeDays}/${WINDOW_DAYS} ${line.daysUp} · ${a.totalContributions} ${line.contributions}`,
+    "accent",
+  );
   rows.push(blank());
 
   // The drawn words depend on which pose is on screen, so every one of them is layered over
@@ -192,8 +213,8 @@ export function composeSession(c: Content, a: Activity): Session {
   rows.push(rule());
 
   // Statusline: the effort picker on the left, the shimmering toggle on the right.
-  const effort: Run[] = [{ col: 0, text: "Effort", style: "muted" }];
-  let col = EFFORT_COL;
+  const effort: Run[] = [{ col: 0, text: c.statusline.effortWord, style: "muted" }];
+  let col = cells(c.statusline.effortWord) + EFFORT_GAP;
   for (const label of c.statusline.effortLabels) {
     const selected = label === c.statusline.effortSelected;
     const shown = selected ? `[${label}]` : label;

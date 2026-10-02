@@ -2,6 +2,8 @@
 import { readFileSync } from "node:fs";
 import { assertCovered, FORBIDDEN_GLYPHS } from "./font.ts";
 import { MASCOT_TIMELINE, type PoseName } from "./timeline.ts";
+import { rowsToFullText } from "./rows.ts";
+import type { Row } from "./rows.ts";
 
 export type Repo = { name: string; blurb: string };
 export type Lane = { label: string; repos: Repo[] };
@@ -9,13 +11,21 @@ export type StackRow = { label: string; items: string[] };
 /** The Statusline toggle: the owner's word and the state it reads, e.g. "Ultrachill" and "on". */
 export type Toggle = { word: string; state: string };
 export type Statusline = {
-  effortLabels: string[]; effortSelected: string; modeBadge: string; note: string; toggle: Toggle;
+  effortWord: string; effortLabels: string[]; effortSelected: string;
+  modeBadge: string; note: string; toggle: Toggle;
 };
+/**
+ * The /activity result line as labelled fragments: `<label> N/365 <daysUp> · M <contributions>`.
+ * Fragments rather than a template with placeholders, so each one is validated like every other
+ * visible string, and the order of the sentence stays in the generator, where the layout is.
+ */
+export type ActivityLine = { label: string; daysUp: string; contributions: string };
 /** Spinner words grouped by Mascot state, so the label names the pose on screen. */
 export type Verbs = Record<PoseName, string[]>;
 export type Content = {
   handle: string; cwd: string; role: string; whoami: string[];
-  lanes: Lane[]; stackRows: StackRow[]; verbs: Verbs; statusline: Statusline;
+  lanes: Lane[]; stackRows: StackRow[]; verbs: Verbs;
+  activityLine: ActivityLine; statusline: Statusline;
 };
 
 /**
@@ -42,6 +52,16 @@ export function assertNoForbiddenNames(text: string, where: string): void {
       throw new Error(`forbidden name appears in ${where} (ADR 0001 forbids publishing it)`);
     }
   }
+}
+
+/**
+ * The ADR 0001 gate over a composed Session. It reads the complete projection of the rows and
+ * never the transcript: a run the picture draws but the transcript omits, or the other way
+ * round, must not be able to hide a name from this check. Call this rather than passing
+ * `rowsToText` yourself, so the choice of projection cannot be got wrong at the call site.
+ */
+export function assertRowsCarryNoForbiddenNames(rows: Row[], where: string): void {
+  assertNoForbiddenNames(rowsToFullText(rows), where);
 }
 
 const DEFAULT_PATH = new URL("../content.json", import.meta.url);
@@ -99,8 +119,14 @@ function assertShape(c: unknown): asserts c is Content {
     words.forEach((word, i) => text(word, `verbs.${state}[${i}]`));
   }
 
+  if (!isObj(c.activityLine)) fail("activityLine must be an object");
+  text(c.activityLine.label, "activityLine.label");
+  text(c.activityLine.daysUp, "activityLine.daysUp");
+  text(c.activityLine.contributions, "activityLine.contributions");
+
   if (!isObj(c.statusline)) fail("statusline must be an object");
-  const { effortLabels, effortSelected, modeBadge, note, toggle } = c.statusline;
+  const { effortWord, effortLabels, effortSelected, modeBadge, note, toggle } = c.statusline;
+  text(effortWord, "statusline.effortWord");
   if (!Array.isArray(effortLabels) || effortLabels.length === 0) fail("statusline.effortLabels must not be empty");
   effortLabels.forEach((label, i) => text(label, `statusline.effortLabels[${i}]`));
   if (!effortLabels.includes(effortSelected)) fail("statusline.effortSelected must be one of effortLabels");

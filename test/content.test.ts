@@ -31,7 +31,9 @@ const VALID: Content = {
     settle: ["Resettling"],
     startle: ["Startled"],
   },
+  activityLine: { label: "fixture done:", daysUp: "days seen", contributions: "pushes" },
   statusline: {
+    effortWord: "Fixtureffort",
     effortLabels: ["low", "mid", "lazy", "max"], effortSelected: "lazy", modeBadge: "autopilot on",
     note: "fixture note", toggle: { word: "Fixtureword", state: "off" },
   },
@@ -154,7 +156,11 @@ test("the smallest valid document loads: one of everything", () => {
     lanes: [{ label: "l/", repos: [{ name: "n", blurb: "b" }] }],
     stackRows: [{ label: "", items: ["i"] }],
     verbs: { sleep: ["a"], yawn: ["b"], stretch: ["c"], settle: ["d"], startle: ["e"] },
-    statusline: { effortLabels: ["only"], effortSelected: "only", modeBadge: "m", note: "n", toggle: { word: "t", state: "s" } },
+    activityLine: { label: "a", daysUp: "d", contributions: "c" },
+    statusline: {
+      effortWord: "e", effortLabels: ["only"], effortSelected: "only",
+      modeBadge: "m", note: "n", toggle: { word: "t", state: "s" },
+    },
   };
   assert.deepEqual(load(smallest), smallest);
 });
@@ -220,8 +226,21 @@ const STRUCTURE: [string, unknown, RegExp][] = [
     [f, 9, new RegExp(`${f} must be a string`)],
   ]),
 
+  // the /activity result line, as labelled fragments
+  ["activityLine", undefined, /activityLine must be an object/],
+  ["activityLine", "scan complete:", /activityLine must be an object/],
+  ["activityLine.label", undefined, /activityLine\.label must be a string/],
+  ["activityLine.label", "  ", /activityLine\.label must not be blank/],
+  ["activityLine.daysUp", undefined, /activityLine\.daysUp must be a string/],
+  ["activityLine.daysUp", "", /activityLine\.daysUp must not be blank/],
+  ["activityLine.contributions", undefined, /activityLine\.contributions must be a string/],
+  ["activityLine.contributions", 4, /activityLine\.contributions must be a string/],
+
   // statusline
   ["statusline", undefined, /statusline must be an object/],
+  ["statusline.effortWord", undefined, /statusline\.effortWord must be a string/],
+  ["statusline.effortWord", " ", /statusline\.effortWord must not be blank/],
+  ["statusline.effortWord", 6, /statusline\.effortWord must be a string/],
   ["statusline.effortLabels", [], /statusline\.effortLabels must not be empty/],
   ["statusline.effortLabels", undefined, /statusline\.effortLabels must not be empty/],
   ["statusline.effortLabels[0]", " ", /statusline\.effortLabels\[0\] must not be blank/],
@@ -291,10 +310,11 @@ test("a file that is not JSON is rejected, and the message says so", () => {
 const EDITABLE = leaves(VALID).filter((p) => p !== "statusline.effortSelected");
 
 test("the sweep covers every string in the document, so it cannot pass vacuously", () => {
-  assert.equal(leaves(VALID).length, 34);
+  assert.equal(leaves(VALID).length, 38);
   for (const expected of [
     "handle", "whoami[2]", "lanes[1].repos[0].blurb", "stackRows[1].items[0]", "verbs.sleep[1]",
-    "statusline.note", "statusline.toggle.word", "statusline.toggle.state",
+    "statusline.note", "statusline.toggle.word", "statusline.toggle.state", "statusline.effortWord",
+    "activityLine.label", "activityLine.daysUp", "activityLine.contributions",
   ]) {
     assert.ok(EDITABLE.includes(expected), `${expected} is not swept`);
   }
