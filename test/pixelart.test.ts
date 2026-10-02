@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { inkLeft, loadGlyphs, parseGrid, runsOf, runsToPath, sharedInkLeft } from "../src/pixelart.ts";
+import { inkLeft, inkRight, loadGlyphs, parseGrid, runsOf, runsToPath, sharedInkLeft, sharedInkWidth } from "../src/pixelart.ts";
 
 const SLEEP = new URL("../art/sleep.grid.txt", import.meta.url);
 const GLYPHS = loadGlyphs(new URL("../art/palette.json", import.meta.url));
@@ -256,4 +256,72 @@ test("sharedInkLeft refuses frames that disagree, and names the frame that broke
   assert.throws(() => sharedInkLeft([frame("rest", 3), frame("drifted", 4)]), /drifted.*4.*rest.*3/s);
   assert.throws(() => sharedInkLeft([frame("rest", 3), frame("ok", 3), frame("late", 1)]), /late/);
   assert.throws(() => sharedInkLeft([]), /no grids|no left edge/);
+});
+
+test("inkRight is the rightmost painted column, and it reads every row", () => {
+  // The counterpart of inkLeft, and deliberately not a shared edge: a tail that reaches further in
+  // one frame than another is the art working, not a fault, so clearance takes a maximum.
+  assert.equal(inkRight(["1", "11", "1  "]), 1, "the second row reaches furthest right");
+  assert.equal(inkRight(["    1", "1", "  1"]), 4, "a row of trailing ink sets the edge");
+  assert.equal(inkRight(["  1   ", "      "]), 2, "trailing spaces are not ink");
+  assert.equal(inkRight(["", "   9", ""]), 3, "blank rows contribute no edge");
+  for (const ch of "123456789") assert.equal(inkRight([ch + "  "]), 0, `character ${ch} is ink`);
+  assert.throws(() => inkRight([]), /paint nothing|no right edge/);
+  assert.throws(() => inkRight(["   ", "  "]), /paint nothing|no right edge/);
+});
+
+// ---------------------------------------------------------------------------------------------
+// sharedInkWidth: the clearance anything beside a multi-frame scene has to leave
+//
+// WHY THESE FRAMES ARE SYNTHETIC. The Mascot's own poses all end at the same pixel, because an
+// invariant in src/mascot.ts forces the rack identical across them and the rack is the widest part
+// of the scene. Measured against the committed artwork, therefore, a maximum over the frames, a
+// minimum over them and a lookup of any single frame all return the same number, and no test built
+// on that artwork can tell the three apart. Frames that actually differ are the only way to pin
+// which one the derivation takes, so they are built here rather than by retouching a pose.
+// ---------------------------------------------------------------------------------------------
+
+/** Frames sharing a left edge at `margin`, each reaching `right` pixels further. */
+const frames = (margin: number, rights: number[]): { name: string; rows: string[] }[] =>
+  rights.map((right, i) => ({
+    name: `f${i}`,
+    rows: [" ".repeat(margin) + "1".repeat(right - margin + 1)],
+  }));
+
+test("sharedInkWidth spans the shared left edge to the WIDEST frame's right edge", () => {
+  // A minimum, or the first frame's own edge, clears whichever frame happens to be narrowest and is
+  // then overlapped by every other one. Each order below puts the widest frame somewhere different,
+  // so taking the first, the last or the narrowest is wrong in at least one of them.
+  for (const rights of [[5, 9, 7], [9, 5, 7], [5, 7, 9]]) {
+    assert.equal(sharedInkWidth(frames(2, rights)), 8, `widest of ${rights.join(", ")} from edge 2`);
+  }
+  assert.equal(sharedInkWidth(frames(0, [3, 3, 3])), 4, "frames that agree are their own width");
+  assert.equal(sharedInkWidth(frames(6, [6])), 1, "one frame of one pixel is one pixel across");
+});
+
+test("sharedInkWidth counts both edges, so a clearance is never a column short", () => {
+  // inkLeft and inkRight are both pixel INDICES, so the span between them is inclusive of each.
+  // Dropping the +1 is invisible on wide artwork and silently overlaps by one column.
+  for (const [margin, right] of [[0, 0], [0, 1], [3, 9], [10, 31]] as [number, number][]) {
+    assert.equal(sharedInkWidth(frames(margin, [right])), right - margin + 1, `${margin} to ${right}`);
+  }
+});
+
+test("sharedInkWidth is measured from the shared edge, so a drifted frame is refused not averaged", () => {
+  // The left edge is what the scene is PLACED by, so disagreement there is an error rather than a
+  // number to pick: a frame starting elsewhere would slide the picture sideways when it came up.
+  const drifted = [{ name: "rest", rows: ["  111"] }, { name: "drifted", rows: ["   1111"] }];
+  assert.throws(() => sharedInkWidth(drifted), /drifted/);
+  assert.throws(() => sharedInkWidth([]), /no grids|no left edge/);
+});
+
+test("the Mascot's own poses cannot tell a maximum from a minimum, which is why the above is synthetic", () => {
+  // The premise of the synthetic frames, measured rather than asserted in prose: every committed
+  // pose ends at the same pixel today. If that ever stops being true this test fails, and the
+  // artwork itself starts covering what only the frames above cover now.
+  const poses = ["sleep", "yawn", "stretch", "settle", "peek", "alert", "glare", "recover"]
+    .map((name) => ({ name, rows: readFileSync(new URL(`../art/${name}.grid.txt`, import.meta.url), "utf8").replace(/\n$/, "").split("\n") }));
+  const edges = new Set(poses.map((p) => inkRight(p.rows)));
+  assert.equal(edges.size, 1, `the poses now end at ${[...edges].join(", ")}, so the artwork can see the maximum itself`);
+  assert.equal(sharedInkWidth(poses), inkRight(poses[0].rows) - sharedInkLeft(poses) + 1);
 });

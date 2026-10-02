@@ -1,5 +1,5 @@
 import { CELL_H, CELL_W, PAD, colX } from "./grid.ts";
-import { inkLeft, inkRight, loadGlyphs, loadGrid, parseGrid, runsOf, runsToPath, sharedInkLeft } from "./pixelart.ts";
+import { inkLeft, loadGlyphs, loadGrid, parseGrid, runsOf, runsToPath, sharedInkLeft, sharedInkWidth } from "./pixelart.ts";
 import type { Box, Grid, Run } from "./pixelart.ts";
 import { DREAMING, MASCOT_TIMELINE, MASTER_SECONDS } from "./timeline.ts";
 import type { PoseName } from "./timeline.ts";
@@ -112,8 +112,7 @@ export const MASCOT_INK_LEFT = sharedInkLeft(Object.values(POSES));
  * It comes out fractional, because an art pixel is half a column wide and the ink is an odd number
  * of pixels. A caller placing text beside it rounds UP, since half a column of overlap is overlap.
  */
-export const MASCOT_INK_COLS =
-  (Math.max(...Object.values(POSES).map((g) => inkRight(g.rows))) - MASCOT_INK_LEFT + 1) * PX / CELL_W;
+export const MASCOT_INK_COLS = sharedInkWidth(Object.values(POSES)) * PX / CELL_W;
 
 // In each region a character is either painted or deliberately the window (`bg`); a table entry nothing uses is a mistake.
 const charsIn = (rows: string[]): Set<string> => new Set([...rows.join("")].filter((c) => c !== " "));

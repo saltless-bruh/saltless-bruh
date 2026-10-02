@@ -114,6 +114,27 @@ export function sharedInkLeft(grids: { name: string; rows: string[] }[]): number
   return first.left;
 }
 
+/**
+ * How many PIXELS ACROSS a set of frames of one scene occupies: from the edge they share to the
+ * rightmost ink any one of them reaches, inclusive of both.
+ *
+ * The two edges are taken differently on purpose, and that asymmetry is the whole content of this
+ * function. The left is `sharedInkLeft`, which REFUSES frames that disagree, because the scene is
+ * placed by that edge and would slide sideways between frames otherwise. The right is a MAXIMUM,
+ * because anything placed beside the scene has to clear its widest frame: a minimum, or the rest
+ * frame's own right edge, clears whichever frame happens to be narrowest and is then overlapped by
+ * every other one, which is a fault nobody sees until the art is retouched.
+ *
+ * It lives here, as a function over grids handed to it, so that the maximum can be exercised by a
+ * set of frames that actually differ. The Mascot's own poses all end at the same pixel, because an
+ * invariant forces the rack identical across them, so measured against the committed artwork alone
+ * a maximum, a minimum and a first-frame lookup all return the same number and no test can tell
+ * them apart.
+ */
+export function sharedInkWidth(grids: { name: string; rows: string[] }[]): number {
+  return Math.max(...grids.map((g) => inkRight(g.rows))) - sharedInkLeft(grids) + 1;
+}
+
 /** One rectangle per run, `size` units square per pixel, with pixel (0, 0) at (originX, originY). */
 export function runsToPath(runs: Run[], originX: number, originY: number, size: number): string {
   return runs.map((r) => `M${originX + r.x * size} ${originY + r.y * size}h${r.w * size}v${size}h-${r.w * size}z`).join("");

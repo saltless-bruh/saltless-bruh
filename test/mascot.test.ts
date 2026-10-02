@@ -8,7 +8,8 @@ import { PALETTES } from "../src/tokens.ts";
 import type { Palette, ThemeName } from "../src/tokens.ts";
 import { MASCOT_TIMELINE, MASTER_SECONDS } from "../src/timeline.ts";
 import type { PoseName } from "../src/timeline.ts";
-import { MASCOT_COLS, MASCOT_INK_LEFT, MASCOT_ROWS, mascotCss, mascotDefs } from "../src/mascot.ts";
+import { MASCOT_COLS, MASCOT_INK_COLS, MASCOT_INK_LEFT, MASCOT_ROWS, mascotCss, mascotDefs } from "../src/mascot.ts";
+import { inkRight, sharedInkWidth } from "../src/pixelart.ts";
 
 // ---------------------------------------------------------------------------------------------
 // Helpers. Everything below reads the GENERATED output (the real svg, css and path data) and the
@@ -1540,13 +1541,37 @@ test("the artwork carries an empty left margin, which is why placing it by its g
  * They do not leave the real risk uncovered. The scenario that matters is somebody retouching the
  * art so the left margin stops being 10, and the test below catches that the moment it happens:
  * the derivation follows the art and a literal does not, so the rendered left edge stops matching
- * the column asked for. The measuring itself is pinned separately by six killed mutants against
- * synthetic grids in test/pixelart.test.ts.
+ * the column asked for. The measuring itself is pinned separately against synthetic grids in
+ * test/pixelart.test.ts, by mutants P1 to P6 in scripts/mutants.json.
+ *
+ * THE SAME IS TRUE OF THE WIDTH, and it was uncovered until 2026-10-02. `MASCOT_INK_COLS` takes a
+ * maximum over every pose's right edge, which is right, but every pose has the same right edge
+ * because an invariant forces the rack identical across them, so the maximum had nothing to
+ * measure: swapping it for a minimum, or for any single pose's edge, changed no output and no test
+ * noticed. The derivation moved to `sharedInkWidth` in src/pixelart.ts so that it can be handed
+ * frames that actually differ, which is what P1 to P3 now mutate.
  *
  * Making them killable would mean adding an art-directory injection seam to src/mascot.ts for no
  * behaviour anyone can observe, which is contorting the design to satisfy the measurement rather
  * than the risk. Deliberately not done.
  */
+test("the clearance beside the scene is its own ink, measured over every pose and not written down", () => {
+  // The counterpart of the offset below, and the thing the startup block is placed from. Both are
+  // derived, for the same reason: a clearance written down stops being true the moment the art is
+  // retouched, and the failure is the text landing on the picture.
+  //
+  // The derivation itself, in particular that it takes the WIDEST pose rather than any single one,
+  // cannot be pinned from here: every committed pose ends at the same pixel, so a maximum, a
+  // minimum and a first-frame lookup all agree on this artwork. That is pinned against synthetic
+  // frames in test/pixelart.test.ts, and this test holds the wiring between the two.
+  const poses = POSE_FILES().map((rows, i) => ({ name: `pose-${i}`, rows }));
+  assert.equal(MASCOT_INK_COLS, sharedInkWidth(poses) * (CELL_W / 2) / CELL_W);
+  assert.equal(MASCOT_INK_COLS, (Math.max(...poses.map((p) => inkRight(p.rows))) - MASCOT_INK_LEFT + 1) / 2);
+  // Fractional, because an art pixel is half a column and the ink is an odd number of them. A
+  // caller placing text beside it has to round UP, which is what src/session.ts does.
+  assert.ok(!Number.isInteger(MASCOT_INK_COLS), "the ink is a whole number of columns, so nothing checks the rounding beside it");
+});
+
 test("the offset the scene is placed by is the artwork's own margin, measured not written down", () => {
   // Read from every pose file here. A module that hard-codes the current offset passes this only
   // for as long as the art keeps that margin, which is the failure the derivation exists to stop.
