@@ -180,15 +180,28 @@ export function countNamesIn(text: string, names: string[]): number {
 export type SecretShape = { label: string; pattern: RegExp };
 
 /**
- * A capture that looks like a generated credential rather than a word somebody typed.
+ * A value that is obviously ILLUSTRATIVE rather than generated: `your-token`, `REPLACE_ME`,
+ * `not-a-real-token`.
  *
- * Two shapes, because one of them does not have mixed case at all: a legacy GitHub personal
- * access token is 40 characters of lowercase hex, which has no uppercase letter to require. The
- * hex arm is only reached when a key named for a credential is on the left of the assignment, so
- * it cannot fire on the commit hashes and `integrity` digests that are all over a lockfile.
+ * This exists because the gate fired on `docs/EDITING.md`, which was explaining to the owner what
+ * to write, and took the whole run down with it. The gate must stay pointed at documentation,
+ * because a document is exactly where somebody pastes a real token while writing an example, so
+ * the fix is on the VALUE and never on the path: exempting `docs/` would remove the case most
+ * worth catching. This is the sibling of the `.env.example` blank-value case that mutant G12
+ * covers; both are the gate firing on the file that documents it.
+ *
+ * The discriminator is the absence of any digit, in a value made only of letter-words joined by a
+ * separator. Every credential family in SECRET_SHAPES carries digits, and a generated secret with
+ * no digit anywhere is improbable: for 36 base62 characters it is about one in 650, and such a
+ * value would also have to avoid `+` and `/` to get this far. The known families are caught by
+ * their prefixes regardless of this predicate, so what is traded away is only an unknown
+ * provider's all-letters secret assigned to a credential-named key.
  */
-const credentialShaped = (s: string): boolean =>
-  (/[a-z]/.test(s) && /[A-Z]/.test(s) && /[0-9]/.test(s)) || /^[0-9a-f]{32,}$/i.test(s);
+const looksIllustrative = (s: string): boolean =>
+  !/[0-9]/.test(s) && /^[A-Za-z]+(?:[-_.][A-Za-z]+)*$/.test(s);
+
+/** Shorter than any credential anybody issues; a value this size is a flag, not a secret. */
+const MIN_CREDENTIAL_LENGTH = 8;
 
 export const SECRET_SHAPES: SecretShape[] = [
   { label: "a GitHub token (gh?_ prefix)", pattern: /\bgh[pousr]_[A-Za-z0-9]{36,}/ },
@@ -200,29 +213,33 @@ export const SECRET_SHAPES: SecretShape[] = [
   { label: "a Google API key", pattern: /\bAIza[0-9A-Za-z_-]{35}\b/ },
   { label: "a PEM private key block", pattern: /-----BEGIN[ A-Z]*PRIVATE KEY-----/ },
   { label: "a JSON web token", pattern: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/ },
-  // The project's own variable, with a value written beside it. `$` is excluded from the first
-  // character of the value so that the one legitimate spelling, the workflow's
-  // `${{ secrets.<name> }}` reference, is not read as the secret itself. The whitespace classes
-  // are horizontal only, so a blank value at the end of a line (`.env.example`) stays blank
-  // rather than reaching forward to the next line for a character.
-  {
-    label: `${TOKEN_ENV} with a value beside it`,
-    pattern: new RegExp(`${TOKEN_ENV}[^\\S\\n]*[=:][^\\S\\n]*["']?[^\\s"'#,}$]`),
-  },
 ];
 
 /**
- * A credential assigned to a key that says what it is: `token = ...`, `api_key: "..."`.
+ * Assignments, where a value is CAPTURED and judged rather than merely matched.
  *
- * Kept apart from SECRET_SHAPES because it needs a predicate on the captured value, not just a
- * match. Bare `key` is deliberately NOT one of the words: it would fire on `@keyframes`, which
- * every generated SVG carries.
+ * Both of these fire on the shape `<something that says credential> = <value>`, which is why both
+ * need `looksIllustrative`: the shape is also exactly how documentation explains the setting. The
+ * value classes stop at `$`, so the workflow's one legitimate spelling,
+ * `PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}`, cannot be read as the secret itself, and the
+ * whitespace classes are horizontal only, so a blank value at the end of a line (`.env.example`)
+ * stays blank instead of reaching forward into the next line for a character.
  *
- * The leading boundary is `[^A-Za-z0-9]` and not `\b`, measured rather than assumed: `\b` does not
- * fire between an underscore and a letter, so `\btoken\b` misses `my_token = ...`, which is the
- * commonest spelling there is. Underscore and hyphen are separators here, not letters.
+ * Bare `key` is deliberately NOT one of the keywords: it would fire on `@keyframes`, which every
+ * generated SVG carries. The leading boundary is `[^A-Za-z0-9]` and not `\b`, measured rather than
+ * assumed: `\b` does not fire between an underscore and a letter, so `\btoken\b` misses
+ * `my_token = ...`, which is the commonest spelling there is.
  */
-const ASSIGNED_SECRET = /(?:^|[^A-Za-z0-9])(?:token|secret|passwd|password|api[_-]?key|access[_-]?key|private[_-]?key|credentials?)["']?[^\S\n]*[=:][^\S\n]*["']?([A-Za-z0-9_\-+/]{20,})/gi;
+const VALUED_SHAPES: SecretShape[] = [
+  {
+    label: `${TOKEN_ENV} with a value beside it`,
+    pattern: new RegExp(`${TOKEN_ENV}[^\\S\\n]*[=:][^\\S\\n]*["']?([A-Za-z0-9_\\-+/]{${MIN_CREDENTIAL_LENGTH},})`, "g"),
+  },
+  {
+    label: "a credential assigned to a key named for one",
+    pattern: /(?:^|[^A-Za-z0-9])(?:token|secret|passwd|password|api[_-]?key|access[_-]?key|private[_-]?key|credentials?)["']?[^\S\n]*[=:][^\S\n]*["']?([A-Za-z0-9_\-+/]{20,})/gi,
+  },
+];
 
 /** The shapes a text carries, by label, deduplicated. Never the match: the match is the secret. */
 export function findSecretShapes(text: string): string[] {
@@ -230,13 +247,69 @@ export function findSecretShapes(text: string): string[] {
   for (const { label, pattern } of SECRET_SHAPES) {
     if (pattern.test(text)) found.push(label);
   }
-  for (const m of text.matchAll(ASSIGNED_SECRET)) {
-    if (credentialShaped(m[1])) {
-      found.push("a credential assigned to a key named for one");
+  for (const { label, pattern } of VALUED_SHAPES) {
+    for (const m of text.matchAll(pattern)) {
+      if (looksIllustrative(m[1])) continue;
+      found.push(label);
       break;
     }
   }
   return [...new Set(found)];
+}
+
+/**
+ * What `.env` has to say about one variable, as a verdict and NOTHING ELSE.
+ *
+ * WHY THIS IS SO CAREFUL. A malformed `.env` used to fail completely silently: the variable was
+ * simply absent, the gate said "no private names configured", and that reads identically to "the
+ * owner has not set it yet". It happened: the real name was written as a KEY rather than as a
+ * value, the gate went on reporting unchecked, and the only way anybody found out was by looking
+ * inside the file, which is the one thing nobody should have to do to that file. Someone did, and
+ * the name went into a transcript. Nothing reached the repository, and the lesson belongs here.
+ *
+ * So this returns one of four literals and never a key, never a value, never a line, never a
+ * count. The caller may quote the variable's own name, which is public, and nothing else. A future
+ * change that returns "the keys it did find" to be helpful would recreate the exact disclosure
+ * this exists because of.
+ */
+export type EnvFileVerdict = "no-file" | "absent" | "blank" | "set";
+
+export function envFileVerdict(root: URL, name: string): EnvFileVerdict {
+  const path = join(dirOf(root), ".env");
+  if (statSync(path, { throwIfNoEntry: false })?.isFile() !== true) return "no-file";
+  let found: EnvFileVerdict = "absent";
+  for (const raw of readFileSync(path, "utf8").split("\n")) {
+    const line = raw.trim();
+    if (line === "" || line.startsWith("#")) continue;
+    const at = line.indexOf("=");
+    if (at < 0) continue;
+    const key = line.slice(0, at).replace(/^export\s+/, "").trim();
+    if (key !== name) continue;
+    // Quotes are stripped the way `--env-file` strips them, so `NAME=""` reads as blank.
+    const value = line.slice(at + 1).trim().replace(/^(['"])(.*)\1$/, "$2").trim();
+    found = value === "" ? "blank" : "set";
+  }
+  return found;
+}
+
+/**
+ * Why the name scan has nothing to scan for, in the words of the actual cause.
+ *
+ * Four causes with four different remedies, and the one that matters most is the last: a `.env`
+ * that defines the variable while the process does not have it can only mean the file was never
+ * loaded, which is a mistake no amount of re-editing the file will fix.
+ */
+function nameListAdvice(root: URL): string {
+  switch (envFileVerdict(root, FORBIDDEN_NAMES_ENV)) {
+    case "no-file":
+      return `no private names configured and there is no .env here: set ${FORBIDDEN_NAMES_ENV} in .env, which \`npm run gates\` and \`npm run build\` read, or as a repository secret`;
+    case "absent":
+      return `.env exists but does not set ${FORBIDDEN_NAMES_ENV}: check that every line reads NAME=value, with the name on the LEFT of the = (a name written as a key sets nothing)`;
+    case "blank":
+      return `.env sets ${FORBIDDEN_NAMES_ENV} to an empty value, which configures nothing: put the comma-separated strings after the =`;
+    case "set":
+      return `.env sets ${FORBIDDEN_NAMES_ENV} but this process did not load it: run it as \`npm run gates\`, which passes --env-file-if-exists=.env`;
+  }
 }
 
 /** `path: shape` for every file carrying a token-shaped string. Never the string itself. */
@@ -682,10 +755,7 @@ export function runGates(root: URL, o: { typecheck?: boolean; names?: string[] }
     // no private names configured there is nothing to look for, and "nothing was checked" must not
     // read as "the tree is clean" (ADR 0001 says this is enforced by a check rather than by
     // discipline, which means the check has to exist).
-    results.push(unconfigured(
-      "forbidden names",
-      `no private names configured: set ${FORBIDDEN_NAMES_ENV}, locally and as a repository secret, so this gate has something to scan for`,
-    ));
+    results.push(unconfigured("forbidden names", nameListAdvice(root)));
   } else {
     const hits = scanTreeForForbiddenNames(root, names);
     results.push(verdict(
@@ -868,9 +938,10 @@ function unreadable(results: GateResult[]): string[] {
   if (unconf.length > 0) {
     blocks.push(
       `  NOT CONFIGURED: ${unconf.map((r) => r.gate).join(", ")}\n`
-      + `    Set ${FORBIDDEN_NAMES_ENV} to the strings that must never reach a published file,\n`
-      + "    locally and as a repository secret. BUILDING AGAIN WILL NOT CHANGE THIS: these gates\n"
-      + "    have the files they need and nothing to check them against (ADR 0001).",
+      + `    Set ${FORBIDDEN_NAMES_ENV} to the strings that must never reach a published file, in\n`
+      + "    .env (which `npm run gates` and `npm run build` read) or as a repository secret.\n"
+      + "    BUILDING AGAIN WILL NOT CHANGE THIS: these gates have the files they need and nothing\n"
+      + "    to check them against (ADR 0001).",
     );
   }
   return blocks;

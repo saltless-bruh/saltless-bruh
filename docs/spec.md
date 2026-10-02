@@ -97,7 +97,7 @@ local departure, not an oversight.
 content.json  (the only file the user edits)
      +
 GitHub GraphQL  ->  cache/activity.json (cache)         .github/workflows/refresh.yml
-     +                                                   daily cron + push + manual
+     +                                                   daily cron + manual dispatch
 design tokens                                            commits only when output changed
      |
      v
@@ -312,6 +312,17 @@ and reaching it fails the build instead of reporting a partial total.
 Read from `PROFILE_GH_TOKEN` in the environment, never from an argument, a CLI flag, or a file in
 the tree. Locally it comes from `.env` (gitignored, see `.env.example`); in CI from a repository
 secret of the same name.
+
+**`.env` is loaded by `node --env-file-if-exists=.env`, on `npm run build` and `npm run gates`
+specifically.** Naming the mechanism here rather than just the file is not pedantry: for a while
+this section said the credential came from `.env`, `.env.example` documented it and `.gitignore`
+excluded it, and no script loaded it, so a correctly written `.env` was read by nobody and the
+name gate reported itself unchecked while the owner had every reason to think it was configured.
+Three documents agreeing with each other is not evidence that the mechanism exists;
+`test/env-file.test.ts` runs the real script's real flag instead. The `-if-exists` form is
+deliberate: the strict `--env-file` exits 9 when the file is absent, which is every CI run, where
+the values come from secrets, and every fresh clone. `npm test` is deliberately NOT given the
+flag, so a developer's own `.env` cannot change a test result.
 
 **`read:user` is NOT required. Measured 2026-10-02**, against the live API, with the query
 `src/activity.ts` actually sends and a token whose scopes were exactly `gist, read:org, repo,

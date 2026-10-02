@@ -14,7 +14,7 @@ import {
   GENERATED, MIN_TRANSCRIPT_ROWS, SIZE_BUDGET_BYTES, SVG_CHECK_SCRIPT,
   checkSvgStructure, countNamesIn, exitCodeFor, externalSvgCheck, findAbsentGlyphs,
   findControlCharacters, findDashes, findReadmeFaults, findReducedMotionFaults,
-  findSecretShapes, findSizeFaults, forbiddenNeedles, listFiles, report, runGates,
+  envFileVerdict, findSecretShapes, findSizeFaults, forbiddenNeedles, listFiles, report, runGates,
   runTypecheck, scanTreeForForbiddenNames, scanTreeForSecrets, svgReferenceCounts,
 } from "../scripts/gates.ts";
 import type { GateResult, GateStatus } from "../scripts/gates.ts";
@@ -269,6 +269,40 @@ test("the stand-in in test/activity.test.ts does not trip the gate it exists to 
   const activityTest = readFileSync(new URL("test/activity.test.ts", ROOT), "utf8");
   assert.match(activityTest, /TOKEN-VALUE-THAT-MUST-NEVER-APPEAR/, "premise: the stand-in is still there");
   assert.deepEqual(findSecretShapes(activityTest), []);
+});
+
+test("a documentation placeholder is not a credential, and a real value in the same file still is", () => {
+  // The gate fired on docs/EDITING.md, which exists to explain what to write, and took the whole
+  // run down with it. The fix is on the VALUE and never on the path: see the next test.
+  for (const placeholder of ["your-token", "REPLACE_ME", "not-a-real-token", "paste.it.here", "a1"]) {
+    assert.deepEqual(findSecretShapes(`${TOKEN_ENV}=${placeholder}`), [], `${placeholder} reads as a credential`);
+  }
+  // And the loosening has NOT become "a document is never scanned", which is the mutation that
+  // would make this gate quietly useless.
+  const realistic = `${TOKEN_ENV}=${"a1B2".repeat(9)}`;
+  assert.ok(findSecretShapes(realistic).length > 0, "a realistic generated value no longer fires");
+  const doc = `Copy .env.example to .env and fill it in:\n\n    ${TOKEN_ENV}=your-token\n`;
+  assert.deepEqual(findSecretShapes(doc), [], "the documented example fires");
+  assert.ok(findSecretShapes(`${doc}\n    ${realistic}\n`).length > 0, "a real token pasted into the same document does not fire");
+});
+
+test("the placeholder exemption is on the value, never on the path", () => {
+  // Exempting docs/ would have been the easy move and it removes the case most worth catching: a
+  // document is exactly where somebody pastes a real token while writing an example.
+  const dir = scratch();
+  mkdirSync(join(dir, "docs"), { recursive: true });
+  writeFileSync(join(dir, "docs", "HOWTO.md"), `${TOKEN_ENV}=${"a1B2".repeat(9)}\n`);
+  writeFileSync(join(dir, "docs", "FINE.md"), `${TOKEN_ENV}=your-token\n`);
+  // One entry per file and SHAPE, so the realistic value is reported under both labels it fits.
+  // What matters here is which files are named at all.
+  assert.deepEqual([...new Set(scanTreeForSecrets(url(dir)).map((h) => h.split(":")[0]))], ["docs/HOWTO.md"]);
+});
+
+test("the page that documents the setting is not blocked by the gate that protects it", () => {
+  // A live fixture: the real file, in the real tree, as the gate reads it.
+  const editing = readFileSync(new URL("docs/EDITING.md", ROOT), "utf8");
+  assert.match(editing, new RegExp(`${TOKEN_ENV}=your-token`), "premise: the page still shows a placeholder value");
+  assert.deepEqual(findSecretShapes(editing), []);
 });
 
 test("ordinary content is not read as a credential", () => {
@@ -623,7 +657,10 @@ test("a built tree with no name list configured is never told to run a build", a
   assert.deepEqual(results.filter((r) => r.status === "absent").map((r) => r.gate), ["forbidden names"]);
   const printed = report(results);
   assert.deepEqual(blockHeadings(printed), ["NOT CONFIGURED"]);
-  assert.ok(!printed.includes("npm run build"), "the summary tells a reader to run a build that cannot help");
+  // The REMEDY sentence, not any mention of the command: the unconfigured block legitimately names
+  // `npm run build` when it says which scripts read `.env`. What must not appear is the
+  // instruction to run it, which is the advice that cannot help here.
+  assert.ok(!printed.includes("Run `npm run build`"), "the summary tells a reader to run a build that cannot help");
   assert.ok(!printed.includes("NOT BUILT"), "the summary claims output is missing when all of it is there");
   assert.match(printed, /BUILDING AGAIN WILL NOT CHANGE THIS/, "the summary does not rule out the wrong remedy");
   assert.match(printed, new RegExp(FORBIDDEN_NAMES_ENV), "the summary does not name the variable to set");
@@ -676,6 +713,63 @@ test("every absence carries a reason, and every reason present gets its own bloc
 
 test("the variable the summary names is the variable the generator reads", () => {
   assert.equal(FORBIDDEN_NAMES_ENV, "PROFILE_FORBIDDEN_NAMES");
+});
+
+test("a .env that does not set the name list says so, distinctly from there being no .env", () => {
+  // The silent failure this closes: the owner wrote their real name as a KEY rather than as a
+  // value, so the variable was never set, the gate said "no private names configured", and that
+  // reads identically to "not set up yet". The only way anybody found out was by looking inside
+  // the file, which is the one thing nobody should have to do to that file.
+  const withEnv = (body: string | null): string => {
+    const dir = scratch();
+    if (body !== null) writeFileSync(join(dir, ".env"), body);
+    return dir;
+  };
+  const adviceIn = (dir: string): string =>
+    gateNamed(runGates(url(dir), { typecheck: false, names: [] }), "forbidden names").detail;
+
+  const none = withEnv(null);
+  assert.equal(envFileVerdict(url(none), FORBIDDEN_NAMES_ENV), "no-file");
+  assert.match(adviceIn(none), /no .env here/);
+
+  // A name written as a key, which is the mistake that was actually made.
+  const asKey = withEnv("Some Name=\nOTHER_SETTING=x\n");
+  assert.equal(envFileVerdict(url(asKey), FORBIDDEN_NAMES_ENV), "absent");
+  assert.match(adviceIn(asKey), /does not set/);
+  assert.match(adviceIn(asKey), /LEFT of the =/, "the advice does not say what the mistake looks like");
+
+  const empty = withEnv(`${FORBIDDEN_NAMES_ENV}=\n`);
+  assert.equal(envFileVerdict(url(empty), FORBIDDEN_NAMES_ENV), "blank");
+  assert.match(adviceIn(empty), /empty value/);
+  assert.equal(envFileVerdict(url(withEnv(`${FORBIDDEN_NAMES_ENV}=""\n`)), FORBIDDEN_NAMES_ENV), "blank");
+
+  // Set in the file, absent from the process: the file was never loaded, and no amount of
+  // re-editing it will help. This is the one a reader cannot possibly guess.
+  const unloaded = withEnv(`export ${FORBIDDEN_NAMES_ENV}=Ada Lovelace\n`);
+  assert.equal(envFileVerdict(url(unloaded), FORBIDDEN_NAMES_ENV), "set");
+  assert.match(adviceIn(unloaded), /did not load it/);
+  assert.match(adviceIn(unloaded), /--env-file-if-exists/);
+
+  // A commented-out line sets nothing.
+  assert.equal(envFileVerdict(url(withEnv(`#${FORBIDDEN_NAMES_ENV}=Ada\n`)), FORBIDDEN_NAMES_ENV), "absent");
+});
+
+test("diagnosing .env never repeats anything out of it", () => {
+  // Non-negotiable: that file holds a credential, and the diagnosis exists because someone had to
+  // read it to find a problem. A future change that returned "the keys it did find", to be
+  // helpful, would recreate the exact disclosure this was written after.
+  const canary = "CANARY-STRING-FROM-INSIDE-THE-ENV-FILE";
+  const dir = scratch();
+  writeFileSync(join(dir, ".env"), `${canary}=value-${canary}\nSOMETHING_ELSE=${canary}\n`);
+  const results = runGates(url(dir), { typecheck: false, names: [] });
+  const printed = report(results);
+  assert.ok(!printed.includes(canary), "the gate read the credential file out loud");
+  for (const r of results) {
+    assert.ok(!r.detail.includes(canary) && !r.problems.join("").includes(canary), `${r.gate} quoted the file`);
+  }
+  // And it still diagnosed the real state rather than going quiet to stay safe.
+  assert.match(gateNamed(results, "forbidden names").detail, /does not set/);
+  assert.ok(["no-file", "absent", "blank", "set"].includes(envFileVerdict(url(dir), FORBIDDEN_NAMES_ENV)));
 });
 
 test("an unbuilt tree says what has not been built yet, not that something is wrong", () => {

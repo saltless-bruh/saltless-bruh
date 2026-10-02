@@ -10,8 +10,8 @@
     "test": "node --test",
     "mutants": "node scripts/mutation-check.ts",
     "typecheck": "tsc",
-    "build": "node src/build.ts",
-    "gates": "node scripts/gates.ts"
+    "build": "node --env-file-if-exists=.env src/build.ts",
+    "gates": "node --env-file-if-exists=.env scripts/gates.ts"
   },
   "keywords": [],
   "type": "module",

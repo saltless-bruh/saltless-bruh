@@ -33,8 +33,20 @@ The build fails with a clear message if something will not render, so a mistake 
 
 `FORBIDDEN_NAMES` in `src/content.ts` is itself committed, so never put a private string there: that would publish the very thing it protects.
 
-Set the environment variable `PROFILE_FORBIDDEN_NAMES` to a comma-separated list instead. It is added to the committed list, and leaving it unset or empty changes nothing:
+Set the environment variable `PROFILE_FORBIDDEN_NAMES` to a comma-separated list instead. It is added to the committed list, and leaving it unset or empty changes nothing.
+
+The easy way is `.env`, which is gitignored and never committed. Copy `.env.example` to `.env` and fill in both lines:
+
+    PROFILE_GH_TOKEN=your-token
+    PROFILE_FORBIDDEN_NAMES=First Last,Last First
+
+**The name goes on the RIGHT of the `=`.** A name written as a key sets nothing, and the gates now say so distinctly instead of reporting the scan as unconfigured, because the two look identical from the outside and only one of them is your mistake to find.
+
+`npm run build` and `npm run gates` both read `.env`. Nothing else does, so if you would rather not keep a file, put it on the command line instead and remember that the gates need it too:
 
     PROFILE_FORBIDDEN_NAMES="First Last,Last First" npm run build
+    PROFILE_FORBIDDEN_NAMES="First Last,Last First" npm run gates
 
-Set it the same way in CI, as a repository secret. The check also runs over everything fetched from the API.
+Set it the same way in CI, as a repository secret of the same name. The check also runs over everything fetched from the API.
+
+**Without it, `npm run gates` says so rather than passing.** The name scan reports itself as `ABSENT ... NOT CONFIGURED` instead of clean, because nothing was checked and that is not the same thing as nothing being wrong.
