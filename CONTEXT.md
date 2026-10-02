@@ -69,8 +69,8 @@ A fault on the rack that wakes the Mascot: the LEDs go red and flash in unison, 
 _Avoid_: alert, notification, event, incident
 
 **Statusline**:
-The closing lines of the Session: the effort picker set to "lazy", a mode badge and the not-affiliated-with-Anthropic note.
-_Avoid_: footer
+The closing panel of the Session: an accent top border, the effort picker set to "lazy", the toggle with its gloss and hints, a mode badge and the not-affiliated-with-Anthropic note.
+_Avoid_: footer, effort row
 
 ## Look
 

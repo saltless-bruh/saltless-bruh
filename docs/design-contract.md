@@ -73,6 +73,39 @@ The real data also gives the grid a shape the fixtures never had: the last 12 co
 16 in the first 12, so it reads as quiet-then-busy rather than as noise. That is the data being real, and it is
 an argument for never making this band look busier than it is.
 
+## The two Statusline ramps, measured 2026-10-02
+
+Added when the Statusline became a panel. Both are computed from the palette in `src/ramp.ts` and
+measured by `test/ramp.test.ts`; neither is a hex literal, so a palette change carries both. Recorded
+here, like the scan sweep's ramp above, so nobody retunes them on principle.
+
+**The toggle's gradient, and the finding that shaped it.** `better-colors` asks for steps evenly
+spaced in *perceived* lightness. Measured, the two tokens it runs between are very nearly
+ISOLUMINANT: `muted` and `accent` are 68.08 and 72.63 in CIE L* in dark, and **47.33 and 47.33 in
+light, identical to two decimal places**. So an even-lightness ramp between them is satisfied
+trivially and would show a reader nothing; what travels across the word is CHROMA, from okC 0.019 to
+0.091 in dark and 0.027 to 0.098 in light. The ramp is therefore the straight line between the two in
+OKLab walked in equal increments, which makes every consecutive pair the same perceptual distance
+apart by construction. Measured over ten characters: L* steps of 0.29 to 0.65 in dark (span 4.55) and
+-0.07 to 0.05 in light (span 0.00). **The unevenness in those numbers is eight-bit quantisation, not
+the ramp**: one code value is about 0.3 L* at this lightness and a step is about 0.5, so a ten-step
+ramp across 4.55 L* cannot be smoother than it is. The test bounds the deviation by a measured
+one-code nudge rather than by a tolerance somebody picked.
+
+**The top tier's rainbow, and why it is allowed at all.** A literal rainbow drops arbitrary hues into
+a palette that has exactly one accent hue, and reads as confetti stuck onto a terminal. This one
+sweeps hue evenly around the whole wheel from the accent's own hue while holding **CIE L\* exactly at
+the accent's** and chroma constant, so the four characters read as one object that happens to be
+polychrome. Measured: L* flat within **0.041** in dark and **0.121** in light, against a target of
+72.627 and 47.331. Holding L* holds relative luminance, so every character measures the accent's own
+contrast against the window: **6.51:1 in dark and 4.77 to 4.79:1 in light**, all of them clear of
+4.5:1, and the rainbow cannot smuggle in a character that is harder to read than the Session's own
+Accent. Chroma is reduced for all four together if any one hue would leave sRGB, never for one alone,
+because one washed-out character reads as a mistake rather than as a sweep.
+
+This is a deliberate, recorded exception to the one-accent rule in `docs/spec.md` 3.4, taken on the
+owner's instruction, and it is confined to one word of four characters.
+
 Two standing weaknesses, both accepted for now and recorded so they are not discovered as surprises:
 
 - **Art borrows text roles.** The mascot paints its body with the `text` token and its rack with `surface`. A cat is

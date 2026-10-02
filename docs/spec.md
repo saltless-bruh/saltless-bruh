@@ -28,7 +28,13 @@ github.com/saltless-bruh
 │  │ > /activity   Scan Sweep + "N/365 days up - M contributions"                 │ │
 │  │ * <verb>...   spinner, loops forever                                         │ │
 │  │ ───────────────────────────────────────────────────────────────────────────  │ │
-│  │ Effort  low  medium  [lazy]  xhigh  max            Ultrachill on             │ │
+│  │ Effort                                                                       │ │
+│  │             Faster                                   Smarter                 │ │
+│  │             ───────────────────────────────────────▲────                     │ │
+│  │                low    medium    high    xhigh    lazy                        │ │
+│  │             Ultrachill: dynamic nap on every task       Ultrachill  on       │ │
+│  │                                                         Tab to toggle        │ │
+│  │   <-/-> to adjust - Enter to confirm - Esc to cancel                         │ │
 │  │ >> autopilot on        terminal-style design, not affiliated with Anthropic  │ │
 │  └──────────────────────────────────────────────────────────────────────────────┘ │
 │                                                                                   │
@@ -188,7 +194,13 @@ At 846px the cell is ~11.3px; at 308px it is ~4.1px. A `viewBox` with no fixed p
 
 ### 3.3 Glyphs
 
-Verified present in JetBrains Mono v2.304, so the Session needs no hand-drawn glyph paths: `❯ ● ╰ ─ │ ✓ ✗ ⚠ ▲ ▶ ■ □ · ∙ • ✶ * ○ ◌ ◉ …`, all printable ASCII, all box-drawing, all block and quadrant characters, and full Vietnamese.
+Verified present in JetBrains Mono v2.304, so the Session needs no hand-drawn glyph paths: `❯ ● ╰ ─ │ ✓ ✗ ⚠ ▲ ▶ ← → ■ □ · ∙ • ✶ * ○ ◌ ◉ …`, all printable ASCII, all box-drawing, all block and quadrant characters, and full Vietnamese.
+
+**`←` (U+2190) and `→` (U+2192) were added to that list on 2026-10-02**, when the Statusline panel
+gained the key hints its reference carries. They were measured the way everything else here is,
+against the vendored faces rather than against a character chart: `assertCovered` on both Regular
+and Bold reports them present. They are listed because the glyph set is a record of what was
+checked; a glyph used but unlisted is indistinguishable from one nobody checked.
 
 Verified **absent**, and therefore forbidden: `⎿ ✻ ✢ ✽ ✔ ✘ ◼ ◻ ⏵ ⏸`. The substitutes above replace them.
 
@@ -264,6 +276,16 @@ Every animation must justify itself in one sentence. Anything that cannot is cut
 | Scan Sweep | Beam crosses the calendar once during playback, then once per 36s master loop | Storytelling: the calendar is read as something being scanned, not a heatmap |
 | Ultrachill shimmer | A bright band crosses the word once every 9s, a quarter of the master loop | Hierarchy: it marks the one joke in the Statusline without running constantly |
 
+**The toggle is a gradient standing still, and the shimmer now travels it.** Until 2026-10-02 the
+word was uniform `muted` at rest and the shimmer was the only thing that made it worth looking at,
+which meant that at rest it was plain and that a reduced-motion reader, and most visitors, never saw
+the point of it at all. The resting word now carries one point of a measured `muted`-to-`accent`
+ramp per character, so it reads as polychrome with nothing running; the sheen lifts each character
+in turn to the ramp's bright end and dissolves into it. **The cadence is unchanged**, and
+deliberately so: this is the one place in the Session where making the still frame carry the idea
+removed the argument for a fourth continuous loop rather than strengthening it. The budget above
+still has three.
+
 **The playback is the one animation with a hard ceiling, because it is the one everybody waits on.** It
 fires on every page load and stands between a reader and the content, so the unit is the row and not the
 character: the Session carries about 2,600 characters, and a per-character typewriter at any readable rate
@@ -327,6 +349,7 @@ The rule, so the copy self-audit applies a definition instead of making a judgem
 | `Effort`, the word before the levels | The glyph set `❯ ● ╰ ─ │ ▶▶ ✶` |
 | `scan complete:`, `days up`, `contributions` | The `·` between the two halves of the result line |
 | The `Ultrachill` toggle and the state it reads | The spinner's `…`, which is punctuation on a word rather than a word |
+| The gloss on the toggle, its hint, and each key hint | The `·` between two key hints, and the `▲` on the effort track |
 | Every spinner verb | The command names `/whoami /ops /stack /activity`, which are the borrowed CLI shape, not the owner's prose |
 | The mode badge and the not-affiliated note | The order of the fragments in a sentence, and the columns they land on |
 
@@ -349,7 +372,7 @@ is the same for every value it decorates belongs to the generator (the spinner's
 | `stackRows[]` | Each has a `label` and `items[]`, printed as plain text |
 | `verbs` | Spinner words, grouped by Mascot state. Every state in `MASCOT_TIMELINE` needs at least one: `sleep`, `yawn`, `stretch`, `settle`, `peek`, and the alarm's `alert`, `swat-up`, `swat-down`, `glare`, `butt-up`, `butt-down`, `recover`. A state with several words rotates through them while that state is on screen. Giving the two halves of a blow the same word is deliberate: the spinner then holds one phrase across the whole gesture instead of flickering between two |
 | `activityLine` | The words of the `/activity` result line, as labelled fragments: `label` (`scan complete:`), `daysUp` (`days up`) and `contributions`. The generator supplies the order, the numbers and the `·` |
-| `statusline` | `effortWord` (the word before the levels, e.g. `Effort`; a longer word pushes the levels along), `effortLabels`, `effortSelected`, `modeBadge`, `note`, and `toggle` (the shimmering word and the state it reads, e.g. `Ultrachill` / `on`). The toggle is not one of the effort labels, so it has its own key |
+| `statusline` | The effort panel's copy. `effortWord` is the heading, and the panel's track is indented by its length, so a longer word still pushes the scale along. `effortEnds` is `start` and `end`, the two words above the ends of the track (`Faster` / `Smarter`). `effortLabels` are the levels, left to right, and the LAST of them is the scale's top tier, which is drawn as a rainbow. `effortSelected` names one of them. `toggle` is the shimmering word and the state it reads (`Ultrachill` / `on`), `toggleNote` is the one-line gloss under the scale, and `toggleHint` the line under the toggle. `help` is the key hints as labelled fragments, which the generator joins with its own `·`. `modeBadge` and `note` close the Session |
 | `readme` | The two visible strings the README carries outside the Session: `imageAlt`, the picture's accessible name, and `transcriptSummary`, the word on the `<details>` toggle. `imageAlt` says what the picture **is**, not what it contains: the contents are the transcript directly below it, and a reader who hears the Session out of the alt text and then again out of the transcript hears it twice |
 
 Validation rules, all enforced at build time:
