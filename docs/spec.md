@@ -483,7 +483,6 @@ The rule, so the copy self-audit applies a definition instead of making a judgem
 | The gloss on the toggle, its hint, and each key hint | The `·` between two key hints, and the `▲` on the effort track |
 | Every spinner verb | The command names `/whoami /ops /stack /activity`, which are the borrowed CLI shape, not the owner's prose |
 | Every key hint on the panel's closing line | The order of the fragments in a sentence, and the columns they land on |
-| | The `│` dividing the effort scale from the toggle, which carries no lexical content at all |
 | The prompt's host, and the command whose output the Mascot is | The prompt's own marks, `┌─( @ )-[ ] └─$`, and the `~/` in front of the path |
 
 A sentence assembled from several of these is built from **labelled fragments, never a template

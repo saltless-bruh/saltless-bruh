@@ -384,7 +384,12 @@ test("nothing in the Session says the owner's discipline twice, and /whoami is w
   const lines = linesOf(composeSession(c, activity).rows);
   // The redundancy that was deleted, stated as the test rather than as a row number: the role row
   // and `/whoami`'s first line were the same words in two cases, four rows apart.
-  const said = lines.filter((l) => l.trim().toLowerCase().replace(/[.·]/g, "").includes("offensive security"));
+  // Stated as the RULE and not as the owner's sentence: every word of `/whoami`'s first line may
+  // appear together on exactly one row. Re-writing the copy keeps the test meaningful, where pinning
+  // the words would only make it fail for the wrong reason the first time the owner edits them.
+  const words = c.whoami[0].toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  assert.ok(words.length >= 3, "premise: the line has enough words for this to mean anything");
+  const said = lines.filter((l) => words.every((w) => new RegExp(`\\b${w}\\b`).test(l.toLowerCase())));
   assert.equal(said.length, 1, `the discipline is stated on ${said.length} rows: ${JSON.stringify(said)}`);
   assert.equal(said[0], `● ${c.whoami[0]}`, "the one place it is said is not /whoami's first line");
   // And the header rows above the rule print the prompt and the startup block, nothing else.

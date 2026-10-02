@@ -68,7 +68,7 @@ this profile. No Claude orange (`#D77757` / `#D97757`); the palette is Everfores
 aqua-green Accent (`docs/spec.md` 3.4). No copy of Claude Code's spinner-verb list; every verb is the
 owner's and lives in `content.json`, bound to the Mascot's own poses. **Grammar only.** None of that
 was traded for the deletion, and the deletion is not a licence to revisit any of it: the note was
-removed because the name it carried was the last one on the page, not because the rule relaxed.
+removed because the name it carried was the only one on the page, not because the rule relaxed.
 
 **The mode badge is no longer drawn either**, and it is named here for the same reason the task list
 was named in the first amendment: it is in the list of borrowed conventions in the decision above, and

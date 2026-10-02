@@ -819,7 +819,7 @@
       "test/readme.test.ts"
     ],
     "find": "  const { imageAlt, transcriptSummary } = o.content.readme;",
-    "replace": "  const transcriptSummary = o.content.readme.transcriptSummary;\n  const imageAlt = o.content.role;"
+    "replace": "  const transcriptSummary = o.content.readme.transcriptSummary;\n  const imageAlt = o.content.whoami[0];"
   },
   {
     "id": "R5  readme: the alt text emptied, so the picture is nameless",
@@ -1902,13 +1902,13 @@
     "replace": "          const gap = 0;"
   },
   {
-    "id": "S13 session: the Mascot and the role line go back to column 0, so the output does not line up with the command",
+    "id": "S13 session: the command sits two columns off the sigil instead of the one a shell prints",
     "file": "src/session.ts",
     "tests": [
       "test/session.test.ts"
     ],
     "find": "const OUTPUT_COL = [...PROMPT_SIGIL].length + 1;",
-    "replace": "const OUTPUT_COL = 0;"
+    "replace": "const OUTPUT_COL = [...PROMPT_SIGIL].length + 2;"
   },
   {
     "id": "S14 session: the prompt's path is spelled from the drawn Handle rather than from the login",

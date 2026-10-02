@@ -440,7 +440,7 @@ export function composeSession(c: Content, a: Activity): Session {
     [{ col: blockCol, text: c.startup.status, style: "muted" }],
   ];
   // GROUNDED on the Mascot's band: the block's last line sits level with the sprite's last row, so
-  // the two end on one floor and the blank row and the role line below close both of them together.
+  // the two end on one floor and the blank row below closes both of them together.
   //
   // It was centred on the band until it was rendered both ways and looked at, which is what the
   // brief asked for and had not been done. Centred reads high, and the artwork says why: the band's
