@@ -12,6 +12,7 @@ import { MASCOT_COLS, MASCOT_ROWS } from "../src/mascot.ts";
 import { BANNER_ROWS, bannerWidthCols } from "../src/banner.ts";
 import { assertCovered } from "../src/font.ts";
 import { MASCOT_TIMELINE } from "../src/timeline.ts";
+import { WINDOW_DAYS } from "../src/activity.ts";
 
 const activity: Activity = {
   totalContributions: 950, activeDays: 99,
@@ -81,7 +82,7 @@ const total = (xs: number[]): number => xs.reduce((s, x) => s + x, 0);
 /** The /activity result line as the content's fragments and this activity's numbers spell it. */
 function resultLine(c: Content, a: Activity): string {
   const { label, daysUp, contributions } = c.activityLine;
-  return `${label} ${a.activeDays}/365 ${daysUp} · ${a.totalContributions} ${contributions}`;
+  return `${label} ${a.activeDays}/${WINDOW_DAYS} ${daysUp} · ${a.totalContributions} ${contributions}`;
 }
 
 // ---- the whole Session ----
@@ -130,13 +131,12 @@ test("in each face of the Session, no two runs overlap or touch, apart from a hi
 });
 
 test("the faces are checked apart, so a word drawn as art may share columns with the glyphs over it", () => {
-  const verb = (text: string, cls: string): Run => ({ col: 2, text, drawOnly: true, cls });
   // What the motion layer will add to the spinner's row: the one verb the transcript says, and
   // a drawn variant at the same columns. Neither is ever shown where the other is.
   assert.doesNotThrow(() => assertNoCollisions([{ runs: [
     { col: 0, text: "✶", style: "accent" },
     { col: 2, text: `Loafing${VERB_SUFFIX}`, textOnly: true },
-    verb(`Loafing${VERB_SUFFIX}`, "pose-sleep"),
+    { col: 2, text: `Loafing${VERB_SUFFIX}`, drawOnly: true, cls: "pose-sleep" },
   ] }]));
   // A collision inside one face is still a collision, and the message names which face.
   assert.throws(
@@ -147,13 +147,59 @@ test("the faces are checked apart, so a word drawn as art may share columns with
     () => assertNoCollisions([{ runs: [{ col: 0, text: "ab" }, { col: 2, text: "cd", textOnly: true }] }]),
     /row 0 in the transcript: "ab" runs into "cd"/,
   );
-  // And two drawn variants at one position are a collision in the picture: only the motion
-  // layer's clock keeps them apart, which is a fact about the clock, not about the row, so the
-  // set has to declare itself the way the Statusline's highlight copy does.
+});
+
+test("alternatives share columns only with their own layer, and still collide with everything else", () => {
+  // `layer` names the group, rather than the check reading a class-name prefix, so renaming a
+  // motion class cannot quietly stop the row model protecting the row.
+  const verb = (text: string, layer?: string): Run =>
+    ({ col: 2, text, drawOnly: true, cls: "pose", ...(layer === undefined ? {} : { layer }) });
+
+  // Positive: one verb per Mascot pose, all alternatives, plus the word the transcript says.
+  assert.doesNotThrow(() => assertNoCollisions([{ runs: [
+    { col: 0, text: "✶", style: "accent" },
+    { col: 2, text: `Loafing${VERB_SUFFIX}`, textOnly: true },
+    verb(`Loafing${VERB_SUFFIX}`, "verb"),
+    verb(`Resettling${VERB_SUFFIX}`, "verb"),
+    verb(`Startled${VERB_SUFFIX}`, "verb"),
+  ] }]), "runs sharing a layer are alternatives and may share columns");
+
+  // Negative: different layer names are not one group.
   assert.throws(
-    () => assertNoCollisions([{ runs: [verb("Loafing", "pose-sleep"), verb("Resettling", "pose-settle")] }]),
-    /in the picture/,
+    () => assertNoCollisions([{ runs: [verb("Loafing", "verb"), verb("Resettling", "spinner")] }]),
+    /row 0 in the picture: "Loafing" runs into "Resettling"/,
   );
+  // Negative: either side carrying no layer at all.
+  for (const runs of [
+    [verb("Loafing", "verb"), verb("Resettling")],
+    [verb("Loafing"), verb("Resettling", "verb")],
+  ]) {
+    assert.throws(() => assertNoCollisions([{ runs }]), /row 0 in the picture/);
+  }
+  // Negative: an empty name forms no group, so a layer that came out blank exempts nothing.
+  assert.throws(
+    () => assertNoCollisions([{ runs: [verb("Loafing", ""), verb("Resettling", "")] }]),
+    /row 0 in the picture/,
+  );
+  // Negative: a layered run still collides with what sits outside its group. "✶✶" reaches
+  // column 2, where the alternatives begin, so it touches them.
+  assert.throws(() => assertNoCollisions([{ runs: [
+    { col: 0, text: "✶✶", style: "accent" },
+    verb(`Loafing${VERB_SUFFIX}`, "verb"),
+  ] }]), /row 0 in the picture/);
+  // Negative: the longest alternative is checked too. "Resettling…" reaches column 13 while
+  // "Loafing…" stops at 10, so comparing only neighbours would miss the run at column 11.
+  assert.throws(() => assertNoCollisions([{ runs: [
+    verb(`Resettling${VERB_SUFFIX}`, "verb"),
+    verb(`Loafing${VERB_SUFFIX}`, "verb"),
+    { col: 11, text: "x" },
+  ] }]), /row 0 in the picture: "Resettling…" runs into "x"/);
+
+  // The composed Session uses no layers yet, so none of this exempts anything there today.
+  for (const [, make] of CONTENTS) {
+    const { rows } = composeSession(make(), busy);
+    assert.ok(rows.every((row) => row.runs.every((run) => run.layer === undefined)));
+  }
 });
 
 test("no run is empty, so no empty element is drawn", () => {
@@ -462,6 +508,22 @@ test("every word of the result line comes from content.json; the order and the d
   for (const gone of ["scan complete", "days up", "contributions"]) {
     assert.ok(!text.includes(gone), `${JSON.stringify(gone)} is still written into the generator`);
   }
+});
+
+test("the window the result line counts against is the one the activity module defines", () => {
+  assert.equal(WINDOW_DAYS, 365, "the shipped window");
+  const c = loadContent();
+  const printed = linesOf(composeSession(c, activity).rows).find((l) => l.includes(c.activityLine.label));
+  assert.ok(printed?.includes(`${activity.activeDays}/${WINDOW_DAYS} `), `the result line reads ${printed}`);
+
+  // The value is imported rather than retyped, so the printed denominator cannot drift from the
+  // window the calendar is actually trimmed to. Two numbers that happen to agree today are not
+  // the property being protected, and no behaviour can tell them apart, so this is checked where
+  // the difference lives: a second copy must not exist in the generator at all. Same reason
+  // BREATHS_PER_LOOP was replaced by a derived value after it silently went wrong.
+  const src = readFileSync(new URL("../src/session.ts", import.meta.url), "utf8");
+  assert.match(src, /import \{ WINDOW_DAYS \} from "\.\/activity\.ts";/);
+  assert.doesNotMatch(src, new RegExp(`\\b${WINDOW_DAYS}\\b`), "the window is written into the generator a second time");
 });
 
 test("the Scan Sweep reserves the rows square cells on a 53 by 7 calendar actually need", () => {

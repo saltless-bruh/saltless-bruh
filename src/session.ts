@@ -5,6 +5,9 @@ import type { Row, Run } from "./rows.ts";
 import { BANNER_ROWS, bannerWidthCols } from "./banner.ts";
 import { MASCOT_COLS, MASCOT_ROWS } from "./mascot.ts";
 import { MASCOT_TIMELINE } from "./timeline.ts";
+// The window belongs to the module that trims the calendar to it. A second copy of it here
+// could drift from that one with no test noticing, which is the BREATHS_PER_LOOP mistake exactly.
+import { WINDOW_DAYS } from "./activity.ts";
 
 export type Activity = {
   totalContributions: number;
@@ -37,8 +40,9 @@ export type Session = {
  * own calendar uses, then want CELL_W of height each, so 7 days is 7 x 12 = 84 units; at
  * CELL_H = 24 that is 3.5 rows. Four rows hold the sweep, with the spare half-row as breathing
  * room. Cells of 12 x 24 would read as a bar chart instead of a grid, so the height follows the
- * width rather than the row pitch. The "N/365 days up" result line stays a text row of its own:
- * a status colour is always paired with a word, so the sweep needs its printed result.
+ * width rather than the row pitch. The result line that prints the days and the contributions
+ * stays a text row of its own, because a status colour is always paired with a word: the sweep
+ * needs its printed result, not just coloured cells.
  */
 export const SCAN_ROWS = 4;
 
@@ -52,8 +56,6 @@ export const shimmerClass = (index: number): string => `${SHIMMER_PREFIX}${index
  */
 export const VERB_SUFFIX = "…";
 
-/** Days in the window the activity line counts against. */
-const WINDOW_DAYS = 365;
 /** Free columns between the Mascot and the Banner. */
 const MASCOT_GAP = 2;
 /** Columns where the body text starts, after the prompt glyph and a space. */
@@ -102,9 +104,12 @@ export function languageShares(langs: { name: string; bytes: number }[]): { name
  * every run but the `drawOnly` ones. A word the Banner draws as art may therefore share columns
  * with the glyphs the motion layer stacks there, since the two are never on screen together.
  * A highlight copy is meant to lie over its word and is skipped in both faces; its word is
- * still checked. A set of drawn alternatives at one position, which only the motion layer's
- * clock keeps apart, must declare itself the same way: that is a fact about the clock and not
- * about the row, so this check cannot infer it.
+ * still checked.
+ *
+ * A set of alternatives at one position, which only the motion layer's clock keeps apart, says
+ * so by sharing a `layer` name, and then collides with everything except its own group. Every
+ * pair is compared rather than only neighbours, because skipping a pair inside a layer could
+ * otherwise hide the collision between its longest member and the run after it.
  */
 export function assertNoCollisions(rows: Row[]): void {
   const faces: [string, (run: Run) => boolean][] = [
@@ -115,9 +120,15 @@ export function assertNoCollisions(rows: Row[]): void {
     for (const [face, shown] of faces) {
       const runs = row.runs.filter((r) => shown(r) && !isHighlight(r)).sort((a, b) => a.col - b.col);
       for (let k = 1; k < runs.length; k++) {
-        const prev = runs[k - 1];
-        if (prev.col + cells(prev.text) >= runs[k].col) {
-          throw new Error(`row ${i} in ${face}: ${JSON.stringify(prev.text)} runs into ${JSON.stringify(runs[k].text)}; they need a blank column between them`);
+        for (let j = 0; j < k; j++) {
+          const prev = runs[j];
+          const next = runs[k];
+          // Two alternatives are never shown together. An empty name forms no group, so a layer
+          // that came out blank exempts nothing instead of quietly exempting everything.
+          if (prev.layer && prev.layer === next.layer) continue;
+          if (prev.col + cells(prev.text) >= next.col) {
+            throw new Error(`row ${i} in ${face}: ${JSON.stringify(prev.text)} runs into ${JSON.stringify(next.text)}; they need a blank column between them`);
+          }
         }
       }
     }

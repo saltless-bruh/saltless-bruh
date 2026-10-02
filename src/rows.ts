@@ -16,9 +16,17 @@ export type Style = "text" | "muted" | "accent" | "warning" | "error" | "bold";
  * Neither flag hides anything from the ADR 0001 gate: that reads `rowsToFullText`, which takes
  * every run. Both flags are visible to `rowWidth`, `assertFits` and `charsUsed`, because a run
  * still occupies its columns and a glyph some layer draws still needs the font subset.
+ *
+ * `layer` names a group of ALTERNATIVES: runs sharing a layer are never on screen together, so
+ * they may share columns with each other, and only with each other. A run carrying a layer still
+ * collides normally with everything outside its own group. This states the relationship rather
+ * than a class name, so the row model keeps protecting the row whatever the motion layer calls
+ * its classes. Alternatives are not the same thing as an overlay: the Statusline's highlight
+ * copy is deliberately coincident with the word beneath it, which is a different mechanism.
  */
 export type Run = {
-  col: number; text: string; style?: Style; cls?: string; textOnly?: true; drawOnly?: true;
+  col: number; text: string; style?: Style; cls?: string;
+  textOnly?: true; drawOnly?: true; layer?: string;
 };
 export type Row = { runs: Run[]; cls?: string };
 
