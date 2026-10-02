@@ -1943,8 +1943,8 @@
     "tests": [
       "test/session.test.ts"
     ],
-    "find": "  rows.push(blank());\n\n  // The Mascot, as the command's output.",
-    "replace": "  // The Mascot, as the command's output."
+    "find": "  rows.push(blank());\n\n  // The Mascot, as the command's output, with its ink on the Session's left margin.",
+    "replace": "  // The Mascot, as the command's output, with its ink on the Session's left margin."
   },
   {
     "id": "S18 session: the startup block is placed by the sprite's grid rather than by its ink, so it overlaps the art",
@@ -1952,8 +1952,8 @@
     "tests": [
       "test/session.test.ts"
     ],
-    "find": "  const blockCol = OUTPUT_COL + Math.ceil(MASCOT_INK_COLS) + MASCOT_GAP;",
-    "replace": "  const blockCol = OUTPUT_COL + Math.floor(MASCOT_INK_COLS) - 4;"
+    "find": "  const blockCol = MASCOT_COL + Math.ceil(MASCOT_INK_COLS) + MASCOT_GAP;",
+    "replace": "  const blockCol = MASCOT_COL + Math.floor(MASCOT_INK_COLS) - 4;"
   },
   {
     "id": "S19 session: the startup block loses the one word drawn in the colour it names",
@@ -2283,5 +2283,105 @@
     ],
     "find": "  const blockRow = mascotRow + MASCOT_ROWS - block.length;",
     "replace": "  const blockRow = mascotRow + Math.floor((MASCOT_ROWS - block.length) / 2);"
+  },
+  {
+    "id": "S43 session: the role row comes back, repeating what /whoami says four rows below it",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  rows.push(blank());\n  const headerRows = rows.length;",
+    "replace": "  rows.push(blank());\n  rows.push({ runs: [{ col: MASCOT_COL, text: c.whoami[0], style: \"bold\" }] });\n  const headerRows = rows.length;"
+  },
+  {
+    "id": "S44 session: the artwork's blank margin is deleted with the role line, so the rule is glued to the rack",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  rows.push(blank());\n  const headerRows = rows.length;\n  rows.push(rule());",
+    "replace": "  const headerRows = rows.length;\n  rows.push(rule());"
+  },
+  {
+    "id": "S45 session: the Mascot goes back to the command's column, so the header floats in from the margin",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "const MASCOT_COL = 0;",
+    "replace": "const MASCOT_COL = OUTPUT_COL;"
+  },
+  {
+    "id": "S46 session: the startup block's column is written down rather than re-derived from the sprite",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const blockCol = MASCOT_COL + Math.ceil(MASCOT_INK_COLS) + MASCOT_GAP;",
+    "replace": "  const blockCol = 29;"
+  },
+  {
+    "id": "S47 session: the mode badge and the not-affiliated note come back under the key hints",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts",
+      "test/build.test.ts"
+    ],
+    "find": "  // A Session that does not fit is not returned: the message names the row and its text.",
+    "replace": "  rows.push({ runs: [\n    { col: 0, text: \"▶▶ autopilot on\", style: \"muted\" },\n    { col: COLS - cells(\"terminal-style design, not affiliated with Anthropic\"), text: \"terminal-style design, not affiliated with Anthropic\", style: \"muted\" },\n  ] });\n\n  // A Session that does not fit is not returned: the message names the row and its text."
+  },
+  {
+    "id": "S48 session: the pane divider's column is written down instead of derived from the toggle",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const dividerCol = toggleCol - (PANE_CLEAR + cells(PANE_DIVIDER));",
+    "replace": "  const dividerCol = 56;"
+  },
+  {
+    "id": "S49 session: the pane divider drifts into the gutter instead of marking the toggle's own edge",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const dividerCol = toggleCol - (PANE_CLEAR + cells(PANE_DIVIDER));",
+    "replace": "  const dividerCol = toggleCol - (PANE_CLEAR + cells(PANE_DIVIDER)) - 1;"
+  },
+  {
+    "id": "S50 session: the pane divider stops at the levels, so the gloss row reaches across the boundary",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  for (let r = paneFrom; r < rows.length; r++) {",
+    "replace": "  for (let r = paneFrom; r < rows.length - 1; r++) {"
+  },
+  {
+    "id": "S51 session: the pane divider runs down the heading row too, which sits outside both panes",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "  const paneFrom = rows.length;",
+    "replace": "  const paneFrom = rows.length - 1;"
+  },
+  {
+    "id": "S52 session: the pane divider is a heavier vertical than the one the /ops tree already draws",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "const PANE_DIVIDER = TREE_CONTINUE;",
+    "replace": "const PANE_DIVIDER = \"┃\";"
+  },
+  {
+    "id": "S53 session: the pane divider is drawn in the Accent, so the structure competes with the marker",
+    "file": "src/session.ts",
+    "tests": [
+      "test/session.test.ts"
+    ],
+    "find": "    rows[r].runs.push({ col: dividerCol, text: PANE_DIVIDER, style: \"muted\" });",
+    "replace": "    rows[r].runs.push({ col: dividerCol, text: PANE_DIVIDER, style: \"accent\" });"
   }
 ]
