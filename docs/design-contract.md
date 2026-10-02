@@ -157,3 +157,54 @@ otherwise be decided by the order the stylesheets happen to be concatenated in.
 **The spinner's verbs are not subject to the playback.** They are on the Mascot's clock, undelayed, because
 the whole point of them is that the word names the pose on screen; any offset would slide the words off the
 picture by exactly that offset. They are invisible during the playback anyway, because their row is.
+
+## Verifying while another agent may be mutating
+
+Added after it cost two rounds in one session. Both times a red test was reported as a defect and
+escalated, and both times it was a live mutant in someone's mutation run. There was nothing wrong
+either time.
+
+**A mutated working tree looks exactly like a broken one.** Nothing in `git status` or a test summary
+distinguishes "this file is mid-mutation" from "this file is wrong", and the natural reaction to a red
+suite, reverting the file or fixing the test, silently corrupts a run that is still going.
+
+### If a test is failing, check this first
+
+Look for **`MUTATION-IN-PROGRESS.json`** in the repository root. `scripts/mutation-check.ts` writes it
+for as long as a mutant is applied, and it names the mutant, the file and the command that puts the
+file back. It is untracked and deliberately loud, so it shows up in `git status` and at the top of `ls`.
+
+If that file is there: **do not revert anything and do not fix the test.** A run is in progress and the
+failure is its mutant. Wait, or ask whoever started it. If the run has clearly died, the marker tells you
+exactly which file to restore, and the next run refuses to start until you have.
+
+### Do not verify HEAD in the working tree
+
+While any agent may be mutating, the working tree is not a trustworthy place to measure anything. Check
+HEAD out somewhere else instead:
+
+```sh
+git worktree add --detach /tmp/verify HEAD
+ln -s "$PWD/node_modules" /tmp/verify/node_modules
+( cd /tmp/verify && npm test && npx tsc )
+git worktree remove --force /tmp/verify
+```
+
+That is how a trustworthy test count was produced while three agents were editing the same branch. It
+costs seconds and it is the only number worth quoting in a report.
+
+### What the harness guarantees, and what it cannot
+
+`npm run mutants` refuses to start if a previous run left a marker behind, or if any file it is about to
+mutate has uncommitted changes. The second one matters more than it looks: the harness restores with
+`git checkout --`, so an uncommitted change in a mutated file is destroyed by the first restore and
+every mutant after it measures a baseline that never contained the feature under test. The run then
+reports a confident "all killed" containing no evidence whatsoever. **Commit the feature, then measure
+it.** It also requires the baseline to be green first, because a red baseline makes every mutant look
+killed from the other direction.
+
+It restores from an exit hook, and between mutants it yields to the event loop so a SIGINT or SIGTERM is
+handled with nothing applied. It cannot do better than that: a signal handler is JavaScript and cannot
+run while the process is blocked inside the synchronous child that runs the tests, and nothing survives
+SIGKILL. A hard kill mid-test can still strand a mutant, which is exactly why the marker exists. The
+marker is the recovery path, not a formality.

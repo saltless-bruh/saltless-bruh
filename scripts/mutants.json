@@ -1,0 +1,788 @@
+[
+ {
+  "id": "M1  timeline: drop the second swat so there is one strike",
+  "file": "src/timeline.ts",
+  "tests": [
+   "test/timeline.test.ts"
+  ],
+  "find": "  { state: \"swat-up\",   from: 29.4,  to: 29.8 },\n  { state: \"swat-down\", from: 29.8,  to: 30.2 },",
+  "replace": "  { state: \"glare\",     from: 29.4,  to: 30.2 },"
+ },
+ {
+  "id": "M2  timeline: the peek removed from the nap",
+  "file": "src/timeline.ts",
+  "tests": [
+   "test/timeline.test.ts"
+  ],
+  "find": "  { state: \"sleep\",     from: 18.75, to: 25 },\n  { state: \"peek\",      from: 25,    to: 26 },\n  { state: \"sleep\",     from: 26,    to: 28 },",
+  "replace": "  { state: \"sleep\",     from: 18.75, to: 28 },"
+ },
+ {
+  "id": "M3  timeline: a blow retimed to 200ms, with no gap left behind",
+  "file": "src/timeline.ts",
+  "tests": [
+   "test/timeline.test.ts"
+  ],
+  "find": "  { state: \"butt-down\", from: 31.2,  to: 31.6 },\n  { state: \"recover\",   from: 31.6,  to: 32.4 },",
+  "replace": "  { state: \"butt-down\", from: 31.2,  to: 31.4 },\n  { state: \"recover\",   from: 31.4,  to: 32.4 },"
+ },
+ {
+  "id": "M4  timeline: the glare removed, so nothing says the paw failed",
+  "file": "src/timeline.ts",
+  "tests": [
+   "test/timeline.test.ts"
+  ],
+  "find": "  { state: \"glare\",     from: 30.2,  to: 30.8 },\n  { state: \"butt-up\",   from: 30.8,  to: 31.2 },",
+  "replace": "  { state: \"butt-up\",   from: 30.2,  to: 31.2 },"
+ },
+ {
+  "id": "M5  timeline: DREAMING forgets the peek",
+  "file": "src/timeline.ts",
+  "tests": [
+   "test/mascot.test.ts",
+   "test/timeline.test.ts"
+  ],
+  "find": "export const DREAMING: PoseName[] = [\"sleep\", \"peek\"];",
+  "replace": "export const DREAMING: PoseName[] = [\"sleep\"];"
+ },
+ {
+  "id": "M6  mascot: bubble inflates in the window before the pop, not the nap",
+  "file": "src/mascot.ts",
+  "tests": [
+   "test/mascot.test.ts"
+  ],
+  "find": "  const grow = napBefore(i);",
+  "replace": "  const grow = MASCOT_TIMELINE[i - 1];"
+ },
+ {
+  "id": "M7  mascot: fault flashes twice as fast, 5 a second",
+  "file": "src/mascot.ts",
+  "tests": [
+   "test/mascot.test.ts"
+  ],
+  "find": "const FAULT_FLASH = { onMs: 200, dim: 0.5 };",
+  "replace": "const FAULT_FLASH = { onMs: 100, dim: 0.5 };"
+ },
+ {
+  "id": "M8  mascot: fault dims back to the healthy floor",
+  "file": "src/mascot.ts",
+  "tests": [
+   "test/mascot.test.ts"
+  ],
+  "find": "const FAULT_FLASH = { onMs: 200, dim: 0.5 };",
+  "replace": "const FAULT_FLASH = { onMs: 200, dim: 0.25 };"
+ },
+ {
+  "id": "M9  mascot: fault ends with the alert, so the glare is green",
+  "file": "src/mascot.ts",
+  "tests": [
+   "test/mascot.test.ts"
+  ],
+  "find": "  return { fault: [fault.from, hold.from], hold: [hold.from, hold.to] };",
+  "replace": "  return { fault: [fault.from, fault.to], hold: [hold.from, hold.to] };"
+ },
+ {
+  "id": "M10 mascot: healthy bank uncovered during the steady hold",
+  "file": "src/mascot.ts",
+  "tests": [
+   "test/mascot.test.ts"
+  ],
+  "find": "${showExcept(\"leds-live\", [[fault[0], hold[1]]])}",
+  "replace": "${showExcept(\"leds-live\", [[fault[0], hold[0]]])}"
+ },
+ {
+  "id": "M11 mascot: fault painted in accent, like the healthy state",
+  "file": "src/mascot.ts",
+  "tests": [
+   "test/mascot.test.ts"
+  ],
+  "find": "const FAULT_TOKEN: keyof Palette = \"error\";",
+  "replace": "const FAULT_TOKEN: keyof Palette = \"accent\";"
+ },
+ {
+  "id": "M12 mascot: fault bank moved inside .rack",
+  "file": "src/mascot.ts",
+  "tests": [
+   "test/mascot.test.ts"
+  ],
+  "find": "</g>\n<g class=\"leds-hold\">${path(\"led-steady\", allLit, RECOLOUR[LIT])}</g>\n<g class=\"leds-fault\">${path(\"led-fault\", allLit, FAULT_TOKEN)}</g>",
+  "replace": "<g class=\"leds-hold\">${path(\"led-steady\", allLit, RECOLOUR[LIT])}</g>\n<g class=\"leds-fault\">${path(\"led-fault\", allLit, FAULT_TOKEN)}</g>\n</g>"
+ },
+ {
+  "id": "M13 mascot: fault split per unit, so the three can drift apart",
+  "file": "src/mascot.ts",
+  "tests": [
+   "test/mascot.test.ts"
+  ],
+  "find": "<g class=\"leds-fault\">${path(\"led-fault\", allLit, FAULT_TOKEN)}</g>",
+  "replace": "<g class=\"leds-fault\">${UNITS.map((u, k) => path(`led-fault-${k}`, runsOf(rackRows, LIT, u), FAULT_TOKEN)).join(\"\")}</g>"
+ },
+ {
+  "id": "M14 mascot: steady hold held for the whole alarm",
+  "file": "src/mascot.ts",
+  "tests": [
+   "test/mascot.test.ts"
+  ],
+  "find": "${showDuring(\"leds-hold\", [hold])}",
+  "replace": "${showDuring(\"leds-hold\", [[fault[0], hold[1]]])}"
+ },
+ {
+  "id": "M15 mascot: ear slab cut out of the static pass",
+  "file": "src/mascot.ts",
+  "tests": [
+   "test/mascot.test.ts"
+  ],
+  "find": "${foot(rows)}${paints(cutOut(rows, TAIL), CAT, CAT_ROWS)}",
+  "replace": "${foot(rows)}${paints(cutOut(cutOut(rows, TAIL), earBox(POSES[name])), CAT, CAT_ROWS)}"
+ },
+ {
+  "id": "M16 mascot: steady bank repaints the dim LEDs too",
+  "file": "src/mascot.ts",
+  "tests": [
+   "test/mascot.test.ts"
+  ],
+  "find": "  const allLit = runsOf(rackRows, LIT, RACK_ROWS);",
+  "replace": "  const allLit = runsOf(rackRows, LIT + \"7\", RACK_ROWS);"
+ },
+ {
+  "id": "M17 mascot: the fault bank loses its own clock and follows a unit's",
+  "file": "src/mascot.ts",
+  "tests": [
+   "test/mascot.test.ts"
+  ],
+  "find": "${onClock(\"leds-fault\", \"leds-fault\")}",
+  "replace": ".leds-fault { animation: leds-fault 7s step-end infinite }"
+ },
+ {
+  "id": "M18 mascot: the healthy units are driven by the master loop instead",
+  "file": "src/mascot.ts",
+  "tests": [
+   "test/mascot.test.ts"
+  ],
+  "find": "${LED_PERIODS.map((s, i) => `.led-${i} { animation: ${ledName(i)} ${s}s step-end infinite }`).join(\"\\n\")}",
+  "replace": "${LED_PERIODS.map((s, i) => `.led-${i} { animation: ${ledName(i)} ${MASTER_SECONDS}s step-end infinite }`).join(\"\\n\")}"
+ },
+ {
+  "id": "M19 mascot: the steady hold flickers instead of holding",
+  "file": "src/mascot.ts",
+  "tests": [
+   "test/mascot.test.ts"
+  ],
+  "find": "${showDuring(\"leds-hold\", [hold])}",
+  "replace": "${faultFlash(\"leds-hold\", hold)}"
+ },
+ {
+  "id": "M20 mascot: the fault bank is visible in the still frame",
+  "file": "src/mascot.ts",
+  "tests": [
+   "test/mascot.test.ts"
+  ],
+  "find": ".leds-fault, .leds-hold { opacity: 0 }",
+  "replace": ".leds-hold { opacity: 0 }"
+ },
+ {
+  "id": "M21 mascot: the burst no longer owns its length",
+  "file": "src/mascot.ts",
+  "tests": [
+   "test/mascot.test.ts"
+  ],
+  "find": "    burst: [pop.from, pop.from + burstFor],",
+  "replace": "    burst: [pop.from, pop.to],"
+ },
+ {
+  "id": "A1  peek: the other eye opens as well",
+  "file": "art/peek.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 25,
+    "y": 6,
+    "from": "2",
+    "to": "3"
+   },
+   {
+    "x": 26,
+    "y": 6,
+    "from": "2",
+    "to": "3"
+   }
+  ]
+ },
+ {
+  "id": "A2  peek: the zZz is dropped",
+  "file": "art/peek.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 50,
+    "y": 0,
+    "from": "1",
+    "to": " "
+   },
+   {
+    "x": 50,
+    "y": 1,
+    "from": "1",
+    "to": " "
+   },
+   {
+    "x": 51,
+    "y": 1,
+    "from": "1",
+    "to": " "
+   },
+   {
+    "x": 45,
+    "y": 2,
+    "from": "1",
+    "to": " "
+   },
+   {
+    "x": 46,
+    "y": 2,
+    "from": "1",
+    "to": " "
+   },
+   {
+    "x": 47,
+    "y": 2,
+    "from": "1",
+    "to": " "
+   },
+   {
+    "x": 46,
+    "y": 3,
+    "from": "1",
+    "to": " "
+   },
+   {
+    "x": 45,
+    "y": 4,
+    "from": "1",
+    "to": " "
+   },
+   {
+    "x": 46,
+    "y": 4,
+    "from": "1",
+    "to": " "
+   },
+   {
+    "x": 47,
+    "y": 4,
+    "from": "1",
+    "to": " "
+   }
+  ]
+ },
+ {
+  "id": "A3  alert: the ears stay up",
+  "file": "art/alert.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 23,
+    "y": 5,
+    "from": "2",
+    "to": " "
+   },
+   {
+    "x": 31,
+    "y": 5,
+    "from": "2",
+    "to": " "
+   },
+   {
+    "x": 24,
+    "y": 4,
+    "from": " ",
+    "to": "2"
+   },
+   {
+    "x": 30,
+    "y": 4,
+    "from": " ",
+    "to": "2"
+   }
+  ]
+ },
+ {
+  "id": "A4  swat-up: the raised paw loses its accent",
+  "file": "art/swat-up.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 21,
+    "y": 4,
+    "from": "4",
+    "to": "2"
+   },
+   {
+    "x": 22,
+    "y": 4,
+    "from": "4",
+    "to": "2"
+   }
+  ]
+ },
+ {
+  "id": "A5  swat-down: the impact sparks are removed",
+  "file": "art/swat-down.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 17,
+    "y": 8,
+    "from": "1",
+    "to": " "
+   },
+   {
+    "x": 16,
+    "y": 9,
+    "from": "1",
+    "to": " "
+   }
+  ]
+ },
+ {
+  "id": "A6  swat-down: the blow reaches no further than the stretch",
+  "file": "art/swat-down.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 18,
+    "y": 10,
+    "from": "4",
+    "to": " "
+   },
+   {
+    "x": 19,
+    "y": 10,
+    "from": "4",
+    "to": " "
+   },
+   {
+    "x": 20,
+    "y": 10,
+    "from": "2",
+    "to": "4"
+   },
+   {
+    "x": 21,
+    "y": 10,
+    "from": "2",
+    "to": "4"
+   }
+  ]
+ },
+ {
+  "id": "A7  swat-down: the face changes too, so the blow is not one limb",
+  "file": "art/swat-down.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 29,
+    "y": 6,
+    "from": "3",
+    "to": "2"
+   },
+   {
+    "x": 30,
+    "y": 6,
+    "from": "3",
+    "to": "2"
+   }
+  ]
+ },
+ {
+  "id": "A8  butt-up: the head rears one row instead of two",
+  "file": "art/butt-up.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 23,
+    "y": 3,
+    "from": "2",
+    "to": " "
+   },
+   {
+    "x": 24,
+    "y": 3,
+    "from": "2",
+    "to": " "
+   },
+   {
+    "x": 25,
+    "y": 3,
+    "from": "2",
+    "to": " "
+   },
+   {
+    "x": 26,
+    "y": 3,
+    "from": "2",
+    "to": " "
+   },
+   {
+    "x": 27,
+    "y": 3,
+    "from": "2",
+    "to": " "
+   },
+   {
+    "x": 28,
+    "y": 3,
+    "from": "2",
+    "to": " "
+   },
+   {
+    "x": 29,
+    "y": 3,
+    "from": "2",
+    "to": " "
+   },
+   {
+    "x": 30,
+    "y": 3,
+    "from": "2",
+    "to": " "
+   },
+   {
+    "x": 31,
+    "y": 3,
+    "from": "2",
+    "to": " "
+   }
+  ]
+ },
+ {
+  "id": "A9  butt-down: the head is not driven down",
+  "file": "art/butt-down.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 24,
+    "y": 5,
+    "from": " ",
+    "to": "2"
+   },
+   {
+    "x": 25,
+    "y": 5,
+    "from": " ",
+    "to": "2"
+   },
+   {
+    "x": 26,
+    "y": 5,
+    "from": " ",
+    "to": "2"
+   },
+   {
+    "x": 27,
+    "y": 5,
+    "from": " ",
+    "to": "2"
+   },
+   {
+    "x": 28,
+    "y": 5,
+    "from": " ",
+    "to": "2"
+   },
+   {
+    "x": 29,
+    "y": 5,
+    "from": " ",
+    "to": "2"
+   },
+   {
+    "x": 30,
+    "y": 5,
+    "from": " ",
+    "to": "2"
+   }
+  ]
+ },
+ {
+  "id": "A10 recover: the ears stay pinned back",
+  "file": "art/recover.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 24,
+    "y": 4,
+    "from": "2",
+    "to": " "
+   },
+   {
+    "x": 30,
+    "y": 4,
+    "from": "2",
+    "to": " "
+   },
+   {
+    "x": 23,
+    "y": 5,
+    "from": " ",
+    "to": "2"
+   },
+   {
+    "x": 31,
+    "y": 5,
+    "from": " ",
+    "to": "2"
+   }
+  ]
+ },
+ {
+  "id": "A11 glare: the eyes go back to the sleeping slit",
+  "file": "art/glare.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 25,
+    "y": 6,
+    "from": "3",
+    "to": "2"
+   },
+   {
+    "x": 26,
+    "y": 6,
+    "from": "3",
+    "to": "2"
+   },
+   {
+    "x": 29,
+    "y": 6,
+    "from": "3",
+    "to": "2"
+   },
+   {
+    "x": 30,
+    "y": 6,
+    "from": "3",
+    "to": "2"
+   },
+   {
+    "x": 25,
+    "y": 7,
+    "from": "2",
+    "to": "3"
+   },
+   {
+    "x": 26,
+    "y": 7,
+    "from": "2",
+    "to": "3"
+   },
+   {
+    "x": 29,
+    "y": 7,
+    "from": "2",
+    "to": "3"
+   },
+   {
+    "x": 30,
+    "y": 7,
+    "from": "2",
+    "to": "3"
+   }
+  ]
+ },
+ {
+  "id": "A12 glare: one rack pixel differs from sleep's",
+  "file": "art/glare.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 16,
+    "y": 13,
+    "from": "5",
+    "to": "6"
+   }
+  ]
+ },
+ {
+  "id": "P1  peek: catchlight moved to the eye's lower row, costing a third pixel",
+  "file": "art/peek.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 29,
+    "y": 6,
+    "from": "4",
+    "to": "3"
+   },
+   {
+    "x": 29,
+    "y": 7,
+    "from": "3",
+    "to": "4"
+   }
+  ]
+ },
+ {
+  "id": "P2  peek: catchlight painted in text instead of accent",
+  "file": "art/peek.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 29,
+    "y": 6,
+    "from": "4",
+    "to": "2"
+   }
+  ]
+ },
+ {
+  "id": "P3  peek: catchlight removed, back to a flat open hole",
+  "file": "art/peek.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 29,
+    "y": 6,
+    "from": "4",
+    "to": "3"
+   }
+  ]
+ },
+ {
+  "id": "P4  peek: a second catchlight added, in the other eye",
+  "file": "art/peek.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 25,
+    "y": 6,
+    "from": "2",
+    "to": "4"
+   }
+  ]
+ },
+ {
+  "id": "P5  peek: catchlight moved to the upper RIGHT corner",
+  "file": "art/peek.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 29,
+    "y": 6,
+    "from": "4",
+    "to": "3"
+   },
+   {
+    "x": 30,
+    "y": 6,
+    "from": "3",
+    "to": "4"
+   }
+  ]
+ },
+ {
+  "id": "P6  peek: body ink left inside the open socket",
+  "file": "art/peek.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 30,
+    "y": 7,
+    "from": "3",
+    "to": "2"
+   }
+  ]
+ },
+ {
+  "id": "P7  alert: the catchlight given to another pose's face",
+  "file": "art/alert.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 29,
+    "y": 6,
+    "from": "3",
+    "to": "4"
+   }
+  ]
+ },
+ {
+  "id": "P8  peek: the left eye opened too, so both eyes peek",
+  "file": "art/peek.grid.txt",
+  "tests": [
+   "test/art.test.ts",
+   "test/mascot.test.ts"
+  ],
+  "pixels": [
+   {
+    "x": 25,
+    "y": 6,
+    "from": "2",
+    "to": "3"
+   },
+   {
+    "x": 26,
+    "y": 6,
+    "from": "2",
+    "to": "3"
+   }
+  ]
+ }
+]
