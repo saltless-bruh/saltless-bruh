@@ -1,4 +1,7 @@
 // src/activity.ts
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { assertNoForbiddenNames } from "./content.ts";
 import type { Activity } from "./session.ts";
 
@@ -284,5 +287,159 @@ export async function fetchActivity(o: { handle: string; repoNames?: string[]; t
       .map(([name, size]) => ({ name, bytes: size }))
       .sort((a, b) => b.bytes - a.bytes || a.name.localeCompare(b.name))
       .slice(0, MAX_LANGUAGES),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The committed cache
+// ---------------------------------------------------------------------------
+
+/**
+ * Where the cache lives. It is committed, so a clone with no network and no credential still
+ * builds; the refresh workflow rewrites it daily.
+ */
+export const CACHE_PATH = new URL("../cache/activity.json", import.meta.url);
+
+/**
+ * One successful fetch, parsed. Never the raw response, never a credential: the response is
+ * scrubbed where it arrives, so everything derived from it is already clean.
+ *
+ * The timestamp lives inside the file rather than being read off the filesystem, because a
+ * checkout resets every mtime and the staleness of the figures would then read as zero.
+ */
+type CacheFile = { fetchedAt: string; activity: Activity };
+
+export type LoadedActivity = {
+  activity: Activity;
+  source: "network" | "cache";
+  /** How old the figures are, in whole seconds. Null when they came straight off the network. */
+  ageSeconds: number | null;
+  /** Why they are not fresh, with the age and the reason spelled out. Null when they are. */
+  staleNote: string | null;
+};
+
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+function badCache(what: string): never {
+  fail(`the activity cache is unusable: ${what}. Delete it and rebuild with ${TOKEN_ENV} set, so the figures come from a real fetch instead of a guess.`);
+}
+
+/** A count has to be a whole number of things. A string, a null or a fraction is corruption. */
+function cachedCount(v: unknown, what: string): number {
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 0) badCache(`${what} is not a whole count`);
+  return v;
+}
+
+/** Rebuilds the record field by field, so a half-written cache cannot be half-used. */
+function checkedCache(v: unknown): CacheFile {
+  if (!isObj(v)) badCache("the top level is not an object");
+  const { fetchedAt, activity } = v;
+  if (typeof fetchedAt !== "string" || !Number.isFinite(Date.parse(fetchedAt))) badCache("fetchedAt is not a timestamp");
+  if (!isObj(activity)) badCache("there is no activity record");
+  if (!Array.isArray(activity.calendar)) badCache("activity.calendar is not a list");
+  if (!Array.isArray(activity.languages)) badCache("activity.languages is not a list");
+
+  const calendar = activity.calendar.map((d: unknown, i) => {
+    if (!isObj(d)) badCache(`calendar[${i}] is not an object`);
+    if (typeof d.date !== "string" || !ISO_DAY.test(d.date)) badCache(`calendar[${i}].date is not an ISO day`);
+    return { date: d.date, count: cachedCount(d.count, `calendar[${i}].count`) };
+  });
+  const languages = activity.languages.map((l: unknown, i) => {
+    if (!isObj(l)) badCache(`languages[${i}] is not an object`);
+    if (typeof l.name !== "string" || l.name.trim() === "") badCache(`languages[${i}].name is blank`);
+    return { name: l.name, bytes: cachedCount(l.bytes, `languages[${i}].bytes`) };
+  });
+
+  return {
+    fetchedAt,
+    activity: {
+      totalContributions: cachedCount(activity.totalContributions, "activity.totalContributions"),
+      activeDays: cachedCount(activity.activeDays, "activity.activeDays"),
+      calendar,
+      languages,
+    },
+  };
+}
+
+function readText(path: URL): string {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    badCache("there is no cache file to read");
+  }
+}
+
+function readCache(path: URL): CacheFile {
+  const raw = readText(path);
+  // Names first. The cache is a file a person can hand-edit, and a JSON syntax error quotes the
+  // text around the fault, so nothing below is allowed to speak until the file has cleared.
+  assertNoForbiddenNames(raw, "the activity cache");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    badCache(`it is not valid JSON (${(e as Error).message})`);
+  }
+  return checkedCache(parsed);
+}
+
+function writeCache(path: URL, activity: Activity): void {
+  const file: CacheFile = { fetchedAt: new Date().toISOString(), activity };
+  mkdirSync(dirname(fileURLToPath(path)), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`);
+}
+
+/** The age in the largest unit that still reads as a number, for a build log a person skims. */
+function describeAge(seconds: number): string {
+  for (const [size, unit] of [[86_400, "day"], [3_600, "hour"], [60, "minute"]] as [number, string][]) {
+    if (seconds >= size) {
+      const n = Math.floor(seconds / size);
+      return `${n} ${unit}${n === 1 ? "" : "s"}`;
+    }
+  }
+  return `${seconds} second${seconds === 1 ? "" : "s"}`;
+}
+
+/**
+ * The activity the build should print: fetched when that works, the cache when it does not.
+ *
+ * A fetch that succeeds refreshes the cache. A fetch that fails is not hidden: the caller gets
+ * the cached figures along with their age and the reason the refresh did not happen, so nothing
+ * downstream can present stale data as current. With no cache to fall back on it throws, because
+ * the alternative is a calendar of zeros, and a calendar of zeros is a number nobody measured.
+ */
+export async function loadActivity(o: {
+  handle: string;
+  repoNames?: string[];
+  cachePath?: URL;
+  transport?: Transport;
+}): Promise<LoadedActivity> {
+  const cachePath = o.cachePath ?? CACHE_PATH;
+  let failure: string;
+  try {
+    const activity = await fetchActivity({
+      handle: o.handle,
+      repoNames: o.repoNames,
+      transport: o.transport ?? githubTransport,
+    });
+    writeCache(cachePath, activity);
+    return { activity, source: "network", ageSeconds: null, staleNote: null };
+  } catch (e) {
+    if (e instanceof ForbiddenNameError) throw e;
+    failure = redact((e as Error).message);
+  }
+
+  let cached: CacheFile;
+  try {
+    cached = readCache(cachePath);
+  } catch (e) {
+    fail(`the activity could not be fetched and there is no usable cache behind it, so there are no real figures to print. The fetch said: ${failure} The cache said: ${redact((e as Error).message)}`);
+  }
+  const ageSeconds = Math.max(0, Math.round((Date.now() - Date.parse(cached.fetchedAt)) / 1000));
+  return {
+    activity: cached.activity,
+    source: "cache",
+    ageSeconds,
+    staleNote: `the activity figures are stale: they were fetched ${describeAge(ageSeconds)} ago and the refresh failed (${failure})`,
   };
 }

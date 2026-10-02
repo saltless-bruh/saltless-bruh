@@ -1,9 +1,14 @@
 // test/activity.test.ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ACTIVITY_QUERY, fetchActivity, githubTransport, MAX_LANGUAGES, TOKEN_ENV, trimToWindow, WINDOW_DAYS } from "../src/activity.ts";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { ACTIVITY_QUERY, CACHE_PATH, fetchActivity, githubTransport, loadActivity, MAX_LANGUAGES, TOKEN_ENV, trimToWindow, WINDOW_DAYS } from "../src/activity.ts";
 import type { Transport } from "../src/activity.ts";
 import { languageShares } from "../src/session.ts";
+import type { Activity } from "../src/session.ts";
 import { FORBIDDEN_NAMES } from "../src/content.ts";
 
 const DAY_MS = 86_400_000;
@@ -362,4 +367,131 @@ test("an HTTP failure does not quote a response body that has not been through t
   );
   assert.ok(outcome instanceof Error, "a 403 was treated as a success");
   assert.ok(!outcome.message.toLowerCase().includes(forbidden.toLowerCase()), "an ungated response body reached the error message");
+});
+
+// ---------------------------------------------------------------------------
+// The committed cache. A build with no network and no token reads it; a build with
+// neither it nor a token fails rather than printing a figure nobody measured.
+// ---------------------------------------------------------------------------
+
+const tmpBase = pathToFileURL(`${mkdtempSync(join(tmpdir(), "activity-cache-"))}/`);
+let tmpSeq = 0;
+/** A cache path inside a directory that does not exist yet. */
+const tmpCache = (): URL => new URL(`run-${tmpSeq++}/activity.json`, tmpBase);
+
+const SAMPLE: Activity = {
+  totalContributions: 12,
+  activeDays: 2,
+  calendar: [{ date: "2026-01-01", count: 4 }, { date: "2026-01-02", count: 8 }],
+  languages: [{ name: "Python", bytes: 10 }],
+};
+
+const agoIso = (seconds: number): string => new Date(Date.now() - seconds * 1000).toISOString();
+
+function writeCacheFixture(path: URL, activity: unknown, fetchedAt = new Date().toISOString()): void {
+  mkdirSync(dirname(fileURLToPath(path)), { recursive: true });
+  writeFileSync(path, JSON.stringify({ fetchedAt, activity }));
+}
+
+const offline: Transport = async () => { throw new Error("getaddrinfo ENOTFOUND api.github.com"); };
+
+test("the cache lives at cache/activity.json so a fresh checkout can build offline", () => {
+  assert.ok(CACHE_PATH.pathname.endsWith("/cache/activity.json"), CACHE_PATH.pathname);
+});
+
+test("a successful fetch writes the cache and reports the data as fresh", async () => {
+  const cachePath = tmpCache();
+  const loaded = await loadActivity({ handle: "x", cachePath, transport: onePage([{ name: "one", languages: [{ name: "Python", size: 5 }] }]) });
+  assert.equal(loaded.source, "network");
+  assert.equal(loaded.staleNote, null);
+  assert.equal(loaded.ageSeconds, null);
+  assert.deepEqual(JSON.parse(readFileSync(cachePath, "utf8")).activity, loaded.activity);
+});
+
+test("the cache holds parsed data only, never the raw response and never a credential", async () => {
+  const cachePath = tmpCache();
+  await withToken(FAKE_TOKEN, () => loadActivity({
+    handle: "x",
+    cachePath,
+    transport: onePage([{ name: "one", description: `echoed ${FAKE_TOKEN}`, languages: [{ name: `Python ${FAKE_TOKEN}`, size: 5 }] }]),
+  }));
+  const text = readFileSync(cachePath, "utf8");
+  assert.ok(!text.includes(FAKE_TOKEN), "the cache carries the credential");
+  assert.ok(!text.includes("contributionCalendar"), "the cache carries the raw response or the query");
+  assert.deepEqual(Object.keys(JSON.parse(text)).sort(), ["activity", "fetchedAt"]);
+});
+
+test("a failed fetch falls back to the cache and says how stale the figures are", async () => {
+  const cachePath = tmpCache();
+  writeCacheFixture(cachePath, SAMPLE, agoIso(3 * 86_400));
+  const loaded = await loadActivity({ handle: "x", cachePath, transport: offline });
+  assert.equal(loaded.source, "cache");
+  assert.deepEqual(loaded.activity, SAMPLE);
+  assert.ok(loaded.ageSeconds !== null && loaded.ageSeconds >= 3 * 86_400, `age was ${loaded.ageSeconds}`);
+  assert.match(String(loaded.staleNote), /stale/i);
+  assert.match(String(loaded.staleNote), /3 days/);
+  assert.match(String(loaded.staleNote), /ENOTFOUND/);
+});
+
+test("with no token but a valid cache the build still gets real figures", async () => {
+  const cachePath = tmpCache();
+  writeCacheFixture(cachePath, SAMPLE, agoIso(5 * 3600));
+  const loaded = await withToken(undefined, () => loadActivity({ handle: "x", cachePath }));
+  assert.equal(loaded.source, "cache");
+  assert.equal(loaded.activity.totalContributions, 12);
+  assert.match(String(loaded.staleNote), /5 hours/);
+  assert.match(String(loaded.staleNote), /PROFILE_GH_TOKEN/);
+});
+
+test("with neither a fetch nor a cache it fails loudly instead of emitting zeros", async () => {
+  const cachePath = tmpCache();
+  await assert.rejects(
+    () => withToken(undefined, () => loadActivity({ handle: "x", cachePath })),
+    (e: Error) => {
+      assert.match(e.message, /PROFILE_GH_TOKEN/);
+      assert.match(e.message, /cache/i);
+      return true;
+    },
+  );
+  assert.ok(!existsSync(fileURLToPath(cachePath)), "a placeholder cache was written");
+});
+
+test("a cache missing required fields is rejected rather than half used", async () => {
+  const cachePath = tmpCache();
+  writeCacheFixture(cachePath, { totalContributions: 5 });
+  await assert.rejects(() => withToken(undefined, () => loadActivity({ handle: "x", cachePath })), /cache/i);
+});
+
+test("a cache whose counts are not whole numbers is rejected", async () => {
+  // JSON cannot carry NaN, so a corrupted figure arrives as a string, a null or a fraction.
+  for (const bad of ["12", null, -1, 1.5, {}]) {
+    const cachePath = tmpCache();
+    writeCacheFixture(cachePath, { ...SAMPLE, totalContributions: bad });
+    await assert.rejects(
+      () => withToken(undefined, () => loadActivity({ handle: "x", cachePath })),
+      /cache/i,
+      `accepted ${JSON.stringify(bad)} as a contribution total`,
+    );
+  }
+});
+
+test("a cache whose calendar entries are malformed is rejected", async () => {
+  const cachePath = tmpCache();
+  writeCacheFixture(cachePath, { ...SAMPLE, calendar: [{ date: "not-a-day", count: 1 }] });
+  await assert.rejects(() => withToken(undefined, () => loadActivity({ handle: "x", cachePath })), /cache/i);
+});
+
+test("a cache carrying a forbidden name is refused", async () => {
+  const cachePath = tmpCache();
+  writeCacheFixture(cachePath, { ...SAMPLE, languages: [{ name: forbidden, bytes: 1 }] });
+  await assert.rejects(() => withToken(undefined, () => loadActivity({ handle: "x", cachePath })), /forbidden name/i);
+});
+
+test("a forbidden name in fetched data is not papered over by a healthy cache", async () => {
+  const cachePath = tmpCache();
+  writeCacheFixture(cachePath, SAMPLE);
+  const transport = onePage([{ name: "one", description: forbidden, languages: [{ name: "Python", size: 1 }] }]);
+  await assert.rejects(() => loadActivity({ handle: "x", cachePath, transport }), /forbidden name/i);
+  // And the clean cache is left exactly as it was, not overwritten with the rejected data.
+  assert.deepEqual(JSON.parse(readFileSync(cachePath, "utf8")).activity, SAMPLE);
 });
