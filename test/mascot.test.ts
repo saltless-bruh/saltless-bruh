@@ -137,6 +137,12 @@ function heldMs(css: string, cls: string, holds: (decls: Record<string, string>)
 
 /** Milliseconds a layer is fully opaque per cycle. */
 const litMs = (css: string, cls: string): number => heldMs(css, cls, (d) => Number(d.opacity) === 1);
+/** How far into its own cycle a layer first becomes fully opaque, in milliseconds. */
+function firstLitMs(css: string, cls: string): number {
+  const stop = stopsOf(css, cls).find((s) => Number(s.decls.opacity) === 1);
+  assert.ok(stop, `.${cls} is never fully lit`);
+  return stop.seconds * 1000;
+}
 /** Milliseconds a layer spends away from rest per cycle. */
 const awayMs = (css: string, cls: string): number =>
   heldMs(css, cls, (d) => [...(d.transform ?? "").matchAll(/translate[XY]\((-?[\d.]+)(?:px)?\)/g)].some((m) => Number(m[1]) !== 0));
@@ -536,6 +542,16 @@ test("the ear stretches: its overlay is a second copy of the slab, so the lift e
     return below !== undefined && [29, 30].some((x) => "124".includes(below[x]));
   });
   assert.deepEqual(attached.sort(), ["settle", "sleep", "startle", "stretch"], "four poses need the static copy; only yawn breaks its own silhouette under the ear");
+  // The lift is a whole art pixel now, so the slab needs a lattice row above it to extend into. A tip drawn on row 0
+  // would be carried off the top of the scene and the stretch would lose its point.
+  const css = mascotCss();
+  const lift = -translateOf(css, "ear", "Y") / PX;
+  assert.ok(Number.isInteger(lift) && lift > 0, `the ear lifts ${lift} art pixels, which is not a whole lattice step upward`);
+  for (const state of states()) {
+    const rows = readGrid(state).slice(0, RACK_FROM);
+    const tip = rows.findIndex((r) => /[24]/.test(r.slice(29, 31)));
+    assert.ok(tip >= lift, `pose-${state}: the ear tip is on row ${tip} and the flick lifts it ${lift}, so it would leave the scene`);
+  }
 });
 
 test("the tail displaces: the static pass leaves its pixels to the .tail group alone, so the flick moves it and never thickens it", () => {
@@ -573,21 +589,36 @@ test("the tail displaces: the static pass leaves its pixels to the .tail group a
   }
 });
 
-test("the tail is drawn detached from the body in every pose, so sliding it sideways cannot tear the sprite", () => {
-  // The `.tail` group is now the only copy of its pixels and it slides in X, which is safe only while no other cat ink
-  // touches it. An art edit that joined the tail to the body would turn that slide into a seam opening mid-sprite, so
-  // the invariant is asserted here rather than left as a comment. The tail's own pixels come from the real drawing and
-  // the ink oracle from the grid files; the foot continuation is excluded because the frame line covers it.
+test("the tail is drawn detached from the body in every pose, at rest and a whole pixel along, so the slide cannot tear or collide", () => {
+  // The `.tail` group is the only copy of its pixels and it slides a whole art pixel in X. That is safe only while no
+  // other cat ink touches it, at EITHER end of the slide: something touching it at rest tears when it leaves, and
+  // something touching the place it lands collides with it there. An art edit that joined the tail to the body would
+  // break one or the other, so both are asserted from the artwork rather than left as a comment. The tail's own pixels
+  // come from the real drawing and the ink oracle from the grid files; the foot continuation is excluded because the
+  // frame line covers it. The slide distance is read off the real keyframes and converted to lattice steps.
+  const css = mascotCss();
+  const step = translateOf(css, "tail", "X") / PX;
+  assert.ok(Number.isInteger(step) && step !== 0, `the tail slides ${step} art pixels, which is not a whole lattice step`);
   const root = parseXml(mascotDefs(0, 0, "dark"));
   for (const state of states()) {
     const rows = readGrid(state).slice(0, RACK_FROM);
-    const tail = new Set(overlayInk(find(root, `pose-${state}`), "tail").keys());
-    assert.ok(tail.size > 0, `pose-${state} has no tail`);
-    for (const p of tail) {
-      const [x, y] = xy(p);
-      for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]] as [number, number][]) {
-        if (tail.has(`${nx},${ny}`) || ny < 0 || ny >= RACK_FROM || nx < 0 || nx >= GRID_W) continue;
-        assert.ok(!"124".includes(rows[ny][nx]), `pose-${state}: the tail at ${p} touches cat ink at ${nx},${ny}; sliding it would tear the sprite there`);
+    const resting = [...overlayInk(find(root, `pose-${state}`), "tail").keys()].map(xy);
+    assert.ok(resting.length > 0, `pose-${state} has no tail`);
+    // The body is every painted pixel that is not the tail: the pixels the tail rests on are its own, and it vacates
+    // them when it slides, so counting them as body would report a tear against the tail's own starting position.
+    const own = new Set(resting.map(([x, y]) => `${x},${y}`));
+    const ink = (x: number, y: number): boolean =>
+      y >= 0 && y < RACK_FROM && x >= 0 && x < GRID_W && "124".includes(rows[y][x]) && !own.has(`${x},${y}`);
+    for (const [where, shift] of [["at rest", 0], ["a whole pixel along", step]] as [string, number][]) {
+      const tail = new Set(resting.map(([x, y]) => `${x + shift},${y}`));
+      for (const p of tail) {
+        const [x, y] = xy(p);
+        assert.ok(x >= 0 && x < GRID_W, `pose-${state}: the tail slides off the scene to ${p}`);
+        // Ink the tail no longer covers at this position belongs to the body, and must not be touching it.
+        for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1], [x, y]] as [number, number][]) {
+          if (tail.has(`${nx},${ny}`)) continue;
+          assert.ok(!ink(nx, ny), `pose-${state} ${where}: the tail at ${p} meets cat ink at ${nx},${ny}, so the slide ${nx === x && ny === y ? "lands on top of the body" : "tears the sprite there"}`);
+        }
       }
     }
   }
@@ -977,9 +1008,18 @@ test("nothing that moves the cat downward can push it into the rack it rests on"
   }
 });
 
-test("every translation in the breath, the ear flick and the tail flick stays under one art pixel, on both axes and both ways", () => {
-  // The cat's feet are continued only one art pixel deep behind the frame, so a larger move would expose the strip of window that
-  // continuation closes, and a runaway value would tear the sprite apart. Both axes, positive and negative, every stop.
+test("every idle translation is exactly one art pixel, which is both the step the lattice has and the depth the feet cover", () => {
+  // Two bounds, and they meet at the same number.
+  //
+  // The floor is the lattice. A sprite drawn on an art-pixel grid and rendered with shape-rendering="crispEdges" has no
+  // position between pixels: a smaller move snaps to nothing or to one device pixel depending on the render width, so it
+  // reads as an edge flickering rather than as the cat rising. Measured through scripts/render-check.ts, a one-unit
+  // breath changed 178 device pixels at 846px wide and 9 at 308px, against 981 and 131 for a full art pixel.
+  //
+  // The ceiling is foot(). It continues the cat's bottom row exactly one art pixel behind the rack frame, which is what
+  // hides the displacement at rest; a lift of PX + 1 would reach past that continuation and show a strip of window under
+  // the feet at most widths. So the amplitude is pinned AT one art pixel, not merely under it, in both directions and on
+  // both axes, at every stop.
   const css = mascotCss();
   for (const cls of ["breath", "ear", "tail"]) {
     const anim = animationsOf(css).find((a) => a.cls === cls);
@@ -995,13 +1035,15 @@ test("every translation in the breath, the ear flick and the tail flick stays un
         assert.ok(["translateX", "translateY"].includes(m[1]), `${kf.name}: ${m[1]} is not a plain translate`);
         const v = m[2].trim().match(/^(-?[\d.]+)(px)?$/);
         assert.ok(v, `${kf.name}: ${m[0]} is not a number of pixels`);
-        assert.ok(Math.abs(Number(v[1])) < PX, `${kf.name} ${m[0]} is as big as an art pixel (${PX} units)`);
-        biggest = Math.max(biggest, Math.abs(Number(v[1])));
+        const units = Math.abs(Number(v[1]));
+        assert.ok(units <= PX, `${kf.name} ${m[0]} is more than one art pixel (${PX} units); foot() only continues the cat ${PX} units behind the frame, so this exposes window under the feet`);
+        assert.ok(units === 0 || units === PX, `${kf.name} ${m[0]} is ${units} units, which is off the art-pixel lattice; crispEdges snaps it to nothing or to one device pixel depending on the render width`);
+        biggest = Math.max(biggest, units);
         moves++;
       }
     }
     assert.equal(moves, 3, `${kf.name}: away, and back to rest`);
-    assert.ok(biggest > 0, `${kf.name} never moves`);
+    assert.equal(biggest, PX, `${kf.name} must move a whole art pixel, not ${biggest} units`);
   }
 });
 
@@ -1038,6 +1080,40 @@ test("the three LEDs flash for the same length of time, on their different clock
   }
   assert.equal(new Set(leds.map((a) => a.seconds)).size, leds.length, "the interval is the only thing the LEDs may differ in, so no two share a clock");
   assert.equal(new Set(leds.map((a) => litMs(css, a.cls).toFixed(0))).size, 1, "every LED flashes for the same number of milliseconds");
+});
+
+test("the three LEDs never flash together, not once in the time their periods take to realign", () => {
+  // Three units on co-prime clocks are there to say the machine's work is independent. If they all lit at the same
+  // instant a viewer would read that as one synchronised part, so each is staggered a flash-length further into its own
+  // cycle: unit k lights at (k + 1) x 200ms. The consequence is checked exhaustively rather than argued, by walking
+  // every lit window of every LED across the full realignment period and looking for an overlap.
+  const css = mascotCss();
+  const leds = animationsOf(css).filter((a) => /^led-\d+$/.test(a.cls)).sort((a, b) => a.cls.localeCompare(b.cls));
+  leds.forEach((a, k) => {
+    const expected = (k + 1) * LED_FLASH_MS;
+    assert.ok(Math.abs(firstLitMs(css, a.cls) - expected) <= 1, `.${a.cls} first lights ${firstLitMs(css, a.cls).toFixed(1)}ms into its cycle, not ${expected}ms: the stagger must step by one flash length per unit`);
+  });
+  // How long the real periods take to realign, computed from them rather than assumed: lcm(7, 11, 13) is 1001s.
+  const togetherMs = leds.reduce((lcm, a) => (lcm * a.seconds) / gcd(lcm, a.seconds), 1) * 1000;
+  assert.ok(togetherMs >= 60_000, `the periods realign every ${togetherMs / 1000}s, which is too soon to be worth staggering`);
+  const windows = leds.map((a) => {
+    const at = firstLitMs(css, a.cls);
+    const period = a.seconds * 1000;
+    return { cls: a.cls, period, flashes: Array.from({ length: Math.round(togetherMs / period) }, (_, n) => at + n * period) };
+  });
+  const lit = litMs(css, leds[0].cls);
+  let compared = 0;
+  for (let i = 0; i < windows.length; i++) {
+    for (let j = i + 1; j < windows.length; j++) {
+      for (const a of windows[i].flashes) {
+        for (const b of windows[j].flashes) {
+          compared++;
+          assert.ok(Math.abs(a - b) >= lit - 1, `${windows[i].cls} lights at ${a}ms and ${windows[j].cls} at ${b}ms, which overlap: the two would flash as one`);
+        }
+      }
+    }
+  }
+  assert.ok(compared > 20_000, `only ${compared} pairs of flashes were compared across ${togetherMs / 1000}s, which is not the whole realignment period`);
 });
 
 test("the ear flick and the tail flick last their own milliseconds, not a share of the cycle carrying them", () => {

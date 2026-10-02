@@ -229,8 +229,15 @@ const TAIL_SECONDS = 23;
 
 /**
  * The shape of one gesture inside its own cycle. These describe a gesture, not a moment in the story, so they have no
- * counterpart in MASCOT_TIMELINE and stay literal. Every move is under one art pixel (a test holds it there): the cat's
- * feet are continued only that far behind the frame.
+ * counterpart in MASCOT_TIMELINE and stay literal.
+ *
+ * Amplitude is exactly one art pixel, which is PX units and not 1. A sprite drawn on a pixel lattice moves in lattice
+ * steps: `shape-rendering="crispEdges"` snaps anything smaller to nothing or to a device pixel depending on the render
+ * width, so a sub-pixel idle move reads as edge jitter rather than motion. Measured on the real render, a one-unit
+ * breath changed 178 device pixels at the 846px width and 9 at 308px, against 981 and 131 for one art pixel: at phone
+ * width the small version was close to invisible. One art pixel is also the ceiling, and that ceiling is `foot()`:
+ * the cat's bottom row is continued exactly one art pixel behind the rack frame, so a lift of PX is covered and a lift
+ * of PX + 1 would expose a strip of window under the feet. A test holds the amplitude at exactly that.
  *
  * Two kinds, written in two units on purpose. A **breath** is genuinely a fraction of a breath: it rises for the middle
  * of its cycle whatever that cycle lasts, so percentages are the honest unit. A **flick** is an event with a length of
@@ -238,16 +245,24 @@ const TAIL_SECONDS = 23;
  * flick states its milliseconds and they are converted against whatever cycle carries it. This is the lesson
  * BREATH_SECONDS already carries at the top of this block, applied to the gestures that sit under it.
  */
-const BREATH_MOVE = { awayAt: 46.7, backAt: 93.3, by: -1 };     // rises for the middle of the breath, then steps back down
-const EAR_MOVE = { afterMs: 85, forMs: 119, by: -1 };           // a quick flick near the start of its cycle: the tip lifts
-const TAIL_MOVE = { afterMs: 230, forMs: 345, by: 1 };          // a quick flick near the start of its cycle: the tip slides
+const BREATH_MOVE = { awayAt: 46.7, backAt: 93.3, by: -PX };    // rises for the middle of the breath, then steps back down
+const EAR_MOVE = { afterMs: 85, forMs: 119, by: -PX };          // a quick flick near the start of its cycle: the tip lifts
+const TAIL_MOVE = { afterMs: 230, forMs: 345, by: PX };         // a quick flick near the start of its cycle: the tip slides
 /**
- * The LEDs are a status flash: `forMs` is how long one stays lit and `atMs` how far into its own cycle it lights, both
- * wall-clock, so the three differ only in how often they flash and never in how long. Written as a share of the cycle
- * instead, one shared keyframe made the same flash 350ms, 550ms and 650ms on the 7s, 11s and 13s units. `dim` is the
- * level between flashes: low, but never dark, because the machine is never off.
+ * The LEDs are a status flash: `forMs` is how long one stays lit, wall-clock, so the three differ only in how often they
+ * flash and never in how long. Written as a share of the cycle instead, one shared keyframe made the same flash 350ms,
+ * 550ms and 650ms on the 7s, 11s and 13s units. `dim` is the level between flashes: low, but never dark, because the
+ * machine is never off.
+ *
+ * `staggerMs` is what keeps them independent. Unit k lights (k + 1) staggers into its own cycle, so on load they fire in
+ * sequence rather than together: three units that happen to agree read as one synchronised part, which argues against
+ * the thing the co-prime periods exist to express. The spacing is deliberately the flash's own length, which has a
+ * stronger consequence than spreading the first pass. A flash is [s, s + 200) with s = 200(k + 1) + period x 1000 x n,
+ * so every lit window begins and ends on a 200ms boundary and two windows could only overlap by coinciding exactly;
+ * that needs 7000a - 11000b = 200, or 35a - 55b = 1, whose left side is a multiple of 5. No two of these three LEDs are
+ * ever lit at the same instant, not once in the 1001s it takes their periods to realign. A test checks that exhaustively.
  */
-const LED_FLASH = { atMs: 210, forMs: 200, dim: 0.25 };
+const LED_FLASH = { staggerMs: 200, forMs: 200, dim: 0.25 };
 
 /** A stop in a cycle, as a percentage to four places, which is under a millisecond for every cycle here. */
 const ofCycle = (fraction: number): string => `${Number((fraction * 100).toFixed(4))}%`;
@@ -270,14 +285,18 @@ function flick(g: { afterMs: number; forMs: number; by: number }, seconds: numbe
 const move = (name: string, axis: "X" | "Y", g: Stops): string =>
   `@keyframes ${name} { 0% { transform: translate${axis}(0) } ${g.awayAt} { transform: translate${axis}(${g.by}px) } ${g.backAt} { transform: translate${axis}(0) } }`;
 
-/** `@keyframes` name for an LED cycle: one per distinct period, so two units on the same clock share a flash. */
-const ledName = (seconds: number): string => `led-${String(seconds).replace(".", "-")}s`;
+/** `@keyframes` name for one rack unit's flash. Each unit has its own offset, so each has its own keyframes. */
+const ledName = (unit: number): string => `led-flash-${unit}`;
+
+/** How far into its own cycle unit `k` lights, in milliseconds. */
+const ledAtMs = (unit: number): number => (unit + 1) * LED_FLASH.staggerMs;
 
 /** The flash as a share of one cycle of `seconds`, so every LED is lit for LED_FLASH.forMs however often it fires. */
-function ledFlash(seconds: number): string {
+function ledFlash(unit: number, seconds: number): string {
   const ms = seconds * 1000;
-  if (LED_FLASH.atMs + LED_FLASH.forMs >= ms) throw new Error(`a ${seconds}s LED cycle cannot hold a ${LED_FLASH.forMs}ms flash at ${LED_FLASH.atMs}ms`);
-  return `@keyframes ${ledName(seconds)} { 0% { opacity: ${LED_FLASH.dim} } ${ofCycle(LED_FLASH.atMs / ms)} { opacity: 1 } ${ofCycle((LED_FLASH.atMs + LED_FLASH.forMs) / ms)} { opacity: ${LED_FLASH.dim} } }`;
+  const at = ledAtMs(unit);
+  if (at + LED_FLASH.forMs >= ms) throw new Error(`a ${seconds}s LED cycle cannot hold a ${LED_FLASH.forMs}ms flash at ${at}ms`);
+  return `@keyframes ${ledName(unit)} { 0% { opacity: ${LED_FLASH.dim} } ${ofCycle(at / ms)} { opacity: 1 } ${ofCycle((at + LED_FLASH.forMs) / ms)} { opacity: ${LED_FLASH.dim} } }`;
 }
 
 type Span = [number, number];
@@ -342,13 +361,13 @@ ${onClock("burst", "burst")}
 .breath { animation: breathe ${BREATH_SECONDS}s step-end infinite }
 .ear { animation: ear ${EAR_SECONDS}s step-end infinite }
 .tail { animation: tail ${TAIL_SECONDS}s step-end infinite }
-${LED_PERIODS.map((s, i) => `.led-${i} { animation: ${ledName(s)} ${s}s step-end infinite }`).join("\n")}
+${LED_PERIODS.map((s, i) => `.led-${i} { animation: ${ledName(i)} ${s}s step-end infinite }`).join("\n")}
 ${poses.map((s) => showDuring(`m-${s}`, spansOf(s))).join("\n")}
 ${steps.map((span, k) => showDuring(`bubble-${k}`, [span])).join("\n")}
 ${showDuring("burst", [burst])}
 ${move("breathe", "Y", shape(BREATH_MOVE))}
 ${move("ear", "Y", flick(EAR_MOVE, EAR_SECONDS))}
 ${move("tail", "X", flick(TAIL_MOVE, TAIL_SECONDS))}
-${[...new Set(LED_PERIODS)].map(ledFlash).join("\n")}
+${LED_PERIODS.map((s, i) => ledFlash(i, s)).join("\n")}
 `;
 }
