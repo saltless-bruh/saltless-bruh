@@ -1,0 +1,583 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { loadContent } from "../src/content.ts";
+import type { Content } from "../src/content.ts";
+import { composeSession, languageShares, SCAN_ROWS, SHIMMER_WORD } from "../src/session.ts";
+import type { Activity } from "../src/session.ts";
+import { assertFits, rowsToText, charsUsed } from "../src/rows.ts";
+import type { Row } from "../src/rows.ts";
+import { COLS } from "../src/grid.ts";
+import { MASCOT_COLS, MASCOT_ROWS } from "../src/mascot.ts";
+import { BANNER_ROWS, bannerWidthCols } from "../src/banner.ts";
+import { assertCovered } from "../src/font.ts";
+
+const activity: Activity = {
+  totalContributions: 950, activeDays: 99,
+  calendar: [{ date: "2026-01-01", count: 3 }],
+  languages: [{ name: "Alpha", bytes: 700 }, { name: "Beta", bytes: 300 }],
+};
+
+/** A year as a profile might really show it: six languages, one with a long name, big numbers. */
+const busy: Activity = {
+  totalContributions: 12345, activeDays: 365,
+  calendar: [{ date: "2026-01-01", count: 40 }],
+  languages: [
+    { name: "TypeScript", bytes: 9_120_431 }, { name: "Python", bytes: 4_002_117 },
+    { name: "Jupyter Notebook", bytes: 1_877_001 }, { name: "Go", bytes: 640_220 },
+    { name: "Rust", bytes: 411_090 }, { name: "Shell", bytes: 90_113 },
+  ],
+};
+
+/** Every field different from the owner's, so output that ignores the content is caught. */
+function altered(): Content {
+  const c = loadContent();
+  c.handle = "ZED";
+  c.role = "Reverse Engineering";
+  c.cwd = "~/elsewhere";
+  c.whoami = ["only one line here"];
+  c.lanes = [
+    { label: "alpha/", repos: [{ name: "r-one", blurb: "first blurb" }] },
+    { label: "beta/", repos: [{ name: "r-two", blurb: "second blurb" }, { name: "r-three", blurb: "third blurb" }] },
+  ];
+  c.stackRows = [{ label: "tools", items: ["aa", "bb"] }, { label: "", items: ["cc"] }];
+  c.statusline = { effortLabels: ["one", "two", "three"], effortSelected: "two", modeBadge: "manual", note: "a short note" };
+  return c;
+}
+
+const CONTENTS: [string, () => Content][] = [["the owner's real content", loadContent], ["different content", altered]];
+
+const PROMPT = "❯ ";
+const COMMANDS = ["/whoami", "/ops", "/stack", "/activity"];
+const SHIMMER_PREFIX = "shimmer-";
+const isShimmer = (cls?: string): boolean => cls?.startsWith(SHIMMER_PREFIX) ?? false;
+
+const linesOf = (rows: Row[]): string[] => rowsToText(rows).split("\n");
+
+/** The lines under one command's prompt, up to the next prompt or the end. */
+function sectionOf(lines: string[], command: string): string[] {
+  const start = lines.indexOf(PROMPT + command);
+  assert.ok(start >= 0, `no prompt line for ${command}`);
+  const rest = lines.slice(start + 1);
+  const next = rest.findIndex((l) => l.startsWith(PROMPT));
+  return next < 0 ? rest : rest.slice(0, next);
+}
+
+/** The /stack section's language rows: name, whole percent, and the column the percent starts at. */
+function languageRows(lines: string[]): { name: string; pct: number; pctCol: number }[] {
+  return sectionOf(lines, "/stack").flatMap((l) => {
+    const m = /^ {5}(\S.*?) {2,}(\d+)%$/.exec(l);
+    return m ? [{ name: m[1], pct: Number(m[2]), pctCol: l.length - (m[2].length + 1) }] : [];
+  });
+}
+
+const total = (xs: number[]): number => xs.reduce((s, x) => s + x, 0);
+
+// ---- the whole Session ----
+
+test("the whole session fits in 72 columns, with the owner's real content", () => {
+  const { rows } = composeSession(loadContent(), busy);
+  assert.doesNotThrow(() => assertFits(rows));
+  assert.ok(linesOf(rows).every((l) => [...l].length <= COLS), "a transcript line is wider than the Session");
+});
+
+test("the session fits with the little activity of a new account too", () => {
+  assert.doesNotThrow(() => assertFits(composeSession(loadContent(), activity).rows));
+});
+
+test("the glyphs the session draws exist in both faces of the font", () => {
+  const { rows } = composeSession(loadContent(), busy);
+  const regular = readFileSync(new URL("../vendor/JetBrainsMono-Regular.ttf", import.meta.url));
+  const bold = readFileSync(new URL("../vendor/JetBrainsMono-Bold.ttf", import.meta.url));
+  assert.doesNotThrow(() => assertCovered(regular, charsUsed(rows)));
+  const boldRows = rows.map((r) => ({ runs: r.runs.filter((run) => run.style === "bold") }));
+  assert.doesNotThrow(() => assertCovered(bold, charsUsed(boldRows)));
+});
+
+test("no two runs in a row overlap or touch, apart from a highlight copy laid over its word", () => {
+  for (const [, make] of CONTENTS) {
+    const { rows } = composeSession(make(), busy);
+    rows.forEach((row, i) => {
+      const runs = row.runs.filter((r) => !isShimmer(r.cls)).sort((a, b) => a.col - b.col);
+      runs.slice(1).forEach((run, k) => {
+        const prev = runs[k];
+        assert.ok(prev.col + [...prev.text].length < run.col, `row ${i}: ${JSON.stringify(prev.text)} runs into ${JSON.stringify(run.text)}`);
+      });
+    });
+  }
+});
+
+test("no run is empty, so no empty element is drawn", () => {
+  for (const [, make] of CONTENTS) {
+    for (const row of composeSession(make(), busy).rows) {
+      for (const run of row.runs) assert.notEqual(run.text, "", "an empty run");
+    }
+  }
+});
+
+test("each part of the session wears its own style", () => {
+  const c = loadContent();
+  const { rows } = composeSession(c, busy);
+  const runs = rows.flatMap((r) => r.runs);
+  const stylesOf = (text: string): (string | undefined)[] => runs.filter((r) => r.text === text).map((r) => r.style);
+  const repo = c.lanes[0].repos[0];
+  const lane = c.lanes[0];
+  const stack = c.stackRows.find((r) => r.label !== "")!;   // an empty label draws nothing to style
+
+  assert.deepEqual(stylesOf("❯"), COMMANDS.map(() => "accent"), "one prompt glyph per command");
+  assert.deepEqual(COMMANDS.map((cmd) => stylesOf(cmd)), COMMANDS.map(() => ["bold"]));
+  assert.deepEqual(stylesOf("●"), c.whoami.map(() => "accent"));
+  assert.deepEqual(stylesOf(c.whoami[0]), ["text"]);
+  assert.deepEqual(stylesOf(lane.label), ["accent"]);
+  assert.ok(stylesOf("╰").every((st) => st === "muted"), "the result glyphs");
+  assert.deepEqual(stylesOf(repo.name), ["text"]);
+  assert.deepEqual(stylesOf(repo.blurb), ["muted"]);
+  assert.deepEqual(stylesOf("TypeScript"), ["text"]);
+  assert.deepEqual(stylesOf("56%"), ["muted"]);
+  assert.deepEqual(stylesOf(stack.label), ["muted"]);
+  assert.deepEqual(stylesOf(stack.items.join("  ")), ["text"]);
+  assert.deepEqual(stylesOf("scan complete: 365/365 days up · 12345 contributions"), ["accent"]);
+  assert.deepEqual(stylesOf("─".repeat(COLS)), ["muted", "muted"]);
+  assert.deepEqual(stylesOf("✶"), ["accent"]);
+  assert.deepEqual(stylesOf("Effort"), ["muted"]);
+  assert.deepEqual(stylesOf(`▶▶ ${c.statusline.modeBadge}`), ["muted"]);
+  assert.deepEqual(stylesOf(c.statusline.note), ["muted"]);
+  assert.deepEqual(stylesOf("on"), ["muted"]);
+});
+
+// ---- the header ----
+
+test("the header is the Mascot's rows plus a role row and a cwd row, derived from the Mascot", () => {
+  const { rows, headerRows } = composeSession(loadContent(), activity);
+  assert.equal(headerRows, MASCOT_ROWS + 2);
+  assert.deepEqual(rows.slice(0, MASCOT_ROWS).map((r) => r.runs.length), Array(MASCOT_ROWS).fill(0), "text must not be drawn over the Mascot");
+  assert.equal(rows[headerRows].runs.length, 1);
+  assert.equal(rowsToText([rows[headerRows]]), "─".repeat(COLS), "a full-width rule closes the header");
+});
+
+for (const [label, make] of CONTENTS) {
+  test(`the role and cwd each get their own full-width row under the Mascot (${label})`, () => {
+    const c = make();
+    const { rows } = composeSession(c, activity);
+    assert.deepEqual(rows[MASCOT_ROWS].runs, [{ col: 0, text: c.role, style: "bold" }]);
+    assert.deepEqual(rows[MASCOT_ROWS + 1].runs, [{ col: 0, text: c.cwd, style: "muted" }]);
+  });
+}
+
+test("a role the width of the whole Session fits and one column more is rejected", () => {
+  const c = loadContent();
+  c.role = "r".repeat(COLS);
+  assert.doesNotThrow(() => composeSession(c, activity));
+  c.role = "r".repeat(COLS + 1);
+  assert.throws(() => composeSession(c, activity), /needs 73 columns/);
+});
+
+test("the banner sits two columns clear of the Mascot and is centred on it", () => {
+  const { bannerCol, bannerRow } = composeSession(loadContent(), activity);
+  assert.equal(bannerCol, MASCOT_COLS + 2);
+  assert.ok(bannerRow >= 0 && bannerRow + BANNER_ROWS <= MASCOT_ROWS, "the banner must stay beside the Mascot");
+  assert.equal(bannerRow, MASCOT_ROWS - (bannerRow + BANNER_ROWS), "as many free rows above the banner as below it");
+});
+
+test("a handle whose banner fills the space beside the Mascot fits and one column more does not", () => {
+  const room = COLS - (MASCOT_COLS + 2);
+  // M is a column wider than A, so swapping letters one at a time reaches every width.
+  const handleOfWidth = (width: number): string | undefined => Array.from({ length: 20 }, (_, n) => n + 1)
+    .flatMap((n) => Array.from({ length: n + 1 }, (_, k) => "M".repeat(k) + "A".repeat(n - k)))
+    .find((h) => bannerWidthCols(h) === width);
+  const exact = handleOfWidth(room);
+  const over = handleOfWidth(room + 1);
+  assert.ok(exact && over, "no handle of M and A has the width needed");
+  const c = loadContent();
+  c.handle = exact;
+  assert.doesNotThrow(() => composeSession(c, activity));
+  c.handle = over;
+  assert.throws(() => composeSession(c, activity), /banner/);
+});
+
+// ---- the commands ----
+
+for (const [label, make] of CONTENTS) {
+  test(`the commands appear once each, in the scripted order (${label})`, () => {
+    const lines = linesOf(composeSession(make(), activity).rows);
+    assert.deepEqual(lines.filter((l) => l.startsWith(PROMPT)).map((l) => l.slice(PROMPT.length)), COMMANDS);
+  });
+
+  test(`/whoami lists the content's lines as bullets and nothing else (${label})`, () => {
+    const c = make();
+    const section = sectionOf(linesOf(composeSession(c, activity).rows), "/whoami");
+    assert.deepEqual(section, [...c.whoami.map((l) => `● ${l}`), ""]);
+  });
+
+  test(`/ops puts each repo's name on one row and its description indented on the next (${label})`, () => {
+    const c = make();
+    const section = sectionOf(linesOf(composeSession(c, activity).rows), "/ops");
+    const expected = c.lanes.flatMap((lane) => [
+      `  ╰  ${lane.label}`,
+      ...lane.repos.flatMap((r) => [" ".repeat(7) + r.name, " ".repeat(9) + r.blurb]),
+    ]);
+    assert.deepEqual(section, [...expected, ""]);
+  });
+
+  test(`/stack prints each tool row with its items aligned after the longest label (${label})`, () => {
+    const c = make();
+    const section = sectionOf(linesOf(composeSession(c, activity).rows), "/stack");
+    const longest = Math.max(...c.stackRows.map((r) => r.label.length));
+    const toolRows = c.stackRows.map((r) => (" ".repeat(5) + r.label.padEnd(longest + 2) + r.items.join("  ")).trimEnd());
+    assert.deepEqual(section.slice(section.length - 1 - toolRows.length), [...toolRows, ""]);
+  });
+}
+
+test("a stack label longer than the old fixed column pushes its items along rather than running into them", () => {
+  const c = loadContent();
+  c.stackRows[0].label = "x".repeat(20);
+  const section = sectionOf(linesOf(composeSession(c, activity).rows), "/stack");
+  const row = section.find((l) => l.includes("metasploit"));
+  assert.equal(row, " ".repeat(5) + "x".repeat(20) + "  " + c.stackRows[0].items.join("  "));
+});
+
+// ---- repo descriptions ----
+
+test("a repo description gets its own row, so it has room to say something", () => {
+  const c = loadContent();
+  c.lanes[0].repos[0].blurb = "self hosted agent memory with a wiki and a vector store";  // 54 chars
+  assert.doesNotThrow(() => assertFits(composeSession(c, activity).rows));
+});
+
+test("a description exactly as wide as its row allows fits and one character more is rejected", () => {
+  const c = loadContent();
+  const room = COLS - 9;
+  c.lanes[0].repos[0].blurb = "d".repeat(room);
+  assert.doesNotThrow(() => composeSession(c, activity));
+  c.lanes[0].repos[0].blurb = "d".repeat(room + 1);
+  assert.throws(() => composeSession(c, activity), /needs 73 columns/);
+});
+
+test("a blurb too long even for its own row is reported, not silently overflowed", () => {
+  const c = loadContent();
+  c.lanes[0].repos[0].blurb = "x".repeat(90);
+  assert.throws(() => composeSession(c, activity), (e: Error) => {
+    assert.match(e.message, /needs 99 columns/);
+    assert.ok(e.message.includes("x".repeat(90)), "the message shows the offending text");
+    return true;
+  });
+  assert.throws(() => assertFits(composeSession(c, activity).rows), /columns/);
+});
+
+test("a repo name has the same limit, measured from its own column", () => {
+  const c = loadContent();
+  c.lanes[0].repos[0].name = "n".repeat(COLS - 7);
+  assert.doesNotThrow(() => composeSession(c, activity));
+  c.lanes[0].repos[0].name = "n".repeat(COLS - 7 + 1);
+  assert.throws(() => composeSession(c, activity), /needs 73 columns/);
+});
+
+// ---- languages ----
+
+test("languageShares gives whole percentages that total exactly 100, by largest remainder", () => {
+  const cases: [number[], number[]][] = [
+    [[700, 300], [70, 30]],
+    [[5000, 3000, 2000], [50, 30, 20]],
+    [[1, 1, 1], [34, 33, 33]],                    // rounding each would total 99
+    [[2, 1], [67, 33]],
+    [[1, 1, 1, 1, 1, 1], [17, 17, 17, 17, 16, 16]], // rounding each would total 102
+    [[2, 2, 2, 2, 2, 2, 2], [15, 15, 14, 14, 14, 14, 14]],
+    [[999, 1], [100, 0]],
+    [[42], [100]],
+  ];
+  for (const [bytes, want] of cases) {
+    const got = languageShares(bytes.map((b, i) => ({ name: `L${i}`, bytes: b }))).map((s) => s.pct);
+    assert.deepEqual(got, want, `shares of ${bytes}`);
+  }
+});
+
+test("languageShares keeps the names, in the order given", () => {
+  const shares = languageShares([{ name: "Zig", bytes: 1 }, { name: "Nim", bytes: 3 }]);
+  assert.deepEqual(shares, [{ name: "Zig", pct: 25 }, { name: "Nim", pct: 75 }]);
+});
+
+test("for any byte counts the shares total 100, are within one point of exact and never invert the order", () => {
+  let seed = 12345;
+  const next = (): number => (seed = (seed * 1103515245 + 12345) % 2147483648);
+  for (let run = 0; run < 400; run++) {
+    const bytes = Array.from({ length: 1 + (next() % 8) }, () => 1 + (next() % 1_000_000));
+    const sum = total(bytes);
+    const pcts = languageShares(bytes.map((b, i) => ({ name: `L${i}`, bytes: b }))).map((s) => s.pct);
+    assert.equal(total(pcts), 100, `shares of ${bytes}`);
+    pcts.forEach((p, i) => {
+      assert.ok(Math.abs(p - (bytes[i] * 100) / sum) < 1, `${bytes[i]} of ${sum} became ${p}%`);
+      bytes.forEach((b, j) => { if (b > bytes[i]) assert.ok(pcts[j] >= p, `${b} bytes shows less than ${bytes[i]}`); });
+    });
+  }
+});
+
+test("with no bytes at all a share is zero, never NaN, and an empty list is empty", () => {
+  assert.deepEqual(languageShares([{ name: "A", bytes: 0 }, { name: "B", bytes: 0 }]).map((s) => s.pct), [0, 0]);
+  assert.deepEqual(languageShares([]), []);
+});
+
+test("languages are shown as whole percentages that come from the bytes", () => {
+  const text = rowsToText(composeSession(loadContent(), activity).rows);
+  assert.match(text, /Alpha\s+70%/);
+  assert.match(text, /Beta\s+30%/);
+});
+
+test("the percentages on screen come from the byte counts, whatever the languages are", () => {
+  const fixtures: [Activity["languages"], [string, number][]][] = [
+    [[{ name: "Zig", bytes: 1 }, { name: "Nim", bytes: 1 }, { name: "Odin", bytes: 1 }], [["Zig", 34], ["Nim", 33], ["Odin", 33]]],
+    [[{ name: "Lua", bytes: 6 }, { name: "Elm", bytes: 4 }], [["Lua", 60], ["Elm", 40]]],
+    [[{ name: "Crystal", bytes: 1000 }], [["Crystal", 100]]],
+  ];
+  for (const [languages, want] of fixtures) {
+    const shown = languageRows(linesOf(composeSession(loadContent(), { ...activity, languages }).rows));
+    assert.deepEqual(shown.map((r) => [r.name, r.pct]), want);
+    assert.equal(total(shown.map((r) => r.pct)), 100);
+  }
+});
+
+test("the real-looking activity shows six languages totalling 100, largest first", () => {
+  const shown = languageRows(linesOf(composeSession(loadContent(), busy).rows));
+  assert.deepEqual(shown.map((r) => r.name), ["TypeScript", "Python", "Jupyter Notebook", "Go", "Rust", "Shell"]);
+  assert.equal(total(shown.map((r) => r.pct)), 100);
+  // exact: 56.505 24.795 11.629 3.966 2.547 0.558. Floors total 96; the four largest remainders take one each.
+  assert.deepEqual(shown.map((r) => r.pct), [56, 25, 12, 4, 2, 1]);
+});
+
+test("languages are listed by size even when the data arrives in another order", () => {
+  const languages = [{ name: "Beta", bytes: 300 }, { name: "Alpha", bytes: 700 }, { name: "Gamma", bytes: 100 }];
+  const shown = languageRows(linesOf(composeSession(loadContent(), { ...activity, languages }).rows));
+  assert.deepEqual(shown.map((r) => r.name), ["Alpha", "Beta", "Gamma"]);
+});
+
+test("every percentage starts in the same column, clear of the longest language name", () => {
+  const shown = languageRows(linesOf(composeSession(loadContent(), busy).rows));
+  const longest = Math.max(...shown.map((r) => r.name.length));
+  assert.equal(new Set(shown.map((r) => r.pctCol)).size, 1, "percentages are ragged");
+  assert.ok(shown[0].pctCol >= 5 + longest + 2, "a percentage sits against the name before it");
+});
+
+test("with no languages to show, /stack holds only the tool rows", () => {
+  const c = loadContent();
+  const section = sectionOf(linesOf(composeSession(c, { ...activity, languages: [] }).rows), "/stack");
+  assert.equal(section.length, c.stackRows.length + 1);
+  assert.deepEqual(languageRows(linesOf(composeSession(c, { ...activity, languages: [] }).rows)), []);
+});
+
+// ---- the activity line and the reserved rows ----
+
+test("real activity numbers are printed, never invented", () => {
+  const text = rowsToText(composeSession(loadContent(), activity).rows);
+  assert.match(text, /99\/365/);
+  assert.match(text, /950/);
+});
+
+test("the result line carries this activity's own numbers", () => {
+  for (const [days, contributions] of [[12, 345], [365, 12345], [0, 0]]) {
+    const lines = linesOf(composeSession(loadContent(), { ...activity, activeDays: days, totalContributions: contributions }).rows);
+    assert.ok(
+      lines.includes(`  ╰  scan complete: ${days}/365 days up · ${contributions} contributions`),
+      `no result line for ${days} days and ${contributions} contributions`,
+    );
+  }
+});
+
+test("the Scan Sweep gets its own rows right under /activity, and the result line follows them", () => {
+  const { rows, scanRow } = composeSession(loadContent(), activity);
+  const lines = linesOf(rows);
+  assert.equal(lines[scanRow - 1], PROMPT + "/activity");
+  assert.deepEqual(rows.slice(scanRow, scanRow + SCAN_ROWS).map((r) => r.runs.length), Array(SCAN_ROWS).fill(0));
+  assert.match(lines[scanRow + SCAN_ROWS], /^ {2}╰ {2}scan complete: 99\/365 days up/);
+});
+
+// ---- the spinner ----
+
+test("the spinner row holds only the glyph; the words are not chosen here", () => {
+  const c = loadContent();
+  const { rows, verbRow, scanRow } = composeSession(c, activity);
+  assert.deepEqual(rows[verbRow].runs, [{ col: 0, text: "✶", style: "accent", cls: "spinner-glyph" }]);
+  assert.equal(verbRow, scanRow + SCAN_ROWS + 2, "one blank row after the result line, then the spinner");
+  assert.equal(rows[verbRow - 1].runs.length, 0);
+  const text = rowsToText(rows);
+  for (const word of Object.values(c.verbs).flat()) assert.ok(!text.includes(word), `${word} was written into the rows`);
+});
+
+test("a rule closes the spinner section and the statusline follows it", () => {
+  const { rows, verbRow } = composeSession(loadContent(), activity);
+  assert.equal(rowsToText([rows[verbRow + 1]]), "─".repeat(COLS));
+  assert.equal(rows.length, verbRow + 4, "rule, effort row, mode row, and nothing after");
+});
+
+// ---- the statusline ----
+
+for (const [label, make] of CONTENTS) {
+  test(`the effort row lists every label in order, two spaces apart, from column 9 (${label})`, () => {
+    const c = make();
+    const lines = linesOf(composeSession(c, activity).rows);
+    const effort = lines[lines.length - 2];
+    const shown = c.statusline.effortLabels.map((l) => (l === c.statusline.effortSelected ? `[${l}]` : l));
+    assert.ok(effort.startsWith("Effort   " + shown.join("  ")), effort);
+  });
+
+  test(`the mode row has the badge on the left and the note flush to the right edge (${label})`, () => {
+    const c = make();
+    const lines = linesOf(composeSession(c, activity).rows);
+    const mode = lines[lines.length - 1];
+    assert.ok(mode.startsWith(`▶▶ ${c.statusline.modeBadge}`), mode);
+    assert.ok(mode.endsWith(c.statusline.note), mode);
+    assert.equal([...mode].length, COLS, "the note ends on the last column");
+  });
+}
+
+test("the statusline marks the selected effort and carries the note", () => {
+  const c = loadContent();
+  const text = rowsToText(composeSession(c, activity).rows);
+  assert.match(text, new RegExp(`\\[${c.statusline.effortSelected}\\]`));
+  assert.ok(text.includes(c.statusline.note));
+});
+
+test("whichever effort is selected is the only one marked, and the others stay plain", () => {
+  const c = loadContent();
+  for (const selected of c.statusline.effortLabels) {
+    c.statusline.effortSelected = selected;
+    const { rows } = composeSession(c, activity);
+    const effort = rows[rows.length - 2];
+    const text = rowsToText([effort]);
+    for (const label of c.statusline.effortLabels) {
+      assert.equal(text.includes(`[${label}]`), label === selected, `[${label}] with ${selected} selected`);
+      assert.ok(text.includes(label), `${label} is missing`);
+    }
+    const run = (label: string) => effort.runs.find((r) => r.text === (label === selected ? `[${label}]` : label));
+    for (const label of c.statusline.effortLabels) {
+      assert.equal(run(label)?.style, label === selected ? "accent" : "muted", `style of ${label} with ${selected} selected`);
+    }
+  }
+});
+
+test("a note that would run into the badge, or touch it, is rejected rather than drawn over it", () => {
+  const c = loadContent();
+  const room = COLS - 3 - c.statusline.modeBadge.length;   // what is left after "▶▶ " and the badge
+  c.statusline.note = "n".repeat(room - 1);                 // one blank column between them
+  assert.doesNotThrow(() => composeSession(c, activity));
+  c.statusline.note = "n".repeat(room);                     // touching: the two would read as one word
+  assert.throws(() => composeSession(c, activity), /runs into/);
+  c.statusline.note = "n".repeat(room + 1);                 // overlapping
+  assert.throws(() => composeSession(c, activity), /runs into/);
+});
+
+test("effort labels that would run into the toggle, or touch it, are rejected", () => {
+  const c = loadContent();
+  const { effortLabels, effortSelected } = c.statusline;
+  const start = 9 + effortLabels.reduce((s, l) => s + (l === effortSelected ? l.length + 2 : l.length) + 2, 0);
+  const toggleCol = COLS - `${SHIMMER_WORD} on`.length;
+  const withLast = (len: number): Content => {
+    const copy = loadContent();
+    copy.statusline.effortLabels = [...effortLabels, "x".repeat(len)];
+    return copy;
+  };
+  assert.doesNotThrow(() => composeSession(withLast(toggleCol - 1 - start), activity), "one blank column before the toggle");
+  assert.throws(() => composeSession(withLast(toggleCol - start), activity), /runs into/);
+  assert.throws(() => composeSession(withLast(toggleCol - start + 5), activity), /runs into/);
+});
+
+test("a note wider than the whole Session is rejected, not drawn off the left edge", () => {
+  const c = loadContent();
+  c.statusline.note = "n".repeat(COLS + 10);
+  assert.throws(() => composeSession(c, activity), /runs into/);
+});
+
+// ---- the shimmer word ----
+
+function effortRow(c: Content): Row {
+  const { rows } = composeSession(c, activity);
+  return rows[rows.length - 2];
+}
+
+test("the toggle word is the owner's", () => {
+  assert.equal(SHIMMER_WORD, "Ultrachill");
+});
+
+for (const [label, make] of CONTENTS) {
+  test(`the word is drawn twice at one position, a muted base and an accent copy split per character (${label})`, () => {
+    const row = effortRow(make());
+    const chars = [...SHIMMER_WORD];
+    const base = row.runs.filter((r) => r.text === SHIMMER_WORD);
+    assert.equal(base.length, 1, "exactly one base copy");
+    assert.equal(base[0].style, "muted");
+    assert.equal(base[0].cls, undefined);
+
+    const copy = row.runs.filter((r) => isShimmer(r.cls));
+    assert.equal(copy.length, chars.length, "one highlight run per character");
+    copy.forEach((r, i) => {
+      assert.equal(r.cls, `shimmer-${i}`);
+      assert.equal(r.text, chars[i]);
+      assert.equal(r.style, "accent");
+      assert.equal(r.col, base[0].col + i, `character ${i} sits over its own letter of the base`);
+    });
+  });
+}
+
+test("the word reads once in the transcript, followed by on, and ends flush with the right edge", () => {
+  const lines = linesOf(composeSession(loadContent(), activity).rows);
+  const text = lines.join("\n");
+  assert.equal(text.split(SHIMMER_WORD).length - 1, 1, "the word is written twice in the transcript");
+  const effort = lines[lines.length - 2];
+  assert.ok(effort.endsWith(`${SHIMMER_WORD} on`), effort);
+  assert.equal([...effort].length, COLS);
+});
+
+test("the highlight copy lives in the same row as the word, in no other row", () => {
+  const { rows } = composeSession(loadContent(), activity);
+  const withShimmer = rows.filter((r) => r.runs.some((run) => isShimmer(run.cls)));
+  assert.equal(withShimmer.length, 1);
+  assert.ok(withShimmer[0].runs.some((run) => run.text === SHIMMER_WORD));
+});
+
+// ---- the inputs ----
+
+test("composing the session leaves the content and the activity exactly as they were", () => {
+  const c = loadContent();
+  const a: Activity = { ...busy, languages: [...busy.languages].reverse() };
+  const before = structuredClone({ c, a });
+  composeSession(c, a);
+  assert.deepEqual({ c, a }, before);
+});
+
+// ---- the transcript ----
+
+test("the transcript has one line per row", () => {
+  for (const [, make] of CONTENTS) {
+    const { rows } = composeSession(make(), busy);
+    assert.equal(linesOf(rows).length, rows.length);
+  }
+});
+
+test("every run starts in the transcript at its own column, padding included", () => {
+  for (const [, make] of CONTENTS) {
+    const { rows } = composeSession(make(), busy);
+    const lines = linesOf(rows);
+    rows.forEach((row, i) => {
+      for (const run of row.runs.filter((r) => !isShimmer(r.cls))) {
+        const at = [...lines[i]].slice(run.col, run.col + [...run.text].length).join("");
+        assert.equal(at.trimEnd(), run.text.trimEnd(), `row ${i}: ${JSON.stringify(run.text)} is not at column ${run.col}`);
+      }
+    });
+  }
+});
+
+test("a description at column 9 starts at character 9 of its line, and a name at column 7 at 7", () => {
+  const c = loadContent();
+  const { name, blurb } = c.lanes[0].repos[0];
+  const lines = linesOf(composeSession(c, activity).rows);
+  const nameAt = lines.indexOf(" ".repeat(7) + name);
+  assert.ok(nameAt >= 0, "the name row is missing");
+  assert.equal(lines[nameAt].indexOf(name), 7);
+  assert.equal(lines[nameAt + 1], " ".repeat(9) + blurb);
+  assert.equal(lines[nameAt + 1].indexOf(blurb), 9);
+});
+
+test("the prompt starts the line and the command two columns in", () => {
+  const lines = linesOf(composeSession(loadContent(), activity).rows);
+  const whoami = lines.indexOf(PROMPT + "/whoami");
+  assert.ok(whoami >= 0);
+  assert.equal(lines[whoami].indexOf("/whoami"), 2);
+});
