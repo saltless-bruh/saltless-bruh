@@ -552,7 +552,12 @@ test("the ear stretches: its overlay is a second copy of the slab, so the lift e
     const below = rows[tip + 2];
     return below !== undefined && [29, 30].some((x) => "124".includes(below[x]));
   });
-  assert.deepEqual(attached.sort(), ["settle", "sleep", "startle", "stretch"], "four poses need the static copy; only yawn breaks its own silhouette under the ear");
+  assert.deepEqual(
+    attached.sort(),
+    ["butt-down", "glare", "settle", "sleep", "stretch"],
+    "these five carry head ink under the slab, so the static copy is load-bearing; in the rest an eye hole sits there, which the artwork chose",
+  );
+  assert.ok(attached.length > 0, "if nothing were attached the second copy would be waste rather than a stretch");
   // The lift is a whole art pixel now, so the slab needs a lattice row above it to extend into. A tip drawn on row 0
   // would be carried off the top of the scene and the stretch would lose its point.
   const css = mascotCss();
@@ -748,9 +753,14 @@ test("the base stylesheet leaves every layer untransformed and the LEDs lit", as
   // the cat mid-breath, and a stray base opacity would freeze an LED mid-flicker.
   const css = styleOf(await fullSvg("dark"));
   assert.deepEqual(styleRules(css).filter((r) => "transform" in r.decls), []);
-  for (const cls of ["breath", "ear", "tail", "led", "led-0", "led-1", "led-2", "rack"]) {
+  for (const cls of ["breath", "ear", "tail", "led", "led-0", "led-1", "led-2", "rack", "leds-live"]) {
     const opacity = baseValue(css, [cls], "opacity");
     assert.ok(opacity === undefined || Number(opacity) === 1, `.${cls} base opacity ${opacity}`);
+  }
+  // The still frame is a healthy machine. The fault bank and the steady bank are states the loop drives to and
+  // back from, so under `animation: none` they must both be gone and the green flicker bank must be the one left.
+  for (const cls of ["leds-fault", "leds-hold"]) {
+    assert.equal(Number(baseValue(css, [cls], "opacity")), 0, `.${cls} must be hidden in the still frame`);
   }
 });
 
@@ -806,15 +816,25 @@ function withTimeline(replacement: Window[], fn: () => void): void {
   assert.deepEqual(MASCOT_TIMELINE, original, "the timeline was restored");
 }
 
-// Hand-derived alternative inside the same 36 s loop: 12 s is 33.333% of it and 32 s is 88.889%; neither is in the committed table.
+// Hand-derived alternative inside the same 36 s loop. 12 s is 33.333% of it and 33 s is 91.667%; neither is in the
+// committed table. It carries every state, so the whole loop is still exercised, and it moves the nap, the peek and
+// the alarm, so a module that stopped deriving any one of the three fails.
 const MOVED: Window[] = [
   { state: "sleep", from: 0, to: 9 },
   { state: "yawn", from: 9, to: 12 },
   { state: "stretch", from: 12, to: 18 },
   { state: "settle", from: 18, to: 21 },
-  { state: "sleep", from: 21, to: 32 },
-  { state: "startle", from: 32, to: 34 },
-  { state: "sleep", from: 34, to: MASTER_SECONDS },
+  { state: "sleep", from: 21, to: 27 },
+  { state: "peek", from: 27, to: 28 },
+  { state: "sleep", from: 28, to: 30 },
+  { state: "alert", from: 30, to: 31 },
+  { state: "swat-up", from: 31, to: 31.5 },
+  { state: "swat-down", from: 31.5, to: 32 },
+  { state: "glare", from: 32, to: 32.5 },
+  { state: "butt-up", from: 32.5, to: 33 },
+  { state: "butt-down", from: 33, to: 33.5 },
+  { state: "recover", from: 33.5, to: 34.5 },
+  { state: "sleep", from: 34.5, to: MASTER_SECONDS },
 ];
 
 test("the committed timeline is what the keyframes show, instant by instant", () => {
@@ -825,10 +845,12 @@ test("the keyframes follow the timeline when it changes, so they are derived and
   withTimeline(MOVED, () => {
     assertLoopShowsTimeline(MOVED);
     const css = mascotCss();
-    assert.match(css, /33\.333%/);
-    assert.match(css, /88\.889%/);
+    assert.match(css, /33\.333%/, "12 s, the moved yawn-to-stretch hand-off");
+    assert.match(css, /93\.056%/, "33.5 s, where the moved headbutt hands over to the recovery");
     assert.ok(!css.includes("30.278%"), "the committed 10.9 s hand-off must not survive");
-    assert.ok(!css.includes("83.333%"), "the committed 30 s pop must not survive");
+    assert.ok(!css.includes("72.222%"), "the committed 26 s end of the peek must not survive");
+    assert.ok(!css.includes("79.444%"), "the committed 28.6 s end of the alert must not survive");
+    assert.ok(!css.includes("81.667%"), "the committed 29.4 s second swat must not survive");
   });
 });
 
@@ -845,21 +867,33 @@ const bubbleSteps = (root: Node): string[] => walk(root).flatMap(classesOf).filt
 const BURST_MS = 200;
 
 /**
- * The bubble inflates in equal steps across the window before startle, bursts at the very instant
- * startle begins, and is gone for the rest of the loop. Everything is read from the real keyframes.
+ * States she is, or is pretending to be, asleep in. Declared here rather than imported, so a module that went back
+ * to taking "the window immediately before the pop" reports the wrong inflation window instead of agreeing with
+ * itself. The committed loop has `peek` sitting inside the nap, which is exactly the case that breaks.
+ */
+const DREAMING = ["sleep", "peek"];
+
+/**
+ * The bubble inflates in equal steps across the nap that reaches the pop, bursts at the very instant the alarm
+ * begins, and is gone for the rest of the loop. Everything is read from the real keyframes.
  */
 function assertBubbleFollowsTimeline(timeline: Window[]): void {
   const css = mascotCss();
-  const i = timeline.findIndex((w) => w.state === "startle");
-  assert.ok(i > 0, "the timeline needs a window before startle to inflate in");
-  const grow = timeline[i - 1];
+  const i = timeline.findIndex((w) => w.state === "alert");
+  assert.ok(i > 0, "the timeline needs a nap before the alert to inflate in");
+  let j = i;
+  while (j > 0 && DREAMING.includes(timeline[j - 1].state)) j--;
+  assert.ok(j < i, "the alert must follow a sleeping window");
+  assert.ok(i - j > 1, "the committed nap is several windows: a one-window nap would not test the walk-back");
+  const grow = { from: timeline[j].from, to: timeline[i].from };
   const pop = timeline[i];
   const steps = bubbleSteps(parseXml(mascotDefs(0, 0, "dark")));
   const all = [...steps, "burst"];
   const stepLength = (grow.to - grow.from) / steps.length;
   const visible = (t: number): string[] => all.filter((c) => opacityAt(css, c, t) === 1);
 
-  assert.equal(grow.to, pop.from, "the long window must run right up to startle");
+  assert.equal(grow.to, pop.from, "the nap must run right up to the alert");
+  for (const w of timeline.slice(j, i)) assert.ok(DREAMING.includes(w.state), `${w.state} is inside the nap but is not a sleeping state`);
   assert.deepEqual(visible(grow.from - 0.001), [], "no bubble before the long window begins");
   steps.forEach((step, k) => {
     assert.deepEqual(visible(grow.from + k * stepLength + 0.001), [step], `${step} starts on its step`);
@@ -888,18 +922,26 @@ function assertBubbleFollowsTimeline(timeline: Window[]): void {
   }
 }
 
-test("the bubble inflates in four steps across the long sleep and pops exactly when startle begins", () => {
+test("the bubble inflates in four steps across the whole nap and pops exactly when the alarm begins", () => {
   assert.equal(bubbleSteps(parseXml(mascotDefs(0, 0, "dark"))).length, 4);
   assertBubbleFollowsTimeline(MASCOT_TIMELINE);
   // The instant itself, read straight off the committed timeline rather than through the sampler's own arithmetic.
-  const startle = MASCOT_TIMELINE.find((w) => w.state === "startle");
-  assert.ok(startle);
-  assert.equal(startle.from, 30);
+  const alert = MASCOT_TIMELINE.find((w) => w.state === "alert");
+  assert.ok(alert);
+  assert.equal(alert.from, 28);
   const css = mascotCss();
-  assert.equal(opacityAt(css, "bubble-3", startle.from - 0.001), 1);
-  assert.equal(opacityAt(css, "bubble-3", startle.from + 0.001), 0);
-  assert.equal(opacityAt(css, "burst", startle.from - 0.001), 0);
-  assert.equal(opacityAt(css, "burst", startle.from + 0.001), 1);
+  assert.equal(opacityAt(css, "bubble-3", alert.from - 0.001), 1);
+  assert.equal(opacityAt(css, "bubble-3", alert.from + 0.001), 0);
+  assert.equal(opacityAt(css, "burst", alert.from - 0.001), 0);
+  assert.equal(opacityAt(css, "burst", alert.from + 0.001), 1);
+  // The inflation spans the peek: the bubble must not blink out while she opens an eye, because a bubble
+  // plus an open eye is the joke. Measured at the middle of the peek window.
+  const peek = MASCOT_TIMELINE.find((w) => w.state === "peek");
+  assert.ok(peek);
+  const mid = (peek.from + peek.to) / 2;
+  assert.ok(peek.from > 18.75 && peek.to < alert.from, "the peek must sit inside the nap the bubble inflates in");
+  const upAtPeek = bubbleSteps(parseXml(mascotDefs(0, 0, "dark"))).filter((c) => opacityAt(css, c, mid) === 1);
+  assert.equal(upAtPeek.length, 1, `${upAtPeek.length} bubble steps are up during the peek, not one`);
 });
 
 test("the bubble's steps and pop follow the timeline when it changes", () => {
@@ -924,16 +966,40 @@ test("the bubble starts as one pixel at x21 row 7, grows up and to the left to a
   assert.deepEqual([steps[3].w, steps[3].h], [3, 3], "about 3 x 3 by the last step");
 });
 
-test("the bubble sits in free space: no step overlaps the sleeping cat, and the burst clears the startled one", () => {
-  // A step is on screen only with the sleeping pose and the burst only with the startled one, so those are the pairs that meet.
+test("the bubble sits in free space, against every pose it is actually on screen with", () => {
+  // Which poses those are is derived rather than named: the inflation now spans three windows and the burst lands
+  // on the alert, so a retime that slid a step under a different pose has to be checked against that pose.
+  const css = mascotCss();
   const root = parseXml(mascotDefs(0, 0, "dark"));
-  const sleeping = inkOf([find(root, "pose-sleep")]);
-  const startled = inkOf([find(root, "pose-startle")]);
   const rack = inkOf([find(root, "rack")]);
-  for (const c of bubbleSteps(root)) {
-    for (const p of inkOf([find(root, c)]).keys()) assert.ok(!sleeping.has(p) && !rack.has(p), `${c} overlaps the sleeping cat or the rack at ${p}`);
+  let checked = 0;
+  for (const c of [...bubbleSteps(root), "burst"]) {
+    const ink = inkOf([find(root, c)]);
+    assert.ok(ink.size > 0, `${c} draws nothing`);
+    // Every instant the layer is up, sampled to the tenth of a second, and the pose on screen at it.
+    const sharing = new Set<string>();
+    for (let k = 0; k < MASTER_SECONDS * 10; k++) {
+      const t = k * 0.1 + 0.03;
+      if (opacityAt(css, c, t) === 1) sharing.add(poseAt(MASCOT_TIMELINE, t));
+    }
+    assert.ok(sharing.size > 0, `${c} is never on screen`);
+    for (const state of sharing) {
+      const cat = inkOf([find(root, `pose-${state}`)]);
+      for (const p of ink.keys()) {
+        assert.ok(!cat.has(p), `${c} overlaps pose-${state} at ${p}`);
+        assert.ok(!rack.has(p), `${c} overlaps the rack at ${p}`);
+      }
+      checked++;
+    }
   }
-  for (const p of inkOf([find(root, "burst")]).keys()) assert.ok(!startled.has(p) && !rack.has(p), `the burst overlaps the startled cat or the rack at ${p}`);
+  assert.ok(checked >= 6, `only ${checked} bubble-and-pose pairs were checked`);
+  // And the pairs really are the ones the story has: the steps meet the nap, the burst meets the alert.
+  const burstShares = new Set<string>();
+  for (let k = 0; k < MASTER_SECONDS * 100; k++) {
+    const t = k * 0.01 + 0.003;
+    if (opacityAt(css, "burst", t) === 1) burstShares.add(poseAt(MASCOT_TIMELINE, t));
+  }
+  assert.deepEqual([...burstShares], ["alert"], "the burst is the pop, so it can only ever be on screen with the alert");
 });
 
 test("the burst is a ring around where the bubble was", () => {
@@ -976,11 +1042,20 @@ test("every animation rule has keyframes, cuts frames, loops forever and targets
   for (const name of kfNames) assert.ok(anims.some((a) => a.name === name), `@keyframes ${name} is never used`);
 });
 
-test("every pose, bubble step and the burst swap on the master clock", () => {
+test("everything that tells the story runs on the master clock, and nothing else does", () => {
+  // The poses, the bubble, and the rack's three alarm banks. The banks belong here because the fault is part of
+  // the storyline: it starts when she wakes and ends when the headbutt lands. The idle layers (breath, ear, tail
+  // and the three healthy LEDs) deliberately do not, which is what keeps the loop from reading as a loop.
   const anims = animationsOf(mascotCss());
   const master = anims.filter((a) => a.seconds === MASTER_SECONDS).map((a) => a.cls).sort();
-  const expected = [...states().map((s) => `pose-${s}`), ...bubbleSteps(parseXml(mascotDefs(0, 0, "dark"))), "burst"].sort();
+  const expected = [
+    ...states().map((s) => `pose-${s}`),
+    ...bubbleSteps(parseXml(mascotDefs(0, 0, "dark"))),
+    "burst", "leds-live", "leds-fault", "leds-hold",
+  ].sort();
   assert.deepEqual(master, expected);
+  const idle = anims.filter((a) => a.seconds !== MASTER_SECONDS).map((a) => a.cls).sort();
+  assert.deepEqual(idle, ["breath", "ear", "led-0", "led-1", "led-2", "tail"]);
 });
 
 test("the breath divides the loop exactly, lifts the cat and its bubble in every pose, and never the rack", () => {
@@ -1125,6 +1200,240 @@ test("the three LEDs never flash together, not once in the time their periods ta
     }
   }
   assert.ok(compared > 20_000, `only ${compared} pairs of flashes were compared across ${togetherMs / 1000}s, which is not the whole realignment period`);
+});
+
+// ---------------------------------------------------------------------------------------------
+// The alarm: the LEDs carry the fault, and the inversion is the signal
+// ---------------------------------------------------------------------------------------------
+
+/** The window a state occupies, read from the committed timeline. */
+const windowOf = (state: string): Window => {
+  const w = MASCOT_TIMELINE.find((x) => x.state === state);
+  assert.ok(w, `the timeline has no ${state} window`);
+  return w;
+};
+
+/** The pixels of every lit LED in the rack, read from the grid file rather than from any bank. */
+const LIT_PIXELS = (): string[] => {
+  const rows = readGrid("sleep");
+  const out: string[] = [];
+  rows.forEach((row, y) => [...row].forEach((c, x) => { if (c === "6" && y >= RACK_FROM) out.push(`${x},${y}`); }));
+  return out.sort();
+};
+
+test("both alarm banks repaint exactly the lit LEDs, nothing more, so a fault cannot light a vent", () => {
+  // Read from the artwork, not from the healthy bank, so a bank that drifted from the grid fails even if the
+  // two banks drifted together.
+  const expected = LIT_PIXELS();
+  assert.ok(expected.length >= 3, `only ${expected.length} lit LED pixels in the artwork`);
+  for (const theme of ["dark", "light"] as const) {
+    const root = parseXml(mascotDefs(0, 0, theme));
+    for (const cls of ["leds-fault", "leds-hold"]) {
+      assert.deepEqual([...inkOf([find(root, cls)]).keys()].sort(), expected, `${theme} .${cls}`);
+    }
+    // And the same pixels the three healthy units cover between them, so the banks cannot fall out of step
+    // with the units when the rack art changes.
+    const healthy = [0, 1, 2].flatMap((k) => [...inkOf([find(root, `led-${k}`)]).keys()]).sort();
+    assert.deepEqual(healthy, expected, `${theme}: the three units do not add up to the artwork's lit pixels`);
+  }
+});
+
+test("the fault bank is drawn in error and the steady bank in accent, in both themes", () => {
+  for (const theme of ["dark", "light"] as const) {
+    const p = PALETTES[theme];
+    const root = parseXml(mascotDefs(0, 0, theme));
+    for (const f of inkOf([find(root, "leds-fault")]).values()) assert.equal(f, p.error, `${theme}: the fault is not the error token`);
+    for (const f of inkOf([find(root, "leds-hold")]).values()) assert.equal(f, p.accent, `${theme}: the steady bank is not the accent`);
+    // The healthy flicker stays accent, which is what makes the switch a change of state and not of art.
+    for (const k of [0, 1, 2]) for (const f of inkOf([find(root, `led-${k}`)]).values()) assert.equal(f, p.accent, `${theme}: led-${k}`);
+    assert.notEqual(p.error, p.accent, "the premise: the two states are different colours");
+  }
+});
+
+test("the fault reads against the panel and the window, but NOT against the green it replaces", () => {
+  // Both halves of this are measured, and the second half is the uncomfortable one.
+  //
+  // Against the rack the fault is fine: error on the panel is 4.50:1 in both themes and on the window 5.16:1
+  // dark and 4.77:1 light, so a lit fault LED is plainly a lit LED.
+  //
+  // Against the ACCENT it replaces it is 1.26:1 in dark and 1.00:1 in light. Everforest's red and green sit at
+  // the same lightness by design, so red-to-green is a pure hue change. At 308px an LED is about two device
+  // pixels, and a red-green hue change at equal lightness is also the pair a protan or deutan viewer cannot
+  // separate. So the colour CANNOT be what tells a viewer the machine faulted.
+  //
+  // What tells them is the behaviour, and that is pinned by its own tests: healthy, the three units are never
+  // lit together and flash once every 7, 11 and 13 seconds; faulting, all three agree and flash at 2.5Hz. The
+  // spinner's verb is the paired word (docs/design-contract.md: colour alone never carries meaning). This test
+  // exists so the equal lightness is recorded as measured rather than discovered later, and so nobody "fixes"
+  // it by reaching for a brighter red from outside the nine palette colours.
+  for (const theme of ["dark", "light"] as const) {
+    const p = PALETTES[theme];
+    const root = parseXml(mascotDefs(0, 0, theme));
+    const fault = pathsUnder(find(root, "leds-fault"))[0];
+    const panel = pathsUnder(find(root, "rack")).find((n) => n.attrs.class === "panel");
+    assert.ok(fault && panel);
+    const onPanel = contrast(fault.attrs.fill, panel.attrs.fill);
+    const onWindow = contrast(fault.attrs.fill, p.bg);
+    assert.ok(onPanel >= 4, `${theme}: the fault is only ${onPanel.toFixed(2)}:1 on the panel`);
+    assert.ok(onWindow >= 4, `${theme}: the fault is only ${onWindow.toFixed(2)}:1 on the window`);
+    // Recorded, not asserted as a goal: the two states are within a hair of each other in lightness.
+    const fromAccent = contrast(fault.attrs.fill, p.accent);
+    assert.ok(fromAccent < 1.5, `${theme}: error and accent are ${fromAccent.toFixed(2)}:1 apart, which is more separation than the palette has ever had; if the palette really changed, update the note above instead of deleting it`);
+    // The fault stays inside the nine colours.
+    assert.ok(Object.values(p).includes(fault.attrs.fill), `${theme}: the fault colour is not a palette token`);
+  }
+});
+
+test("both alarm banks sit over the rack panel, so neither path meets the window on a bare edge", () => {
+  const root = parseXml(mascotDefs(0, 0, "dark"));
+  const panel = new Set(pathsUnder(find(root, "rack")).filter((n) => n.attrs.class === "panel").flatMap((n) => [...pixels(n.attrs.d)]));
+  for (const cls of ["leds-fault", "leds-hold"]) {
+    for (const p of inkOf([find(root, cls)]).keys()) assert.ok(panel.has(p), `.${cls}: ${p} has nothing under it`);
+  }
+  // Painted after the rack, or the rack would cover them.
+  const order = walk(root);
+  const rackEnd = order.findIndex((n) => classesOf(n).includes("rack")) + walk(order[order.findIndex((n) => classesOf(n).includes("rack"))]).length;
+  for (const cls of ["leds-fault", "leds-hold"]) {
+    assert.ok(order.findIndex((n) => classesOf(n).includes(cls)) >= rackEnd, `.${cls} is painted before the rack finishes`);
+  }
+});
+
+test("the fault flashes IN UNISON, which is the inversion the healthy state is defined against", () => {
+  // Healthy, no two units are ever lit together (pinned above): three services on their own clocks. A fault is
+  // one machine, so its lights agree, and agreement is what a viewer reads as a fault rather than as traffic.
+  // Structurally enforced: every error pixel lives under one group driven by one animation, so the units
+  // physically cannot be given separate schedules. A later "consistency" tidy-up that staggered them fails here.
+  const root = parseXml(mascotDefs(0, 0, "dark"));
+  const groups = walk(root).filter((n) => classesOf(n).includes("leds-fault"));
+  assert.equal(groups.length, 1, "the fault must be one group, or its units could drift apart");
+  const errorPixels = walk(root).filter((n) => n.tag === "path" && n.attrs.fill === PALETTES.dark.error);
+  assert.equal(errorPixels.length, 1, "exactly one path carries the fault colour");
+  assert.ok(pathsUnder(groups[0]).includes(errorPixels[0]), "the error path is inside the fault group");
+  const css = mascotCss();
+  assert.equal(animationsOf(css).filter((a) => a.cls === "leds-fault").length, 1, "one animation for the whole bank");
+  // The bank really does span all three units, so the unison is across the rack and not inside one unit.
+  const dividers = readGrid("sleep").map((r, y) => y).filter((y) => y >= RACK_FROM && /^ *3+ *$/.test(readGrid("sleep")[y]));
+  const rowsLit = new Set([...inkOf([find(root, "leds-fault")]).keys()].map((p) => xy(p)[1]));
+  assert.equal(rowsLit.size, dividers.length - 1, `the fault lights ${rowsLit.size} of the rack's ${dividers.length - 1} units`);
+});
+
+test("the fault runs from the jolt to the moment the headbutt lands, derived from the timeline", () => {
+  const css = mascotCss();
+  const alert = windowOf("alert");
+  const recover = windowOf("recover");
+  // Dark before and after, lit at the first instant of the alert, gone at the first instant of the recovery.
+  assert.equal(opacityAt(css, "leds-fault", alert.from - 0.001), 0, "the rack is healthy a millisecond before she wakes");
+  assert.equal(opacityAt(css, "leds-fault", alert.from + 0.001), 1, "the fault is lit the instant she wakes");
+  assert.ok(opacityAt(css, "leds-fault", recover.from - 0.001) > 0, "still faulting a millisecond before the headbutt lands");
+  assert.equal(opacityAt(css, "leds-fault", recover.from + 0.001), 0, "the headbutt fixes it at that instant, not a beat later");
+  assert.equal(opacityAt(css, "leds-fault", recover.to + 0.001), 0);
+  // It is still red through the glare, which is the beat that says nothing was fixed by the paw.
+  const glare = windowOf("glare");
+  assert.ok(opacityAt(css, "leds-fault", (glare.from + glare.to) / 2) > 0, "the glare must happen against a still-faulting rack");
+});
+
+test("the fault flashes on a 200ms cadence, which is 2.5 a second and under the three-a-second ceiling", () => {
+  // docs/spec.md section 7, criterion 2.3.1. Measured off the real keyframes, in milliseconds, so retiming the
+  // window cannot change the rate: the cadence is wall-clock, like the healthy flash.
+  const css = mascotCss();
+  const stops = stopsOf(css, "leds-fault");
+  const alert = windowOf("alert");
+  const recover = windowOf("recover");
+  const inside = stops.filter((st) => st.seconds >= alert.from - 0.001 && st.seconds < recover.from - 0.001);
+  assert.ok(inside.length >= 4, `only ${inside.length} stops inside the fault window`);
+  for (let i = 1; i < inside.length; i++) {
+    const gap = (inside[i].seconds - inside[i - 1].seconds) * 1000;
+    assert.ok(Math.abs(gap - 200) <= 1, `a fault stop is ${gap.toFixed(1)}ms after the one before it, not 200ms`);
+  }
+  const risingEdges = inside.filter((st) => Number(st.decls.opacity) === 1).length;
+  const seconds = recover.from - alert.from;
+  assert.ok(risingEdges / seconds <= 3, `the fault flashes ${(risingEdges / seconds).toFixed(2)} times a second`);
+  assert.equal(risingEdges, 9, "nine flashes across the 3.6s fault");
+  assert.ok(Math.abs(litMs(css, "leds-fault") - risingEdges * 200) <= 2, `lit for ${litMs(css, "leds-fault").toFixed(0)}ms, not ${risingEdges * 200}ms`);
+  // It dims between flashes rather than going out, and its floor is twice the healthy one. Measured on the real
+  // render: at the healthy 0.25 the dim half of every flash read as grey rather than red at both widths and on
+  // both themes, because error and accent share a lightness and only differ in hue. A fault whose colour is
+  // legible for only half its duration is a fault a reader can miss, so the floor was raised and pinned here.
+  const levels = [...new Set(stopsOf(css, "leds-fault").map((st) => Number(st.decls.opacity)))].sort((a, b) => a - b);
+  assert.deepEqual(levels, [0, 0.5, 1], "hidden outside the window, half-lit and lit inside it");
+  const healthyDim = [...new Set(stopsOf(css, "led-0").map((st) => Number(st.decls.opacity)))].sort((a, b) => a - b)[0];
+  assert.equal(levels[1], healthyDim * 2, "the faulting floor is twice the healthy one, which is where it was measured");
+});
+
+test("red and green are never on screen together, and the green bank is uncovered again after the hold", () => {
+  // The healthy bank is hidden for the whole incident rather than per-unit, because its three units run on 7s,
+  // 11s and 13s clocks that have no relation to the master loop and so cannot be gated from inside.
+  const css = mascotCss();
+  const alert = windowOf("alert");
+  const recover = windowOf("recover");
+  let faulting = 0;
+  let holding = 0;
+  for (let k = 0; k < MASTER_SECONDS * 200; k++) {
+    const t = k * 0.005 + 0.001;
+    const live = opacityAt(css, "leds-live", t);
+    const fault = opacityAt(css, "leds-fault", t);
+    const hold = opacityAt(css, "leds-hold", t);
+    assert.ok(!(live > 0 && fault > 0), `at ${t.toFixed(3)}s the rack is red and green at once`);
+    assert.ok(!(hold > 0 && fault > 0), `at ${t.toFixed(3)}s the steady bank overlaps the fault`);
+    assert.ok(!(hold > 0 && live > 0), `at ${t.toFixed(3)}s the steady bank overlaps the flicker`);
+    // Something is always showing the machine's state: it is never off.
+    assert.ok(live > 0 || fault > 0 || hold > 0, `at ${t.toFixed(3)}s nothing paints the LEDs at all`);
+    if (fault > 0) faulting++;
+    if (hold > 0) holding++;
+  }
+  assert.ok(faulting > 0 && holding > 0);
+  assert.equal(opacityAt(css, "leds-live", alert.from - 0.001), 1, "flickering before the fault");
+  assert.equal(opacityAt(css, "leds-live", alert.from + 0.001), 0);
+  assert.equal(opacityAt(css, "leds-live", recover.to - 0.001), 0, "the hold owns the recovery window");
+  assert.equal(opacityAt(css, "leds-live", recover.to + 0.001), 1, "and the independent flicker resumes after it");
+});
+
+test("the recovery holds all three green and steady, which is a state the healthy flicker cannot produce", () => {
+  const css = mascotCss();
+  const recover = windowOf("recover");
+  assert.equal(opacityAt(css, "leds-hold", recover.from - 0.001), 0);
+  assert.equal(opacityAt(css, "leds-hold", recover.from + 0.001), 1);
+  assert.equal(opacityAt(css, "leds-hold", recover.to + 0.001), 0);
+  // Steady means one level for the whole window: no stop inside it.
+  const inside = stopsOf(css, "leds-hold").filter((st) => st.seconds > recover.from + 0.001 && st.seconds < recover.to - 0.001);
+  assert.deepEqual(inside, [], "a stop inside the hold would make the steady beat flicker");
+  assert.ok(Math.abs(litMs(css, "leds-hold") - (recover.to - recover.from) * 1000) <= 2, "lit for exactly the recovery window");
+  // The point of a separate bank: the three units are never all lit at once while they are on their own clocks,
+  // so "all green together" is not a frame the healthy animation can ever reach.
+  const leds = animationsOf(css).filter((a) => /^led-\d+$/.test(a.cls));
+  assert.equal(new Set(leds.map((a) => firstLitMs(css, a.cls))).size, leds.length, "the units are staggered, so they never agree");
+});
+
+test("the healthy units keep their own clocks across the incident, so the machine looks like it kept working", () => {
+  // The cover is a group opacity, not a pause. The three units are still on 7s, 11s and 13s and are NOT gated by
+  // the master loop, so when the group reappears they are wherever their own clocks have really got to.
+  const css = mascotCss();
+  for (const cls of ["led-0", "led-1", "led-2"]) {
+    assert.notEqual(cycleSeconds(css, cls), MASTER_SECONDS, `.${cls} must not be driven by the storyline`);
+  }
+  const root = parseXml(mascotDefs(0, 0, "dark"));
+  const live = find(root, "leds-live");
+  for (const k of [0, 1, 2]) {
+    assert.ok(walk(live).some((n) => classesOf(n).includes(`led-${k}`)), `led-${k} is not inside the bank that gets covered`);
+  }
+});
+
+test("the alarm windows follow the timeline when it changes, so they are derived and not a typed pair", () => {
+  withTimeline(MOVED, () => {
+    const css = mascotCss();
+    const alert = MOVED.find((w) => w.state === "alert");
+    const recover = MOVED.find((w) => w.state === "recover");
+    assert.ok(alert && recover);
+    assert.equal(opacityAt(css, "leds-fault", alert.from - 0.001), 0);
+    assert.equal(opacityAt(css, "leds-fault", alert.from + 0.001), 1);
+    assert.equal(opacityAt(css, "leds-fault", recover.from + 0.001), 0);
+    assert.equal(opacityAt(css, "leds-hold", (recover.from + recover.to) / 2), 1);
+    assert.equal(opacityAt(css, "leds-live", (recover.from + recover.to) / 2), 0);
+    assert.equal(opacityAt(css, "leds-live", recover.to + 0.001), 1);
+    // The committed instants must be gone, or the windows were written down rather than read.
+    assert.equal(opacityAt(css, "leds-fault", 28.001), 0, "the committed 28s fault must not survive");
+    assert.equal(opacityAt(css, "leds-hold", 31.8), 0, "the committed 31.6s hold must not survive");
+  });
 });
 
 test("the ear flick and the tail flick last their own milliseconds, not a share of the cycle carrying them", () => {

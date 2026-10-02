@@ -7,7 +7,9 @@ import { MASCOT_TIMELINE } from "../src/timeline.ts";
 // the loader. The expectations are the art direction in art/ART-DIRECTION.md, coordinate by coordinate.
 
 const ART = new URL("../art/", import.meta.url);
-const POSES = ["sleep", "yawn", "stretch", "settle", "startle"];
+const NAP = ["sleep", "yawn", "stretch", "settle", "peek"];
+const ALARM = ["alert", "swat-up", "swat-down", "glare", "butt-up", "butt-down", "recover"];
+const POSES = [...NAP, ...ALARM];
 const WIDTH = 64;
 const HEIGHT = 28;
 const RACK_FROM = 11;          // rows 11 to 27 are the rack
@@ -20,12 +22,23 @@ const G = Object.fromEntries(POSES.map((p) => [p, grid(p)])) as Record<string, s
 const at = (pose: string, x: number, y: number): string => G[pose][y]?.[x] ?? " ";
 const find = (pose: string, ch: string): [number, number][] =>
   G[pose].flatMap((row, y) => [...row].flatMap((c, x): [number, number][] => (c === ch ? [[x, y]] : [])));
-/** Topmost and leftmost cat ink, ignoring the zZz (character 1). */
+/** Topmost and leftmost cat ink, ignoring the zZz and the impact sparks (character 1). */
 const catInk = (pose: string): [number, number][] =>
   G[pose].slice(0, RACK_FROM).flatMap((row, y) => [...row].flatMap((c, x): [number, number][] => ("24".includes(c) ? [[x, y]] : [])));
-/** Cat pixels (rows above the rack) that differ, not counting the sleeping pose's own zZz. */
+/** Cat pixels (rows above the rack) that differ, not counting either pose's own zZz. */
 const diff = (a: string, b: string): number =>
   G[a].slice(0, RACK_FROM).reduce((n, row, y) => n + [...row].filter((c, x) => c !== G[b][y][x] && G.sleep[y][x] !== "1" && G[b][y][x] !== "1").length, 0);
+/** Exactly which pixels differ, as "x,y:from>to". */
+const changes = (from: string, to: string): string[] =>
+  G[from].slice(0, RACK_FROM).flatMap((row, y) => [...row].flatMap((c, x) => (c === G[to][y][x] ? [] : [`${x},${y}:${c}>${G[to][y][x]}`])));
+/** The topmost row a pose paints cat ink in. */
+const top = (pose: string): number => Math.min(...catInk(pose).map(([, y]) => y));
+/** The topmost row of the skull, which is the head's own silhouette and not a raised paw. */
+const headTop = (pose: string): number =>
+  Math.min(...catInk(pose).filter(([x]) => x >= 23 && x <= 31).map(([, y]) => y));
+/** Every row the pose shows a hole (character 3) in, with the columns, so eye shape can be compared. */
+const holes = (pose: string): string[] =>
+  G[pose].slice(0, RACK_FROM).flatMap((row, y) => [...row].flatMap((c, x) => (c === "3" ? [`${x},${y}`] : [])));
 
 test("the poses on disk are exactly the poses the timeline names", () => {
   const states = [...new Set(MASCOT_TIMELINE.map((w) => w.state))].sort();
@@ -45,7 +58,7 @@ test("every pose file is exactly 64 x 28 and uses only characters in the palette
   }
 });
 
-test("the rack rows are byte-identical in all five poses, so the rack can be emitted once", () => {
+test("the rack rows are byte-identical in every pose, so the rack can be emitted once", () => {
   // Asserted, not assumed: one rack is drawn for every pose, so a difference here would be silently lost.
   const reference = G.sleep.slice(RACK_FROM);
   assert.equal(reference.length, HEIGHT - RACK_FROM);
@@ -67,12 +80,44 @@ test("no two poses are the same picture", () => {
   }
 });
 
-test("the zZz belongs to the sleeping pose only: no other pose shows a sleeping cue", () => {
-  // Poses are swapped by opacity, so a zZz that is only in the sleeping grid is on screen exactly during the sleep windows.
+test("the lightest tint is the zZz while she sleeps and an impact spark when she hits something, nowhere else", () => {
+  // Character 1 has two jobs and they cannot be confused because they are in different places. The zZz
+  // belongs to the poses she is (or is pretending to be) asleep in, and the sparks sit left of her body,
+  // over the chassis the blow landed on.
+  const ZZZ = JSON.stringify(find("sleep", "1"));
   assert.ok(find("sleep", "1").length > 0, "the sleeping pose keeps the artwork's zZz");
+  assert.equal(JSON.stringify(find("peek", "1")), ZZZ, "the peek keeps the zZz: a bubble and a zZz are what make the open eye a joke");
   for (const pose of ["yawn", "stretch", "settle"]) assert.deepEqual(find(pose, "1"), [], `${pose} carries zZz`);
-  // Startle uses the same lightest tint for its two catchlights, in the face and nowhere else.
-  for (const [x, y] of find("startle", "1")) assert.ok(x >= 24 && x <= 31 && y >= 4 && y <= 7, `startle has a stray light pixel at x${x} row ${y}`);
+  for (const pose of ALARM) {
+    const sparks = find(pose, "1");
+    const expected = ["swat-down", "butt-down"].includes(pose);
+    assert.equal(sparks.length > 0, expected, `${pose} ${expected ? "needs" : "must not have"} impact sparks`);
+    for (const [x, y] of sparks) {
+      assert.ok(x < 21 && y >= 8, `${pose}: a spark at x${x} row ${y} is not on the chassis beside her`);
+      assert.ok(at(pose, x, y) === "1" && catInk(pose).every(([cx, cy]) => Math.abs(cx - x) + Math.abs(cy - y) > 1), `${pose}: the spark at x${x} row ${y} touches body ink, which would show a seam between two paths`);
+    }
+  }
+  assert.equal(find("swat-down", "1").length, 2, "two sparks for the paw");
+  assert.equal(find("butt-down", "1").length, 2, "two sparks for the headbutt");
+});
+
+test("she lies on top of the rack and the LEDs are on its front face, so she cannot reach them", () => {
+  // The premise of the whole gag, measured from the artwork rather than asserted in prose: every lit LED is
+  // inside a rack unit, below every pixel of every pose, and the only surface any pose touches is the rack's
+  // top line. So a blow can only ever land on the chassis.
+  const lit = find("sleep", "6");
+  assert.ok(lit.length > 0, "the rack has lit LEDs");
+  const lowestCat = Math.max(...POSES.flatMap((p) => catInk(p).map(([, y]) => y)));
+  assert.equal(lowestCat, RACK_FROM - 1, "the cat rests on the rack's top line");
+  for (const [x, y] of lit) {
+    assert.ok(y > RACK_FROM, `a lit LED at row ${y} is on the rack's top line, not its front face`);
+    assert.ok(y > lowestCat + 1, `a lit LED at row ${y} is level with the cat at row ${lowestCat}`);
+  }
+  // And the blows land directly above them, which is why hitting the chassis reads as going for the lights.
+  const ledCols = [...new Set(lit.map(([x]) => x))];
+  const strike = find("swat-down", "4").filter(([x, y]) => y === RACK_FROM - 1 && x < 21).map(([x]) => x);
+  assert.ok(strike.length > 0, "the striking paw lands on the rack's top line");
+  for (const x of strike) assert.ok(x >= Math.min(...ledCols) && x <= Math.max(...ledCols) + 1, `the paw lands at x${x}, nowhere near the LED columns ${Math.min(...ledCols)} to ${Math.max(...ledCols)}`);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -128,8 +173,8 @@ test("stretch: the head is lowered one row", () => {
 });
 
 test("stretch: the mid-back is raised one row", () => {
-  const top = (pose: string, x: number): number => Math.min(...catInk(pose).filter(([cx]) => cx === x).map(([, y]) => y));
-  for (const x of [36, 37, 38]) assert.equal(top("stretch", x) , top("sleep", x) - 1, `back at x${x}`);
+  const rowTop = (pose: string, x: number): number => Math.min(...catInk(pose).filter(([cx]) => cx === x).map(([, y]) => y));
+  for (const x of [36, 37, 38]) assert.equal(rowTop("stretch", x), rowTop("sleep", x) - 1, `back at x${x}`);
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -153,50 +198,182 @@ test("settle: it is a different picture from both neighbours, and a small change
 });
 
 // ---------------------------------------------------------------------------------------------
-// Startle: ears up a row, eyes open, the body a pixel higher, the only waking pose
+// Peek: two pixels, which is the whole joke
 // ---------------------------------------------------------------------------------------------
 
-test("startle: the ears snap up one row, to row 3", () => {
-  assert.deepEqual([at("startle", 24, 3), at("startle", 30, 3)], ["2", "2"]);
-  assert.equal(Math.min(...catInk("startle").map(([, y]) => y)), 3);
-  assert.equal(Math.min(...catInk("sleep").map(([, y]) => y)), 4);
+test("peek: exactly two pixels of the sleeping pose change, and they are one eye opening", () => {
+  // The brief's budget, held literally. Anything more and the cat has woken up, which is the opposite
+  // of the gag: the zZz and the nose bubble must still say deep sleep.
+  assert.deepEqual(changes("sleep", "peek"), ["29,6:2>3", "30,6:2>3"]);
 });
 
-test("startle: each closed slit becomes an open eye, a dark pixel with a lighter pixel beside or above it", () => {
-  const lighter = find("startle", "1");
-  assert.equal(lighter.length, 2, "one catchlight per eye");
-  for (const [x, y] of lighter) {
-    const touchesDark = [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]].some(([nx, ny]) => at("startle", nx, ny) === "3");
-    assert.ok(touchesDark, `the light pixel at x${x} row ${y} is not next to a dark one`);
+test("peek: the open eye is a square hole and the other stays a one-row slit, so only one eye opened", () => {
+  const eye = (pose: string, x0: number): string[] => [x0, x0 + 1].flatMap((x) => [5, 6, 7].flatMap((y) => (at(pose, x, y) === "3" ? [`${x},${y}`] : [])));
+  assert.equal(eye("sleep", 25).length, 2, "sleep's left eye is a two-pixel slit");
+  assert.equal(eye("sleep", 29).length, 2, "sleep's right eye is a two-pixel slit");
+  assert.deepEqual(eye("peek", 25), eye("sleep", 25), "the left eye must not open as well");
+  assert.deepEqual(eye("peek", 29), ["29,6", "29,7", "30,6", "30,7"], "the right eye is a 2 x 2 hole");
+  // Symmetric about its own socket, so the pupil has no sideways bias: she is looking straight out.
+  const xs = eye("peek", 29).map((p) => Number(p.split(",")[0]));
+  const ys = eye("peek", 29).map((p) => Number(p.split(",")[1]));
+  assert.equal(new Set(xs).size, 2);
+  assert.equal(new Set(ys).size, 2);
+});
+
+test("peek: the ears, the nose and the zZz are untouched, so nothing else says she woke", () => {
+  assert.deepEqual([at("peek", 24, 4), at("peek", 30, 4)], ["2", "2"], "ears still up");
+  assert.equal(at("peek", 27, 8), "4", "nose unchanged");
+  assert.equal(top("peek"), top("sleep"), "the silhouette does not move");
+  assert.deepEqual(find("peek", "1"), find("sleep", "1"), "the zZz is unchanged");
+});
+
+// ---------------------------------------------------------------------------------------------
+// The alarm: ears back and eyes open, then two blows with a paw, then a headbutt
+// ---------------------------------------------------------------------------------------------
+
+test("every waking pose drops the zZz and pins the ears back, so the two 1px tips leave the silhouette", () => {
+  // Ears back is the one cue that survives at phone width, where an eye is two device pixels. It is drawn as
+  // the two tips folding into a flat skull: the silhouette loses its points instead of growing new ink.
+  for (const pose of ALARM) {
+    const upright = ["recover"].includes(pose);
+    const tips = [at(pose, 24, 4), at(pose, 30, 4)].filter((c) => c === "2").length;
+    assert.equal(tips === 2, upright, `${pose} ${upright ? "needs its ears up again" : "must have its ears pinned"}`);
+    assert.deepEqual(find(pose, "1").filter(([x]) => x >= 45), [], `${pose} still carries the zZz`);
   }
-  // The open eye is taller than the closed slit it replaces, so the change is unmistakable.
-  const eye = (x0: number): number => [x0, x0 + 1].flatMap((x) => [3, 4, 5, 6, 7].map((y) => at("startle", x, y))).filter((c) => c === "3").length;
-  assert.ok(eye(25) >= 3 && eye(29) >= 3, "each eye has at least three dark pixels");
-  assert.equal(find("startle", "3").filter(([, y]) => y < RACK_FROM).length, 6, "six dark eye pixels, no stray ones");
-});
-
-test("startle: the whole body is one pixel higher, so it clears the ground", () => {
-  const bottom = (pose: string): number => Math.max(...catInk(pose).map(([, y]) => y));
-  assert.equal(bottom("sleep"), 10);
-  assert.equal(bottom("startle"), 9);
-  assert.equal(at("startle", 23, 9), "4", "the paws came up with it");
-});
-
-test("startle is the sleeping cat one row higher, with only the eyes redrawn", () => {
-  // Everything but the eyes moved up exactly one row: no other pixel of the cat was touched.
-  for (let y = 4; y <= 10; y++) {
-    for (let x = 0; x < WIDTH; x++) {
-      if (G.sleep[y][x] === "1") continue;                                   // the zZz is gone
-      const insideEyes = x >= 25 && x <= 30 && (y - 1 === 5 || y - 1 === 6);  // the face pixels that were redrawn
-      if (insideEyes) continue;
-      assert.equal(at("startle", x, y - 1), G.sleep[y][x], `x${x}: sleep row ${y} should be startle row ${y - 1}`);
-    }
+  // Pinned means flat, not missing: the skull's top row covers the same columns as the row under it,
+  // holes included. The ears-up poses are the contrast, where the top row is only the two tips.
+  const skull = (pose: string, y: number): number[] =>
+    [...Array(11).keys()].map((i) => i + 22).filter((x) => at(pose, x, y) !== " ");
+  for (const pose of ["alert", "swat-up", "swat-down", "glare"]) {
+    const t = headTop(pose);
+    assert.deepEqual(skull(pose, t), skull(pose, t + 1), `${pose}: the skull's top row is not flat`);
+  }
+  for (const pose of ["sleep", "peek", "recover"]) {
+    const t = headTop(pose);
+    assert.deepEqual(skull(pose, t), [24, 30], `${pose}: the ears should be two separate tips`);
+    assert.ok(skull(pose, t + 1).length > 2, `${pose}: the row under the tips should be the whole skull`);
   }
 });
 
-test("a pose changes little: yawn, settle and stretch move a handful of cat pixels, not the picture", () => {
-  // Shipped idle animations move one or two pixels; a pose that is obviously different in the grid diff is too much.
-  // The yawn is the one moment the silhouette may break. Measured: yawn 16, settle 11, stretch 32 of the cat's 103 ink pixels.
-  const limits: Record<string, number> = { yawn: 20, settle: 14, stretch: 36 };
-  for (const [pose, limit] of Object.entries(limits)) assert.ok(diff(pose, "sleep") <= limit, `${pose} differs in ${diff(pose, "sleep")} pixels, limit ${limit}`);
+test("alert: both eyes open into square holes and the body does not move, so the jolt is read on the face", () => {
+  for (const x0 of [25, 29]) for (const y of [6, 7]) for (const x of [x0, x0 + 1]) {
+    assert.equal(at("alert", x, y), "3", `alert eye pixel x${x} row ${y}`);
+  }
+  assert.equal(holes("alert").length, 8, "two 2 x 2 eyes and nothing else dark");
+  // The body is planted: she is braced to hit something, not leaping. Rows 7 to 10 are sleep's, byte for byte.
+  for (let y = 7; y < RACK_FROM; y++) assert.equal(G.alert[y], G.sleep[y], `alert row ${y} moved`);
+});
+
+test("swat-up: a paw is raised clear above the skull, on a forearm that reaches the body", () => {
+  const paw = find("swat-up", "4").filter(([x, y]) => y <= 5 && x < 23);
+  assert.ok(paw.length >= 2, "the raised paw is at least two pixels of accent, like the tucked paws it came from");
+  const pawRow = Math.max(...paw.map(([, y]) => y));
+  assert.ok(pawRow < headTop("swat-up"), `the paw is on row ${pawRow}, not above the skull at row ${headTop("swat-up")}`);
+  // Connected all the way down: a floating paw is not a limb.
+  const ink = new Set(catInk("swat-up").map(([x, y]) => `${x},${y}`));
+  for (const [x, y] of paw) {
+    let reached = false;
+    const seen = new Set<string>();
+    const walk = (p: string): void => {
+      if (seen.has(p) || !ink.has(p)) return;
+      seen.add(p);
+      const [px, py] = p.split(",").map(Number);
+      if (py >= 8) reached = true;
+      for (const n of [`${px - 1},${py}`, `${px + 1},${py}`, `${px},${py - 1}`, `${px},${py + 1}`]) walk(n);
+    };
+    walk(`${x},${y}`);
+    assert.ok(reached, `the raised paw at x${x} row ${y} is not joined to the body`);
+  }
+  assert.deepEqual([at("swat-up", 23, 10), at("swat-up", 24, 10)], ["2", "2"], "the tucked paw has left row 10");
+  assert.deepEqual([at("swat-up", 27, 10), at("swat-up", 28, 10)], ["4", "4"], "the other front paw stays where it was");
+});
+
+test("swat-down: the same foreleg is flat on the chassis, further left than any reach in the nap", () => {
+  const reach = (pose: string): number => Math.min(...catInk(pose).filter(([, y]) => y === RACK_FROM - 1).map(([x]) => x));
+  assert.ok(reach("swat-down") < reach("stretch"), `the blow reaches x${reach("swat-down")}, no further than the stretch at x${reach("stretch")}`);
+  assert.deepEqual([at("swat-down", 18, 10), at("swat-down", 19, 10)], ["4", "4"], "the paw itself is accent, as every paw in this artwork is");
+  assert.deepEqual([at("swat-down", 23, 10), at("swat-down", 24, 10)], ["2", "2"], "the same paw is the one that left its tucked place");
+  assert.deepEqual([at("swat-down", 27, 10), at("swat-down", 28, 10)], ["4", "4"], "the other front paw stays where it was");
+});
+
+test("the blow is one limb moving: only the foreleg and its sparks differ between the two halves", () => {
+  // Isolating the moving part is what makes 400ms read as a deliberate whack rather than the whole cat
+  // twitching. Everything above row 4 and right of x24 must be identical in the two halves.
+  for (const c of changes("swat-up", "swat-down")) {
+    const [x, y] = c.split(":")[0].split(",").map(Number);
+    assert.ok(x <= 24, `the blow changes x${x} row ${y}, which is not the near foreleg`);
+  }
+  const travel = Math.max(...find("swat-down", "4").filter(([x]) => x < 23).map(([, y]) => y))
+    - Math.min(...find("swat-up", "4").filter(([x]) => x < 23).map(([, y]) => y));
+  assert.ok(travel >= 5, `the paw travels ${travel} art pixels, which is too small a swing to read`);
+});
+
+test("glare: the eyes narrow to a hard slit one row above the sleeping one, and the paw is back under her", () => {
+  assert.deepEqual([25, 26, 29, 30].map((x) => at("glare", x, 6)), ["3", "3", "3", "3"], "slits on row 6");
+  assert.deepEqual([25, 26, 29, 30].map((x) => at("glare", x, 7)), ["2", "2", "2", "2"], "nothing left on row 7");
+  assert.equal(holes("glare").length, 4, "narrowed: half the dark pixels the alert has");
+  assert.ok(holes("glare").length < holes("alert").length);
+  assert.equal(G.glare[10], G.sleep[10], "the paw is tucked again, so the stillness is the beat");
+  assert.deepEqual(find("glare", "1"), [], "nothing is being hit during the glare");
+});
+
+test("butt-up: the head rears higher than the cat ever reaches otherwise, on a neck that fills in behind it", () => {
+  assert.equal(headTop("butt-up"), Math.min(...POSES.map(headTop)), "the reared head is the highest the skull gets");
+  assert.ok(headTop("butt-up") <= headTop("alert") - 2, `the head rears from row ${headTop("alert")} to row ${headTop("butt-up")}, which is less than two pixels`);
+  // The neck is solid behind it: a head that rears off a hole would tear away from the body.
+  for (let y = headTop("butt-up"); y < RACK_FROM; y++) {
+    assert.ok(catInk("butt-up").some(([x, cy]) => cy === y && x >= 23 && x <= 31), `butt-up row ${y} is empty under the reared head`);
+  }
+  assert.equal(holes("butt-up").length, 8, "the eyes stay wide while she aims");
+});
+
+test("butt-down: the head is driven three rows down from the rear, eyes screwed shut, sparks on the chassis", () => {
+  assert.equal(headTop("butt-down") - headTop("butt-up"), 3, "the swing of the headbutt");
+  assert.equal(headTop("butt-down"), Math.max(...POSES.map(headTop)), "the driven head is the lowest the skull gets");
+  // Shut, not open: a cat squeezes its eyes closed on impact, and the slits read as effort.
+  assert.deepEqual([25, 26, 29, 30].map((x) => at("butt-down", x, 7)), ["3", "3", "3", "3"]);
+  assert.equal(holes("butt-down").length, 4);
+  assert.deepEqual([at("butt-down", 24, 4), at("butt-down", 30, 4)], [" ", " "], "no ear tips: the ears are flat against the skull");
+  assert.equal(find("butt-down", "1").length, 2, "the impact sparks");
+});
+
+test("recover: ears up, both eyes open, no zZz yet, and otherwise the sleeping cat", () => {
+  // It is deliberately the in-between back to sleep: the only things that change at the cut are the eyes
+  // closing and the zZz returning, so the loop joins without a jolt.
+  assert.deepEqual([at("recover", 24, 4), at("recover", 30, 4)], ["2", "2"], "ears up again");
+  assert.deepEqual(find("recover", "1"), [], "she is awake, so there is no zZz");
+  for (const x0 of [25, 29]) for (const y of [6, 7]) for (const x of [x0, x0 + 1]) {
+    assert.equal(at("recover", x, y), "3", `recover eye pixel x${x} row ${y}`);
+  }
+  assert.deepEqual(changes("recover", "sleep").map((c) => c.split(":")[0]).filter((p) => Number(p.split(",")[0]) < 45), ["25,6", "26,6", "29,6", "30,6"]);
+});
+
+test("the alarm reads as an arc: the skull rises, slams, and comes back level", () => {
+  // The sequence a viewer actually sees, as rows, in timeline order. A pose drawn at the wrong height
+  // would flatten the arc without failing any single-pose test.
+  const order = ["alert", "swat-up", "swat-down", "glare", "butt-up", "butt-down", "recover"];
+  const rows = order.map(headTop);
+  assert.deepEqual(rows, [5, 5, 5, 5, 3, 6, 4]);
+  assert.ok(rows[4] < rows[3], "the head must rear before it strikes");
+  assert.ok(rows[5] > rows[4] + 2, "the strike must travel");
+  assert.ok(rows[6] < rows[5], "and she must lift her head again afterwards");
+});
+
+test("a nap pose changes little; an alarm pose may change more, but never redraws the cat", () => {
+  // Shipped idle animations move one or two pixels, so a nap pose that is obviously different in the grid
+  // diff is too much. The alarm is a gesture rather than an idle, so its budget is larger on purpose, and
+  // a floor is added: a blow that moved almost nothing would not read at all.
+  const measured: Record<string, number> = {
+    yawn: 20, settle: 14, stretch: 36, peek: 2,
+    alert: 12, "swat-up": 20, "swat-down": 22, glare: 16, "butt-up": 32, "butt-down": 16, recover: 6,
+  };
+  assert.deepEqual(Object.keys(measured).sort(), POSES.filter((p) => p !== "sleep").sort());
+  for (const [pose, limit] of Object.entries(measured)) {
+    assert.ok(diff(pose, "sleep") <= limit, `${pose} differs in ${diff(pose, "sleep")} pixels, limit ${limit}`);
+  }
+  const ink = catInk("sleep").length;
+  for (const pose of POSES) assert.ok(diff(pose, "sleep") < ink / 2, `${pose} redraws more than half the cat`);
+  for (const pose of ["swat-up", "swat-down", "butt-up", "butt-down"]) {
+    assert.ok(diff(pose, "sleep") >= 10, `${pose} differs in only ${diff(pose, "sleep")} pixels, which is below what reads as a blow`);
+  }
 });
