@@ -20,7 +20,7 @@ export type Session = {
   rows: Row[];
   /** Rows above the first rule: the Mascot's rows, then the role and the cwd. */
   headerRows: number;
-  /** Where the Banner geometry goes: beside the Mascot, centred on it. */
+  /** Where the Banner geometry goes: beside the Mascot, sharing its ground plane. */
   bannerCol: number;
   bannerRow: number;
   /** First of the SCAN_ROWS rows held empty for the Scan Sweep geometry. */
@@ -147,7 +147,12 @@ export function composeSession(c: Content, a: Activity): Session {
   if (bannerEnd > COLS) {
     throw new Error(`the banner for ${JSON.stringify(c.handle)} needs ${bannerEnd} columns, the Session is ${COLS}; use a shorter handle`);
   }
-  const bannerRow = Math.floor((MASCOT_ROWS - BANNER_ROWS) / 2);
+  // GROUNDED, not centred. The Mascot is a cat on a rack whose bottom row is a visible base line,
+  // so a wordmark centred on the Mascot's band hangs above that line with nothing under it and
+  // reads as floating. Bottom-aligning the two makes the Banner's last row and the rack's base one
+  // ground plane, and both rendered side by side the grounded one is plainly right. Derived from
+  // the two bands rather than written down, so a Banner of any height still lands on the floor.
+  const bannerRow = MASCOT_ROWS - BANNER_ROWS;
 
   // Header. The Mascot and the Banner are geometry, so nothing is drawn as glyphs over their
   // rows. The Banner's middle row still carries the handle as a text-only run, so the

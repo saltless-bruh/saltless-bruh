@@ -8,9 +8,9 @@ import type { Activity } from "../src/session.ts";
 import { assertFits, rowsToText, renderRows, charsUsed } from "../src/rows.ts";
 import type { Row, Run } from "../src/rows.ts";
 import { BASELINE_IN_ROW, CELL_H, CELL_W, COLS, FONT_SIZE, PAD } from "../src/grid.ts";
-import { MASCOT_COLS, MASCOT_ROWS } from "../src/mascot.ts";
+import { MASCOT_COLS, MASCOT_ROWS, mascotDefs } from "../src/mascot.ts";
 import { MASCOT_TIMELINE as POSES_TIMELINE } from "../src/timeline.ts";
-import { BANNER_ROWS, bannerWidthCols } from "../src/banner.ts";
+import { BANNER_ROWS, bannerLetters, bannerWidthCols } from "../src/banner.ts";
 import { assertCovered } from "../src/font.ts";
 import { MASCOT_TIMELINE } from "../src/timeline.ts";
 import { WINDOW_DAYS } from "../src/activity.ts";
@@ -298,11 +298,26 @@ test("a role the width of the whole Session fits and one column more is rejected
   assert.throws(() => composeSession(c, activity), /needs 73 columns/);
 });
 
-test("the banner sits two columns clear of the Mascot and is centred on it", () => {
-  const { bannerCol, bannerRow } = composeSession(loadContent(), activity);
+test("the banner sits two columns clear of the Mascot and stands on its ground plane", () => {
+  const c = loadContent();
+  const { bannerCol, bannerRow } = composeSession(c, activity);
   assert.equal(bannerCol, MASCOT_COLS + 2);
   assert.ok(bannerRow >= 0 && bannerRow + BANNER_ROWS <= MASCOT_ROWS, "the banner must stay beside the Mascot");
-  assert.equal(bannerRow, MASCOT_ROWS - (bannerRow + BANNER_ROWS), "as many free rows above the banner as below it");
+  // GROUNDED, not centred. The Mascot is a cat on a rack whose bottom row is a visible base line,
+  // so a wordmark centred on the band hangs over nothing and reads as floating. This says the two
+  // bands END together and says nothing about where the Banner starts, so it holds for a Banner of
+  // any height: the implementation may not satisfy it by writing down a row number.
+  assert.equal(bannerRow + BANNER_ROWS, MASCOT_ROWS, "the Banner's last row must be the Mascot's last row");
+  assert.ok(bannerRow > MASCOT_ROWS - (bannerRow + BANNER_ROWS), "a centred Banner would leave as much room below it as above");
+
+  // And so does the ink, read out of the geometry the two actually emit rather than from the rows.
+  // Both are built from `M x y h w v h h-w z` rectangles, so the lowest edge is the largest y + v.
+  const bottomOf = (d: string): number =>
+    Math.max(...[...d.matchAll(/M[\d.]+ ([\d.]+)h-?[\d.]+v([\d.]+)/g)].map((m) => Number(m[1]) + Number(m[2])));
+  const ground = PAD + MASCOT_ROWS * CELL_H;
+  const banner = bannerLetters(c.handle, bannerCol, bannerRow).map((l) => l.d).join("");
+  assert.equal(bottomOf(banner), ground, "the wordmark's lowest ink is not on the rack's base line");
+  assert.equal(bottomOf(mascotDefs(0, 0, "dark")), ground, "the rack's lowest ink is not where the band ends");
 });
 
 test("a handle whose banner fills the space beside the Mascot fits and one column more does not", () => {
