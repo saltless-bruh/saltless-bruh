@@ -8,7 +8,7 @@ import { pathToFileURL } from "node:url";
 import { build } from "../src/build.ts";
 import type { Transport } from "../src/activity.ts";
 import { TOKEN_ENV } from "../src/activity.ts";
-import { COMMITTED_FORBIDDEN_NAMES, FORBIDDEN_NAMES, loadContent } from "../src/content.ts";
+import { COMMITTED_FORBIDDEN_NAMES, FORBIDDEN_NAMES, FORBIDDEN_NAMES_ENV, loadContent } from "../src/content.ts";
 import { FORBIDDEN_GLYPHS } from "../src/font.ts";
 import {
   GENERATED, MIN_TRANSCRIPT_ROWS, SIZE_BUDGET_BYTES, SVG_CHECK_SCRIPT,
@@ -593,6 +593,91 @@ test("absent is neither pass nor fail, and it has its own exit code", () => {
   assert.equal(exitCodeFor([result("a", "absent"), result("b", "fail")]), 1);
 });
 
+/**
+ * The remedy block a path or a gate name is listed under, by that block's heading.
+ *
+ * The headings are what a reader acts on, so the tests below assert WHICH block a thing lands in
+ * rather than only that the report mentions it somewhere.
+ */
+const HEADED = /^ {2}[A-Z][A-Z ]*:/;
+
+const remedyBlocks = (printed: string): string[] =>
+  printed.split("\n\n").filter((b) => HEADED.test(b));
+
+function blockFor(printed: string, needle: string): string | null {
+  const found = remedyBlocks(printed).find((b) => b.split("\n")[0].includes(needle));
+  return found === undefined ? null : found.slice(0, found.indexOf(":")).trim();
+}
+
+const blockHeadings = (printed: string): string[] =>
+  remedyBlocks(printed).map((b) => b.slice(0, b.indexOf(":")).trim());
+
+test("a built tree with no name list configured is never told to run a build", async () => {
+  // The exact failure this reason exists for. Every generated file is there, thirteen gates pass,
+  // one is absent because an environment variable is unset, and the old summary said
+  // "NOT BUILT YET. Run `npm run build`". That is the one command that cannot help: somebody
+  // following it runs a build, sees nothing change, and goes looking for a bug in the build.
+  const dir = await builtTree();
+  const results = runGates(url(dir), { typecheck: false, names: [] });
+  assert.deepEqual(results.filter((r) => r.status === "fail"), []);
+  assert.deepEqual(results.filter((r) => r.status === "absent").map((r) => r.gate), ["forbidden names"]);
+  const printed = report(results);
+  assert.deepEqual(blockHeadings(printed), ["NOT CONFIGURED"]);
+  assert.ok(!printed.includes("npm run build"), "the summary tells a reader to run a build that cannot help");
+  assert.ok(!printed.includes("NOT BUILT"), "the summary claims output is missing when all of it is there");
+  assert.match(printed, /BUILDING AGAIN WILL NOT CHANGE THIS/, "the summary does not rule out the wrong remedy");
+  assert.match(printed, new RegExp(FORBIDDEN_NAMES_ENV), "the summary does not name the variable to set");
+  assert.equal(exitCodeFor(results), 3);
+});
+
+test("a mixed run reports every cause, not whichever it looked at first", () => {
+  // Nothing built, nothing configured, and content.json and package.json absent as well: three
+  // causes with three different remedies. A summary that named one of them would be wrong about
+  // the other two, and a reader cannot tell a wrong remedy from a broken build.
+  const dir = scratch();
+  const results = runGates(url(dir), { names: [] });
+  const printed = report(results);
+  assert.deepEqual(blockHeadings(printed).sort(), ["MISSING FROM THE CHECKOUT", "NOT BUILT", "NOT CONFIGURED"]);
+  assert.equal(blockFor(printed, GENERATED.dark), "NOT BUILT");
+  assert.equal(blockFor(printed, GENERATED.cache), "NOT BUILT");
+  assert.equal(blockFor(printed, "forbidden names"), "NOT CONFIGURED");
+  assert.equal(exitCodeFor(results), 3);
+});
+
+test("a file that ships with the repository is never reported as something a build would write", () => {
+  // The same mistake one level down, and it was in here: content.json is the owner's copy and
+  // package.json is the package. A build writes neither, so "run the build" is the wrong remedy
+  // for both, and git is the right one.
+  const dir = scratch();
+  const printed = report(runGates(url(dir), { names: [] }));
+  for (const shipped of ["content.json", "package.json"]) {
+    assert.equal(blockFor(printed, shipped), "MISSING FROM THE CHECKOUT", `${shipped} is in the wrong block`);
+  }
+  for (const generated of [GENERATED.dark, GENERATED.light, GENERATED.readme, GENERATED.cache]) {
+    assert.equal(blockFor(printed, generated), "NOT BUILT", `${generated} is in the wrong block`);
+  }
+});
+
+test("every absence carries a reason, and every reason present gets its own block", () => {
+  // A reason added without a block would be an absence the summary silently drops.
+  const dir = scratch();
+  const results = runGates(url(dir), { names: [] });
+  const absences = results.filter((r) => r.status === "absent");
+  assert.ok(absences.length > 0, "premise: an empty tree has absences");
+  for (const r of absences) {
+    assert.ok(r.reason !== undefined, `${r.gate} is absent and does not say why`);
+  }
+  assert.equal(blockHeadings(report(results)).length, new Set(absences.map((r) => r.reason)).size);
+  // And a pass or a fail never claims a reason, which would read as an absence in a summary.
+  for (const r of results.filter((x) => x.status !== "absent")) {
+    assert.equal(r.reason, undefined, `${r.gate} is ${r.status} and carries an absence reason`);
+  }
+});
+
+test("the variable the summary names is the variable the generator reads", () => {
+  assert.equal(FORBIDDEN_NAMES_ENV, "PROFILE_FORBIDDEN_NAMES");
+});
+
 test("an unbuilt tree says what has not been built yet, not that something is wrong", () => {
   // This is the state the repository is in until the first authenticated refresh, and it is the
   // one moment somebody needs the two apart: a gate that failed identically for both would be
@@ -602,7 +687,8 @@ test("an unbuilt tree says what has not been built yet, not that something is wr
   assert.equal(exitCodeFor(results), 3);
   assert.deepEqual(results.filter((r) => r.status === "fail"), [], "nothing is wrong with a tree that has not been built");
   const printed = report(results);
-  assert.match(printed, /NOT BUILT YET/);
+  assert.match(printed, /NOT EVERYTHING WAS CHECKED/);
+  assert.match(printed, /NOT BUILT:/);
   for (const path of [GENERATED.dark, GENERATED.light, GENERATED.readme, GENERATED.cache]) {
     assert.ok(printed.includes(path), `${path} is not named as one of the things not built yet`);
   }

@@ -51,14 +51,20 @@ export type Content = {
 export const COMMITTED_FORBIDDEN_NAMES: string[] = ["Firstname Lastname"];
 
 /**
+ * The one place the private half of the list is read from. Named, so the message that tells a
+ * person which variable to set cannot drift from the variable that is actually read.
+ */
+export const FORBIDDEN_NAMES_ENV = "PROFILE_FORBIDDEN_NAMES";
+
+/**
  * The private half: real names, from the environment, never from a committed file.
  *
- * Set PROFILE_FORBIDDEN_NAMES to a comma-separated list, locally and in CI. Unset or empty
- * changes nothing here, and `scripts/gates.ts` reports the tree scan as unchecked rather than as
- * clean when this is empty, because the two are not the same thing.
+ * Set it to a comma-separated list, locally and in CI. Unset or empty changes nothing here, and
+ * `scripts/gates.ts` reports the tree scan as unchecked rather than as clean when this is empty,
+ * because the two are not the same thing.
  */
 export const CONFIGURED_FORBIDDEN_NAMES: string[] =
-  (process.env.PROFILE_FORBIDDEN_NAMES ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  (process.env[FORBIDDEN_NAMES_ENV] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 
 /**
  * Strings that must never reach a published file (ADR 0001).

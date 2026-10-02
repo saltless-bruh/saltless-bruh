@@ -34,7 +34,7 @@ import { homedir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { TOKEN_ENV } from "../src/activity.ts";
-import { COMMITTED_FORBIDDEN_NAMES, CONFIGURED_FORBIDDEN_NAMES, FORBIDDEN_NAMES } from "../src/content.ts";
+import { COMMITTED_FORBIDDEN_NAMES, CONFIGURED_FORBIDDEN_NAMES, FORBIDDEN_NAMES, FORBIDDEN_NAMES_ENV } from "../src/content.ts";
 import { FORBIDDEN_GLYPHS } from "../src/font.ts";
 
 // ---------------------------------------------------------------------------------------------
@@ -618,23 +618,53 @@ export const GENERATED = {
 };
 
 export type GateStatus = "pass" | "fail" | "absent";
+
+/**
+ * Why an absent gate had nothing to read. These are two different problems with two different
+ * remedies, and the summary states which one it found rather than assuming.
+ *
+ * `absent` carried only the first meaning at first, and the summary said so in words: a run over a
+ * tree where every generated file existed and only the name list was unconfigured still printed
+ * "NOT BUILT YET. Run `npm run build`", which is the one command that cannot help. Somebody
+ * following it runs a build, sees nothing change, and goes looking for a bug in the build. That is
+ * the exact failure the third state exists to prevent, reintroduced by letting one label mean two
+ * things, so the label now carries the reason.
+ *
+ * There is one reason per REMEDY, which is what decides how many there are. Writing the first two
+ * exposed two more instances of the same mistake in this file: `content.json` and `package.json`
+ * were reported as "not built yet", and a build creates neither. They ship with the repository, so
+ * their absence means a broken checkout and their remedy is git, not a build.
+ */
+export type AbsentReason = "unbuilt" | "unconfigured" | "missing";
+
 export type GateResult = {
   gate: string;
   status: GateStatus;
   /** One line of evidence that the gate looked at something, for a report a person skims. */
   detail: string;
   problems: string[];
+  /** Only when absent. Omitted elsewhere; `unbuilt` is the fallback so an older result still reads. */
+  reason?: AbsentReason;
+  /** Only when absent for want of output: the paths that are not there, for the summary to name. */
+  missing?: string[];
 };
 
 const pass = (gate: string, detail: string): GateResult => ({ gate, status: "pass", detail, problems: [] });
 const fail = (gate: string, detail: string, problems: string[]): GateResult => ({ gate, status: "fail", detail, problems });
+/** Absent because the output it reads has not been generated yet. A build fixes this. */
 const absent = (gate: string, missing: string[]): GateResult =>
-  ({ gate, status: "absent", detail: `not built yet: ${missing.join(", ")}`, problems: [] });
+  ({ gate, status: "absent", detail: `not built yet: ${missing.join(", ")}`, problems: [], reason: "unbuilt", missing });
+/** Absent because the configuration it checks against is not set. A build does NOT fix this. */
+const unconfigured = (gate: string, detail: string): GateResult =>
+  ({ gate, status: "absent", detail, problems: [], reason: "unconfigured" });
+/** Absent because a file that ships with the repository is not there. A build does NOT write it. */
+const missingInput = (gate: string, missing: string[]): GateResult =>
+  ({ gate, status: "absent", detail: `missing from the checkout: ${missing.join(", ")}`, problems: [], reason: "missing", missing });
 
 const verdict = (gate: string, detail: string, problems: string[]): GateResult =>
   problems.length === 0 ? pass(gate, detail) : fail(gate, detail, problems);
 
-export function runGates(root: URL, o: { typecheck?: boolean } = {}): GateResult[] {
+export function runGates(root: URL, o: { typecheck?: boolean; names?: string[] } = {}): GateResult[] {
   const dir = dirOf(root);
   const abs = (rel: string): string => join(dir, rel);
   const there = (rel: string): boolean => existsSync(abs(rel));
@@ -643,23 +673,24 @@ export function runGates(root: URL, o: { typecheck?: boolean } = {}): GateResult
 
   // --- the tree, which is always there to scan -----------------------------------------------
   const files = listFiles(root);
-  if (CONFIGURED_FORBIDDEN_NAMES.length === 0) {
-    // ABSENT and not PASS. The committed half of the list is a public demonstration value, so a
-    // tree scan for it would report this gate's own source and the three test files that exercise
-    // it, and nothing about anybody's privacy. With no private names configured there is nothing
-    // to look for, and "nothing was checked" must not read as "the tree is clean" (ADR 0001 says
-    // this is enforced by a check rather than by discipline, which means the check has to exist).
-    results.push({
-      gate: "forbidden names",
-      status: "absent",
-      detail: "no private names configured: set PROFILE_FORBIDDEN_NAMES, locally and as a repository secret, so this gate has something to scan for",
-      problems: [],
-    });
+  // Injectable so a test can drive both halves of the fork. Production reads the environment.
+  const names = o.names ?? CONFIGURED_FORBIDDEN_NAMES;
+  if (names.length === 0) {
+    // ABSENT, and absent for want of CONFIGURATION rather than of output. The committed half of
+    // the list is a public demonstration value, so a tree scan for it would report this gate's own
+    // source and the three test files that exercise it, and nothing about anybody's privacy. With
+    // no private names configured there is nothing to look for, and "nothing was checked" must not
+    // read as "the tree is clean" (ADR 0001 says this is enforced by a check rather than by
+    // discipline, which means the check has to exist).
+    results.push(unconfigured(
+      "forbidden names",
+      `no private names configured: set ${FORBIDDEN_NAMES_ENV}, locally and as a repository secret, so this gate has something to scan for`,
+    ));
   } else {
-    const hits = scanTreeForForbiddenNames(root, CONFIGURED_FORBIDDEN_NAMES);
+    const hits = scanTreeForForbiddenNames(root, names);
     results.push(verdict(
       "forbidden names",
-      `${files.length} files scanned for ${CONFIGURED_FORBIDDEN_NAMES.length} configured name(s)`,
+      `${files.length} files scanned for ${names.length} configured name(s)`,
       hits.map((h) => `${h} carries a forbidden name (ADR 0001)`),
     ));
   }
@@ -675,14 +706,14 @@ export function runGates(root: URL, o: { typecheck?: boolean } = {}): GateResult
     return found === 0 ? [] : [`${rel} carries ${found} of the committed placeholder name(s), so a placeholder reached a published surface`];
   });
   results.push(visible.length === 0
-    ? absent("placeholder names", [GENERATED.readme, "content.json"])
+    ? absent("placeholder names", [GENERATED.dark, GENERATED.light, GENERATED.readme])
     : verdict("placeholder names", visible.join(", "), placeholders));
 
   // --- content.json, the one visible surface that exists before a build ----------------------
   if (there("content.json")) {
     results.push(verdict("dashes in content.json", "content.json", findDashes(read("content.json")).map((d) => `content.json ${d}`)));
   } else {
-    results.push(absent("dashes in content.json", ["content.json"]));
+    results.push(missingInput("dashes in content.json", ["content.json"]));
   }
 
   // --- the generated output ------------------------------------------------------------------
@@ -767,7 +798,7 @@ export function runGates(root: URL, o: { typecheck?: boolean } = {}): GateResult
   if (o.typecheck === false) {
     // Left out on purpose by the caller; not reported, so nothing reads as checked that was not.
   } else if (!there("package.json")) {
-    results.push(absent("typecheck", ["package.json"]));
+    results.push(missingInput("typecheck", ["package.json"]));
   } else {
     const tsc = runTypecheck(root);
     results.push(tsc.ok ? pass("typecheck", "npm run typecheck exited 0") : fail("typecheck", "npm run typecheck", [tsc.output]));
@@ -793,12 +824,56 @@ export function report(results: GateResult[]): string {
   const tail = code === 1
     ? "\nGATES FAILED. Each line above says what is wrong and in which file."
     : code === 3
-      ? "\nNOT BUILT YET. Nothing above is wrong; the gates marked ABSENT have nothing to read."
-        + `\nRun \`npm run build\` with ${TOKEN_ENV} set to write them. Until the first authenticated`
-        + "\nrefresh has run there is no cache and no asset, and the build fails rather than inventing"
-        + "\na calendar (docs/spec.md 5.3)."
+      ? `\nNOT EVERYTHING WAS CHECKED. Nothing above is wrong; the gates marked ABSENT had nothing\nto read. What was missing, and what to do about it:\n\n${unreadable(results).join("\n\n")}`
       : "\nall gates passed";
   return `${lines.join("\n")}\n${tail}`;
+}
+
+/**
+ * One block per CAUSE of an absence, each naming its own remedy.
+ *
+ * A mixed run reports both, in full. The single-cause version of this is the bug that produced it:
+ * a summary that named one cause told a reader to run a build when the build had already run and
+ * the real gap was an unset variable, and the reader cannot tell a wrong remedy from a broken
+ * build. So neither block is allowed to stand in for the other, and the unconfigured one says in
+ * as many words that building again changes nothing.
+ */
+function unreadable(results: GateResult[]): string[] {
+  const of = (reason: AbsentReason): GateResult[] =>
+    results.filter((r) => r.status === "absent" && (r.reason ?? "unbuilt") === reason);
+  const blocks: string[] = [];
+
+  const unbuilt = of("unbuilt");
+  if (unbuilt.length > 0) {
+    const paths = [...new Set(unbuilt.flatMap((r) => r.missing ?? []))].sort();
+    blocks.push(
+      `  NOT BUILT: ${paths.join(", ")}\n`
+      + `    Run \`npm run build\` with ${TOKEN_ENV} set. Until the first authenticated refresh there\n`
+      + "    is no cache and no asset, and the build fails rather than inventing a calendar\n"
+      + "    (docs/spec.md 5.3).",
+    );
+  }
+
+  const missing = of("missing");
+  if (missing.length > 0) {
+    const paths = [...new Set(missing.flatMap((r) => r.missing ?? []))].sort();
+    blocks.push(
+      `  MISSING FROM THE CHECKOUT: ${paths.join(", ")}\n`
+      + "    These are neither generated nor configuration: they ship with the repository, and a\n"
+      + "    build does not write them. Restore them from git.",
+    );
+  }
+
+  const unconf = of("unconfigured");
+  if (unconf.length > 0) {
+    blocks.push(
+      `  NOT CONFIGURED: ${unconf.map((r) => r.gate).join(", ")}\n`
+      + `    Set ${FORBIDDEN_NAMES_ENV} to the strings that must never reach a published file,\n`
+      + "    locally and as a repository secret. BUILDING AGAIN WILL NOT CHANGE THIS: these gates\n"
+      + "    have the files they need and nothing to check them against (ADR 0001).",
+    );
+  }
+  return blocks;
 }
 
 if (import.meta.main) {
