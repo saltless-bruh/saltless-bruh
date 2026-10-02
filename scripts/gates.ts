@@ -293,23 +293,61 @@ export function envFileVerdict(root: URL, name: string): EnvFileVerdict {
 }
 
 /**
- * Why the name scan has nothing to scan for, in the words of the actual cause.
+ * The note on a name scan that scanned for nothing.
  *
- * Four causes with four different remedies, and the one that matters most is the last: a `.env`
- * that defines the variable while the process does not have it can only mean the file was never
- * loaded, which is a mistake no amount of re-editing the file will fix.
+ * ADR 0001's enforcement is opt-in as of its 2026-10-02 amendment: the owner chose not to
+ * configure a private name, so this gate passes. It passes with a sentence that cannot be read as
+ * "the tree was checked and is clean", because that is a different claim and the difference is the
+ * entire value of the line.
+ *
+ * Every variant therefore OPENS with what was not done, and only then says what to do about it.
+ * The four tails are four causes with four remedies, and the one that matters most is the last: a
+ * `.env` that defines the variable while this process does not have it can only mean the file was
+ * never loaded, which is a mistake no amount of re-editing the file will fix. That one is the
+ * reason this diagnosis exists at all.
  */
-function nameListAdvice(root: URL): string {
+const NOT_SCANNED = "no private names configured, so nothing was scanned for";
+
+function nameListNote(root: URL): string {
   switch (envFileVerdict(root, FORBIDDEN_NAMES_ENV)) {
     case "no-file":
-      return `no private names configured and there is no .env here: set ${FORBIDDEN_NAMES_ENV} in .env, which \`npm run gates\` and \`npm run build\` read, or as a repository secret`;
+      return `${NOT_SCANNED}. ADR 0001's tree scan is opt-in: set ${FORBIDDEN_NAMES_ENV} in .env, which \`npm run gates\` and \`npm run build\` read, or as a repository secret, to turn it on`;
     case "absent":
-      return `.env exists but does not set ${FORBIDDEN_NAMES_ENV}: check that every line reads NAME=value, with the name on the LEFT of the = (a name written as a key sets nothing)`;
+      return `${NOT_SCANNED}, and a .env here does not set ${FORBIDDEN_NAMES_ENV}: if you meant to configure it, check that every line reads NAME=value, with the name on the LEFT of the = (a name written as a key sets nothing)`;
     case "blank":
-      return `.env sets ${FORBIDDEN_NAMES_ENV} to an empty value, which configures nothing: put the comma-separated strings after the =`;
+      return `${NOT_SCANNED}, and a .env here sets ${FORBIDDEN_NAMES_ENV} to an empty value: put the comma-separated strings after the =`;
     case "set":
-      return `.env sets ${FORBIDDEN_NAMES_ENV} but this process did not load it: run it as \`npm run gates\`, which passes --env-file-if-exists=.env`;
+      return `${NOT_SCANNED}, yet a .env here sets ${FORBIDDEN_NAMES_ENV}: this process did not load it, so run it as \`npm run gates\`, which passes --env-file-if-exists=.env`;
   }
+}
+
+/**
+ * The configured names that the profile is BUILT to show, by the field they come from.
+ *
+ * Reaching for a harmless-looking placeholder is a predictable move, and the handle is the first
+ * one to hand: configuring `lazie` fails six files at once, because `LAZIE` is deliberately in
+ * `content.json`, the README, both assets, `CONTEXT.md` and `art/ART-DIRECTION.md`. Listing those
+ * six files and nothing else would be true and useless. This names the contradiction instead.
+ *
+ * It reports the FIELD and never the value: a configured name is private by assumption, and the
+ * one case where it provably is not, matching the public handle, is not worth a special case.
+ */
+function identityCollisions(root: URL, names: string[]): string[] {
+  let identity: Record<string, unknown>;
+  try {
+    identity = JSON.parse(readFileSync(join(dirOf(root), "content.json"), "utf8")) as Record<string, unknown>;
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  for (const field of ["handle", "login"]) {
+    const value = identity[field];
+    if (typeof value !== "string" || value.trim() === "") continue;
+    if (names.some((n) => n.trim() !== "" && n.trim().toLowerCase() === value.trim().toLowerCase())) {
+      out.push(`one of the configured names IS content.json's ${field}, which the profile exists to show, so it is in the copy, the README and both assets by design (ADR 0001). Forbid the private name you want kept out, not the public one`);
+    }
+  }
+  return out;
 }
 
 /** `path: shape` for every file carrying a token-shaped string. Never the string itself. */
@@ -707,8 +745,13 @@ export type GateStatus = "pass" | "fail" | "absent";
  * exposed two more instances of the same mistake in this file: `content.json` and `package.json`
  * were reported as "not built yet", and a build creates neither. They ship with the repository, so
  * their absence means a broken checkout and their remedy is git, not a build.
+ *
+ * There was a third, `unconfigured`, for the name scan with no private names set. It is gone
+ * because nothing produces it any more: ADR 0001's amendment made that scan opt-in, so it passes
+ * with a note instead of being absent. The reason and its block were removed rather than left
+ * standing, because a reason no code can produce is a branch in the summary nothing can reach.
  */
-export type AbsentReason = "unbuilt" | "unconfigured" | "missing";
+export type AbsentReason = "unbuilt" | "missing";
 
 export type GateResult = {
   gate: string;
@@ -720,6 +763,13 @@ export type GateResult = {
   reason?: AbsentReason;
   /** Only when absent for want of output: the paths that are not there, for the summary to name. */
   missing?: string[];
+  /**
+   * A PASS that enforced nothing, because what it would check against is not configured.
+   *
+   * It does not change the exit code (ADR 0001's amendment), but the summary says so, so that
+   * "all gates passed" can never be read as "every gate checked something and found it clean".
+   */
+  unenforced?: true;
 };
 
 const pass = (gate: string, detail: string): GateResult => ({ gate, status: "pass", detail, problems: [] });
@@ -727,9 +777,6 @@ const fail = (gate: string, detail: string, problems: string[]): GateResult => (
 /** Absent because the output it reads has not been generated yet. A build fixes this. */
 const absent = (gate: string, missing: string[]): GateResult =>
   ({ gate, status: "absent", detail: `not built yet: ${missing.join(", ")}`, problems: [], reason: "unbuilt", missing });
-/** Absent because the configuration it checks against is not set. A build does NOT fix this. */
-const unconfigured = (gate: string, detail: string): GateResult =>
-  ({ gate, status: "absent", detail, problems: [], reason: "unconfigured" });
 /** Absent because a file that ships with the repository is not there. A build does NOT write it. */
 const missingInput = (gate: string, missing: string[]): GateResult =>
   ({ gate, status: "absent", detail: `missing from the checkout: ${missing.join(", ")}`, problems: [], reason: "missing", missing });
@@ -749,19 +796,21 @@ export function runGates(root: URL, o: { typecheck?: boolean; names?: string[] }
   // Injectable so a test can drive both halves of the fork. Production reads the environment.
   const names = o.names ?? CONFIGURED_FORBIDDEN_NAMES;
   if (names.length === 0) {
-    // ABSENT, and absent for want of CONFIGURATION rather than of output. The committed half of
-    // the list is a public demonstration value, so a tree scan for it would report this gate's own
-    // source and the three test files that exercise it, and nothing about anybody's privacy. With
-    // no private names configured there is nothing to look for, and "nothing was checked" must not
-    // read as "the tree is clean" (ADR 0001 says this is enforced by a check rather than by
-    // discipline, which means the check has to exist).
-    results.push(unconfigured("forbidden names", nameListAdvice(root)));
+    // PASSES, and passes carrying the note that it enforced nothing. ADR 0001's amendment of
+    // 2026-10-02 made this tree scan opt-in: the owner weighed their own name and chose not to
+    // configure it, and the policy it enforces still holds in the built output regardless. So this
+    // no longer holds back a run. What it must never do is read as "the tree was checked and is
+    // clean", which is why the note opens with what was not done. The committed half of the list is
+    // a public demonstration value and is handled by its own gate below, which is unconditional.
+    results.push({ ...pass("forbidden names", nameListNote(root)), unenforced: true });
   } else {
-    const hits = scanTreeForForbiddenNames(root, names);
+    // Opt-out, not removal: configured, it runs, and it fails on a hit.
+    const collisions = identityCollisions(root, names);
+    const hits = collisions.length > 0 ? collisions : scanTreeForForbiddenNames(root, names).map((h) => `${h} carries a forbidden name (ADR 0001)`);
     results.push(verdict(
       "forbidden names",
       `${files.length} files scanned for ${names.length} configured name(s)`,
-      hits.map((h) => `${h} carries a forbidden name (ADR 0001)`),
+      hits,
     ));
   }
   results.push(verdict("secrets", `${files.length} files scanned`, scanTreeForSecrets(root)));
@@ -896,7 +945,12 @@ export function report(results: GateResult[]): string {
     : code === 3
       ? `\nNOT EVERYTHING WAS CHECKED. Nothing above is wrong; the gates marked ABSENT had nothing\nto read. What was missing, and what to do about it:\n\n${unreadable(results).join("\n\n")}`
       : "\nall gates passed";
-  return `${lines.join("\n")}\n${tail}`;
+  // A gate that passed having enforced nothing is still a pass, and the exit code says so, but the
+  // summary must not let "all gates passed" stand in for "every gate found something and it was
+  // clean". Printed for a failing run too, since the same gate is just as unenforced there.
+  const unenforced = results.filter((r) => r.unenforced === true);
+  const note = unenforced.length === 0 ? "" : `\n\nNOTE: ${unenforced.map((r) => r.gate).join(", ")} passed without checking anything.\nRead its line above for why. That is not the same claim as the tree having been checked.`;
+  return `${lines.join("\n")}\n${tail}${note}`;
 }
 
 /**
@@ -904,9 +958,10 @@ export function report(results: GateResult[]): string {
  *
  * A mixed run reports both, in full. The single-cause version of this is the bug that produced it:
  * a summary that named one cause told a reader to run a build when the build had already run and
- * the real gap was an unset variable, and the reader cannot tell a wrong remedy from a broken
- * build. So neither block is allowed to stand in for the other, and the unconfigured one says in
- * as many words that building again changes nothing.
+ * the real gap was elsewhere, and a reader cannot tell a wrong remedy from a broken build. So
+ * neither block is allowed to stand in for the other. `content.json` and `package.json` are in the
+ * second block precisely because a build does not write them, which the first block's remedy would
+ * have implied.
  */
 function unreadable(results: GateResult[]): string[] {
   const of = (reason: AbsentReason): GateResult[] =>
@@ -934,16 +989,6 @@ function unreadable(results: GateResult[]): string[] {
     );
   }
 
-  const unconf = of("unconfigured");
-  if (unconf.length > 0) {
-    blocks.push(
-      `  NOT CONFIGURED: ${unconf.map((r) => r.gate).join(", ")}\n`
-      + `    Set ${FORBIDDEN_NAMES_ENV} to the strings that must never reach a published file, in\n`
-      + "    .env (which `npm run gates` and `npm run build` read) or as a repository secret.\n"
-      + "    BUILDING AGAIN WILL NOT CHANGE THIS: these gates have the files they need and nothing\n"
-      + "    to check them against (ADR 0001).",
-    );
-  }
   return blocks;
 }
 

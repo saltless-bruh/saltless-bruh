@@ -78,6 +78,46 @@ Session becomes the still frame. That is a survivable failure, because reduced m
 requires the still frame to be the correct resting state, but it is the thing to check first if
 the profile ever looks dead.
 
+### 1.2 Chrome and Firefox, measured
+
+Gate 1 asks for both engines, and an `<img>`-embedded SVG running its own `@keyframes` is exactly the
+kind of restricted context where two engines could reasonably disagree. They do not. Measured
+2026-10-02 on Chrome 153.0.8010.52 and Firefox 157.0, by rendering the same frozen instants of the
+same asset through `scripts/render-check.ts --engine=` and differencing the PNGs.
+
+| What was compared | Result |
+|---|---|
+| The SVG's `<style>` and `@keyframes` running inside `<img>` at all | **Both.** The CSP above is honoured identically; neither engine needs a fallback |
+| The Mascot across all twelve poses of the 36s loop | **Pixel-identical** in eleven. The art is geometry at `crispEdges`, so there is nothing for a rasteriser to differ on |
+| The Scan Sweep's beam position, at eight instants across the crossing | **Identical** at every one |
+| The `/activity` result line | Absent at every instant the beam is still crossing, present from 2.55s, in **both** |
+| The Ultrachill shimmer, per character across the word | **Identical** numbers. The sheen is on the same two characters in both at every step |
+| The playback's last row reaching its settled value | Both reach it by 1.66s at 846px. At 308px Firefox is still within 22/255 of settled at 1.66s and exact by 1.70s |
+| `prefers-reduced-motion: reduce`, both variants, both widths | **Both** collapse to the same still frame; the two engines differ only by text antialiasing |
+| Everything else | Differs by about **1.4% of pixels, entirely glyph antialiasing**: it survives no downsampling, vanishing by 8x in every frame |
+
+**The one real difference is a measuring hazard, not a viewer-visible one, and it is worth knowing
+before it costs somebody an afternoon.** At a freeze landing *exactly* on a keyframe stop the two
+engines resolve the boundary differently: Chrome applies the stop's own value, Firefox holds the
+preceding step. It was found at `--freeze=28.80`, which is exactly the fifth 200ms stop of the fault
+flash, where Chrome showed the bank lit and Firefox showed it dim. Ten milliseconds either side they
+agree, and at `29.00` they agree because that stop is emitted as `80.556%` and therefore falls at
+29.00016s rather than on the round number. Nothing a viewer sees depends on it, because an exact
+boundary has zero duration in real playback and both engines run the flash at 2.5Hz. **So: when
+comparing engines, do not freeze on a round multiple of a gesture's own step.** Offset by 10ms and
+the comparison is clean.
+
+**Firefox also screenshots on load rather than after a settle budget.** Chrome's
+`--virtual-time-budget` lets the page run first; Firefox's `--screenshot` fires immediately, so an
+unfrozen Firefox render catches the first instant of the playback and looks like a broken asset. That
+is the harness, not the engine. `--freeze` removes the difference, which is the other reason every
+comparison above uses it.
+
+**How Firefox is asked for reduced motion.** It has no flag. `scripts/render-check.ts` writes a
+throwaway profile whose `user.js` sets `ui.prefersReducedMotion`. MDN documents only the OS-level
+toggles and never names that pref, so it was confirmed against the binary rather than taken from a
+page: a probe whose rule only fires under `reduce` rendered green at `0` and red at `1`.
+
 **Why the assets are repo-relative and not absolute.** The 5-minute `max-age` above is what makes
 a refreshed Session appear promptly. An absolute URL to a third-party host would be rewritten to
 camo instead, whose cache was measured serving a copy 3.6 hours old of an image whose own origin
@@ -425,19 +465,34 @@ references with no target, a missing `viewBox`, a box the art is letterboxed in)
 both assets and the transcript block and carrying none of the HTML GitHub strips, no token-shaped string
 anywhere in the tree, and `npm run typecheck` at exit 0.
 
-**It reports three states, not two.** A gate passes, fails, or is `absent` because the thing it reads has
-not been built yet, and the run exits 0, 1 and 3 for the three. Until the first authenticated refresh there
-is no cache and no asset (5.3), and a gate that failed identically for "this output is wrong" and "this
-output does not exist yet" would be useless on the first real run, which is the one time somebody has to
-tell them apart.
+**It reports three states, not two.** A gate passes, fails, or is `absent` because the thing it reads is not
+there, and the run exits 0, 1 and 3 for the three. Until the first authenticated refresh there is no cache
+and no asset (5.3), and a gate that failed identically for "this output is wrong" and "this output does not
+exist yet" would be useless on the first real run, which is the one time somebody has to tell them apart.
 
-**Gate 6 reads the private half of the forbidden-name list.** `FORBIDDEN_NAMES` is a committed placeholder
-plus whatever `PROFILE_FORBIDDEN_NAMES` adds (4.2). The committed entry is published in `src/content.ts` by
-design, so scanning the tree for it reports the gate's own source and the tests that exercise it and nothing
-about anybody's privacy; the private half is what a tree scan is for. With nothing configured the gate
-reports `absent` rather than clean, because "nothing was checked" must not read as "the tree is clean". The
-committed placeholder is still scanned for in the generated output, where finding it means a placeholder
-reached a published surface.
+An absence also carries WHY, because the remedy differs and the summary states it rather than assuming:
+`unbuilt` for the generated output, which a build writes, and `missing` for `content.json` and
+`package.json`, which ship with the repository and which a build does not write. A mixed run prints every
+cause it found. The first version of this named one cause, and on a tree where every file existed and only a
+variable was unset it said "NOT BUILT YET, run `npm run build`", which is the one command that could not
+help.
+
+**Gate 6 reads the private half of the forbidden-name list, and it is opt-in.** `FORBIDDEN_NAMES` is a
+committed placeholder plus whatever `PROFILE_FORBIDDEN_NAMES` adds (4.2). The committed entry is published in
+`src/content.ts` by design, so scanning the tree for it reports the gate's own source and the tests that
+exercise it and nothing about anybody's privacy; the private half is what a tree scan is for.
+
+With nothing configured the gate **passes, carrying a note that it scanned for nothing**. That is ADR 0001's
+amendment of 2026-10-02: the owner weighed their own name and chose not to configure one, the policy itself
+still holds in the built output, and the refresh is no longer held back by it. The note is worded so it
+cannot be read as "the tree was checked and is clean", which is a different claim, and the run's summary
+repeats that a gate passed without checking anything. Configured, the scan runs and fails on a hit: this is
+opt-out, not removal. Configuring a name the profile is built to show, such as the handle, fails with that
+contradiction named rather than with the six files it is deliberately in.
+
+Two halves were never configuration-dependent and still run on every build: the scan over fetched data
+(5.4), and the committed placeholder over the generated output, where finding it means a placeholder reached
+a published surface.
 
 ## 7. Accessibility
 

@@ -190,19 +190,81 @@ test("an empty needle list is refused rather than passing for every tree there i
   assert.deepEqual(forbiddenNeedles([" Some Name ", "Other"]), ["some name", "other"]);
 });
 
-test("with no private names configured the tree scan reports unchecked, not clean", () => {
-  // ABSENT and not PASS. The committed half of the list is a public demonstration value, so
-  // scanning the tree for it would report this gate's own source and the files that test it.
-  // "Nothing was checked" must not read as "the tree is clean" (ADR 0001).
+test("with no private names configured the scan passes, and says it scanned for nothing", () => {
+  // ADR 0001, amended 2026-10-02: the owner weighed their own name and chose not to configure it,
+  // so this no longer holds back a run. The POLICY is unchanged and the built output still carries
+  // no real name; what changed is that the enforcement is opt-in.
   const dir = scratch();
-  const gate = gateNamed(runGates(url(dir), { typecheck: false }), "forbidden names");
-  if (process.env.PROFILE_FORBIDDEN_NAMES) {
-    assert.equal(gate.status, "pass", "with names configured the scan should actually run");
-    return;
+  const results = runGates(url(dir), { typecheck: false, names: [] });
+  const gate = gateNamed(results, "forbidden names");
+  assert.equal(gate.status, "pass");
+  assert.equal(gate.unenforced, true, "a pass that enforced nothing must say so");
+  // The wording is the whole value of the line: it must be unreadable as "checked and clean".
+  assert.match(gate.detail, /nothing was scanned for/);
+  assert.ok(!/\bclean\b/.test(gate.detail), "the note uses the word this gate must never claim");
+  const printed = report(results);
+  assert.match(printed, /passed without checking anything/, "the summary lets a pass stand in for a clean tree");
+  assert.match(printed, /not the same claim/);
+  assert.ok(exitCodeFor(results) !== 1, "an unconfigured scan must not fail the run");
+});
+
+test("configured, the scan runs and fails: this is opt-out, not removal", () => {
+  const dir = scratch();
+  writeFileSync(join(dir, "notes.md"), "a line mentioning Ada Lovelace in passing\n");
+  writeFileSync(join(dir, "clean.md"), "nothing to see\n");
+  const results = runGates(url(dir), { typecheck: false, names: ["Ada Lovelace"] });
+  const gate = gateNamed(results, "forbidden names");
+  assert.equal(gate.status, "fail");
+  assert.equal(gate.unenforced, undefined, "a gate that really scanned must not be marked unenforced");
+  assert.match(gate.problems.join("\n"), /notes\.md/);
+  assert.ok(!gate.problems.join("\n").includes("Ada Lovelace"), "the failure repeated the name it protects");
+  assert.equal(exitCodeFor(results), 1);
+});
+
+test("a configured name the profile is BUILT to show is called out as the contradiction it is", () => {
+  // Reaching for a harmless-looking placeholder is a predictable move, and the handle is the first
+  // one to hand. Configuring it fails six files at once, because the handle is deliberately in
+  // content.json, the README, both assets, CONTEXT.md and art/ART-DIRECTION.md. Listing those six
+  // and nothing else would be true and useless.
+  const handle = loadContent().handle;
+  const results = runGates(ROOT, { typecheck: false, names: [handle] });
+  const gate = gateNamed(results, "forbidden names");
+  assert.equal(gate.status, "fail");
+  assert.equal(gate.problems.length, 1, `expected one explanation, got: ${gate.problems.join(" | ")}`);
+  assert.match(gate.problems[0], /IS content\.json's handle/);
+  assert.match(gate.problems[0], /profile exists to show/);
+  assert.ok(!gate.problems[0].includes(handle), "the explanation repeats the value rather than naming the field");
+  // The login is the other predictable choice.
+  const byLogin = gateNamed(runGates(ROOT, { typecheck: false, names: [loadContent().login] }), "forbidden names");
+  assert.equal(byLogin.status, "fail");
+  assert.match(byLogin.problems.join("\n"), /IS content\.json's login/);
+});
+
+test("the committed-placeholder half runs whether anything is configured or not", () => {
+  // It never depended on configuration and must not start to: it is the half that catches a
+  // demonstration value reaching a published surface.
+  const dir = scratch();
+  writeFileSync(join(dir, "content.json"), JSON.stringify({ role: COMMITTED_FORBIDDEN_NAMES[0] }));
+  for (const names of [[], ["Ada Lovelace"]]) {
+    const results = runGates(url(dir), { typecheck: false, names });
+    assert.equal(gateNamed(results, "placeholder names").status, "fail", `with names=${JSON.stringify(names)}`);
+    assert.equal(exitCodeFor(results), 1);
   }
-  assert.equal(gate.status, "absent");
-  assert.match(gate.detail, /PROFILE_FORBIDDEN_NAMES/);
-  assert.notEqual(gate.status, "pass");
+});
+
+test("the gate still distinguishes checked-and-clean from nothing-to-check", () => {
+  // Only the exit status changed. A run that really scanned says how much it scanned.
+  const dir = scratch();
+  writeFileSync(join(dir, "clean.md"), "nothing to see\n");
+  const scanned = gateNamed(runGates(url(dir), { typecheck: false, names: ["Ada Lovelace"] }), "forbidden names");
+  const notScanned = gateNamed(runGates(url(dir), { typecheck: false, names: [] }), "forbidden names");
+  assert.equal(scanned.status, "pass");
+  assert.equal(notScanned.status, "pass");
+  assert.match(scanned.detail, /files scanned for 1 configured name/);
+  assert.match(notScanned.detail, /nothing was scanned for/);
+  assert.notEqual(scanned.detail, notScanned.detail, "two different outcomes read identically");
+  assert.equal(scanned.unenforced, undefined);
+  assert.equal(notScanned.unenforced, true);
 });
 
 test("the committed placeholder reaching a published surface is caught, where a tree scan cannot", () => {
@@ -646,38 +708,35 @@ function blockFor(printed: string, needle: string): string | null {
 const blockHeadings = (printed: string): string[] =>
   remedyBlocks(printed).map((b) => b.slice(0, b.indexOf(":")).trim());
 
-test("a built tree with no name list configured is never told to run a build", async () => {
-  // The exact failure this reason exists for. Every generated file is there, thirteen gates pass,
-  // one is absent because an environment variable is unset, and the old summary said
-  // "NOT BUILT YET. Run `npm run build`". That is the one command that cannot help: somebody
-  // following it runs a build, sees nothing change, and goes looking for a bug in the build.
+test("a fully built tree with nothing configured is a clean run, and says what it did not do", async () => {
+  // The state the repository is actually in: every generated file present, the name scan opt-in and
+  // not configured. Before the absence carried a reason, this printed "NOT BUILT YET. Run
+  // `npm run build`" at a tree where every file existed, which is the one command that cannot help.
+  // The reason split fixed that; ADR 0001's amendment then made this case a pass outright.
   const dir = await builtTree();
   const results = runGates(url(dir), { typecheck: false, names: [] });
   assert.deepEqual(results.filter((r) => r.status === "fail"), []);
-  assert.deepEqual(results.filter((r) => r.status === "absent").map((r) => r.gate), ["forbidden names"]);
+  assert.deepEqual(results.filter((r) => r.status === "absent"), [], "nothing is missing from a built tree");
   const printed = report(results);
-  assert.deepEqual(blockHeadings(printed), ["NOT CONFIGURED"]);
-  // The REMEDY sentence, not any mention of the command: the unconfigured block legitimately names
-  // `npm run build` when it says which scripts read `.env`. What must not appear is the
-  // instruction to run it, which is the advice that cannot help here.
+  assert.deepEqual(blockHeadings(printed), [], "a run with no absences has no remedy blocks");
   assert.ok(!printed.includes("Run `npm run build`"), "the summary tells a reader to run a build that cannot help");
   assert.ok(!printed.includes("NOT BUILT"), "the summary claims output is missing when all of it is there");
-  assert.match(printed, /BUILDING AGAIN WILL NOT CHANGE THIS/, "the summary does not rule out the wrong remedy");
-  assert.match(printed, new RegExp(FORBIDDEN_NAMES_ENV), "the summary does not name the variable to set");
-  assert.equal(exitCodeFor(results), 3);
+  assert.match(printed, /all gates passed/);
+  assert.match(printed, /passed without checking anything/, "the pass that enforced nothing is not flagged");
+  assert.equal(exitCodeFor(results), 0);
 });
 
 test("a mixed run reports every cause, not whichever it looked at first", () => {
-  // Nothing built, nothing configured, and content.json and package.json absent as well: three
-  // causes with three different remedies. A summary that named one of them would be wrong about
-  // the other two, and a reader cannot tell a wrong remedy from a broken build.
+  // Nothing built, and content.json and package.json absent as well: two causes with two different
+  // remedies. A summary that named one of them would be wrong about the other, and a reader cannot
+  // tell a wrong remedy from a broken build.
   const dir = scratch();
   const results = runGates(url(dir), { names: [] });
   const printed = report(results);
-  assert.deepEqual(blockHeadings(printed).sort(), ["MISSING FROM THE CHECKOUT", "NOT BUILT", "NOT CONFIGURED"]);
+  assert.deepEqual(blockHeadings(printed).sort(), ["MISSING FROM THE CHECKOUT", "NOT BUILT"]);
   assert.equal(blockFor(printed, GENERATED.dark), "NOT BUILT");
   assert.equal(blockFor(printed, GENERATED.cache), "NOT BUILT");
-  assert.equal(blockFor(printed, "forbidden names"), "NOT CONFIGURED");
+  assert.equal(blockFor(printed, "content.json"), "MISSING FROM THE CHECKOUT");
   assert.equal(exitCodeFor(results), 3);
 });
 
@@ -730,7 +789,8 @@ test("a .env that does not set the name list says so, distinctly from there bein
 
   const none = withEnv(null);
   assert.equal(envFileVerdict(url(none), FORBIDDEN_NAMES_ENV), "no-file");
-  assert.match(adviceIn(none), /no .env here/);
+  assert.match(adviceIn(none), /opt-in/, "the plain case should say the scan is off by default, not imply a fault");
+  assert.ok(!/does not set|empty value|did not load/.test(adviceIn(none)), "the plain case claims a .env problem that is not there");
 
   // A name written as a key, which is the mistake that was actually made.
   const asKey = withEnv("Some Name=\nOTHER_SETTING=x\n");

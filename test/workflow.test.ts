@@ -114,6 +114,30 @@ test("the workflow does not send anyone to mint a scope the API does not need", 
   assert.match(code, /unverified/, "the GITHUB_TOKEN claim is presented as established when it is not");
 });
 
+test("only the token is required, because without it there is nothing to build", () => {
+  // ADR 0001, amended 2026-10-02: the owner chose not to configure a private name list, so the
+  // daily refresh must run without it. The token is a different case: the build fails rather than
+  // inventing a calendar, so a run without it has nothing to publish.
+  const preflight = STEPS[at("Check this repository is configured")];
+  const required = [...preflight.matchAll(/if \[ -z "\$\{(\w+)\}" \]; then\n((?:.*\n)*?)\s*fi/g)]
+    .filter(([, , body]) => /exit 1/.test(body))
+    .map(([, name]) => name);
+  assert.deepEqual(required, [TOKEN_ENV], `the preflight stops the run for ${required.join(", ")}`);
+  // The optional one is still mentioned, so a reader of the log knows the scan is off and why.
+  assert.ok(preflight.includes(FORBIDDEN_NAMES_ENV), "the log says nothing about the scan being off");
+  assert.match(preflight, /not a fault/, "an unset optional secret reads as a problem");
+});
+
+test("the optional secret is still passed through, so setting it later turns the scan on", () => {
+  // Opt-out, not removal: nothing about the workflow should need editing to re-arm the gate.
+  for (const step of ["npm run build", "npm run gates"]) {
+    assert.ok(
+      STEPS[at(step)].includes(`${FORBIDDEN_NAMES_ENV}: \${{ secrets.${FORBIDDEN_NAMES_ENV} }}`),
+      `${step} does not receive ${FORBIDDEN_NAMES_ENV}, so setting the secret would change nothing`,
+    );
+  }
+});
+
 test("the workflow configures the variable the generator actually reads", () => {
   // A secret passed under a name nothing reads is a gate quietly running unconfigured.
   assert.ok(code.includes(`${FORBIDDEN_NAMES_ENV}: \${{ secrets.${FORBIDDEN_NAMES_ENV} }}`), `the workflow does not pass ${FORBIDDEN_NAMES_ENV}`);

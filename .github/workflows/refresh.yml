@@ -82,30 +82,30 @@ jobs:
           PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}
           PROFILE_FORBIDDEN_NAMES: ${{ secrets.PROFILE_FORBIDDEN_NAMES }}
         run: |
-          missing=""
+          # Only the token is REQUIRED: without it there is genuinely nothing to build, because
+          # the build fails rather than inventing a calendar. PROFILE_FORBIDDEN_NAMES is optional
+          # as of ADR 0001's amendment of 2026-10-02: the owner weighed their own name and chose
+          # not to configure it, so the tree scan passes carrying a note that it scanned for
+          # nothing, and the refresh is no longer held back by it. It is still passed through
+          # below, so setting the secret later turns the scan on with no change here.
           if [ -z "${PROFILE_GH_TOKEN}" ]; then
-            missing="${missing} PROFILE_GH_TOKEN"
-          fi
-          if [ -z "${PROFILE_FORBIDDEN_NAMES}" ]; then
-            missing="${missing} PROFILE_FORBIDDEN_NAMES"
-          fi
-          if [ -n "${missing}" ]; then
-            echo "This repository is missing Actions secret(s):${missing}" >&2
+            echo "This repository is missing the Actions secret PROFILE_GH_TOKEN." >&2
             echo "" >&2
-            echo "PROFILE_GH_TOKEN is a user token. Measured 2026-10-02: the repo scope is enough" >&2
+            echo "It is a user token. Measured 2026-10-02: the repo scope is enough" >&2
             echo "for the owner's own figures, and read:user is NOT required for them. The built-in" >&2
             echo "GITHUB_TOKEN is still assumed not to do, unverified: it is an installation token" >&2
             echo "scoped to one repository rather than a user token, it is not reliably able to read" >&2
             echo "the contribution calendar, and private contributions are only ever counted for the" >&2
             echo "token's own owner (docs/spec.md 5.2)." >&2
-            echo "" >&2
-            echo "PROFILE_FORBIDDEN_NAMES is a comma separated list of strings that must never" >&2
-            echo "appear in a published file. ADR 0001 is enforced by a check rather than by" >&2
-            echo "discipline, and the check has nothing to look for without it, so the gates" >&2
-            echo "report the scan as unchecked rather than as clean and this job stops." >&2
             exit 1
           fi
-          echo "both secrets are present"
+          echo "the token is present"
+          if [ -z "${PROFILE_FORBIDDEN_NAMES}" ]; then
+            echo "PROFILE_FORBIDDEN_NAMES is not set, so the tree scan for private names will" >&2
+            echo "report that it scanned for nothing. That is the owner's recorded choice, and" >&2
+            echo "not a fault: see ADR 0001, amended 2026-10-02. Setting the secret, with no" >&2
+            echo "other change here, turns the scan back on." >&2
+          fi
 
       # The only step that sees the credential, and the only one that needs it.
       - name: Build the Session from real figures

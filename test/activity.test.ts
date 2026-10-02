@@ -13,11 +13,11 @@ import { inspect } from "node:util";
  * credential riding along as a `cause`, which is exactly how one escapes in practice.
  */
 const everythingIn = (e: unknown): string => inspect(e, { depth: 10 });
-import { ACTIVITY_QUERY, CACHE_PATH, fetchActivity, githubTransport, loadActivity, MAX_LANGUAGES, TOKEN_ENV, trimToWindow, WINDOW_DAYS } from "../src/activity.ts";
+import { ACTIVITY_QUERY, CACHE_PATH, fetchActivity, ForbiddenNameError, githubTransport, loadActivity, MAX_LANGUAGES, TOKEN_ENV, trimToWindow, WINDOW_DAYS } from "../src/activity.ts";
 import type { Transport } from "../src/activity.ts";
 import { languageShares } from "../src/session.ts";
 import type { Activity } from "../src/session.ts";
-import { FORBIDDEN_NAMES } from "../src/content.ts";
+import { COMMITTED_FORBIDDEN_NAMES, FORBIDDEN_NAMES } from "../src/content.ts";
 
 const DAY_MS = 86_400_000;
 const isoDay = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
@@ -299,6 +299,29 @@ test("with the variable unset the failure names the variable and where to set it
         // credential to mint and sent them to make one they did not need.
         assert.match(e.message, /repo scope/, "the message does not name the scope that is actually enough");
         assert.doesNotMatch(e.message, /needs? the read:user/, "the message demands a scope the API does not require");
+        return true;
+      },
+    );
+  });
+});
+
+test("the scan over fetched data does not depend on anything being configured", async () => {
+  // ADR 0001's amendment made the TREE scan opt-in. This one was never configuration-dependent and
+  // must not become so: it is the path that matters most and the one nobody inspects, since a name
+  // can arrive in a repository description the query never asked for. It reads FORBIDDEN_NAMES,
+  // whose committed half is always present, so it is armed on every build with nothing set.
+  assert.ok(COMMITTED_FORBIDDEN_NAMES.length > 0, "premise: the committed half is never empty");
+  const body = JSON.stringify({
+    data: { user: { repositories: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [
+      { name: "a-repo", description: `by ${COMMITTED_FORBIDDEN_NAMES[0]}`, languages: { edges: [] } },
+    ] } } },
+  });
+  await withToken(undefined, async () => {
+    await assert.rejects(
+      () => fetchActivity({ login: "x", transport: async () => body }),
+      (e: Error) => {
+        assert.ok(e instanceof ForbiddenNameError, `a name in fetched data must be its own failure, got ${e.constructor.name}`);
+        assert.ok(!e.message.includes(COMMITTED_FORBIDDEN_NAMES[0]), "the failure repeated the name");
         return true;
       },
     );
