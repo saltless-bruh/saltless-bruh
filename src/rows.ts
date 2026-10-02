@@ -28,20 +28,18 @@ export function assertFits(rows: Row[]): void {
   });
 }
 
-/** The Session as plain text, for the transcript block and the forbidden-name scan. */
+/**
+ * The Session as plain text, for the transcript block and the forbidden-name scan.
+ * Each run writes onto the grid cells it covers, so runs drawn over one another (a highlight
+ * copy laid over a word) read once, as the eye sees them, rather than being concatenated.
+ */
 export function rowsToText(rows: Row[]): string {
   return rows.map((row) => {
-    let line = "";
-    let at = 0;
+    const line: string[] = [];
     for (const run of [...row.runs].sort(byColumn)) {
-      if (at < run.col) {
-        line += " ".repeat(run.col - at);
-        at = run.col;
-      }
-      line += run.text;
-      at += cells(run.text);
+      [...run.text].forEach((ch, i) => { line[run.col + i] = ch; });
     }
-    return line.trimEnd();
+    return Array.from(line, (ch) => ch ?? " ").join("").trimEnd();
   }).join("\n");
 }
 

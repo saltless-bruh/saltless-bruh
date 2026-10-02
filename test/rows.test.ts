@@ -87,6 +87,23 @@ test("the transcript pads by columns, so a character outside the BMP counts once
   assert.equal([...text].length, 4);
 });
 
+test("runs that cover the same cells are written once, as when a copy is laid over a word", () => {
+  // The Statusline draws a word twice at one position, a base copy and a highlight copy
+  // split by character. The transcript must read the word once, not twice.
+  const word = "shimmer";
+  const runs: Run[] = [
+    { col: 4, text: word, style: "muted" },
+    ...[...word].map((ch, i): Run => ({ col: 4 + i, text: ch, style: "accent", cls: `shimmer-${i}` })),
+    { col: 12, text: "on" },
+  ];
+  assert.equal(rowsToText([{ runs }]), "    shimmer on");
+});
+
+test("an overlapping run writes onto cells, so it is counted in columns and the rest of the row stays put", () => {
+  const text = rowsToText([{ runs: [{ col: 1, text: `a${CLEF}b` }, { col: 2, text: CLEF }, { col: 5, text: "z" }] }]);
+  assert.deepEqual([...text], [" ", "a", CLEF, "b", " ", "z"]);
+});
+
 // ---- esc and renderRows ----
 
 test("esc replaces ampersand, less-than, greater-than and double quote, every occurrence", () => {
