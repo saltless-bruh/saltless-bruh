@@ -10,7 +10,8 @@
     "test": "node --test",
     "mutants": "node scripts/mutation-check.ts",
     "typecheck": "tsc",
-    "build": "node src/build.ts"
+    "build": "node src/build.ts",
+    "gates": "node scripts/gates.ts"
   },
   "keywords": [],
   "type": "module",
