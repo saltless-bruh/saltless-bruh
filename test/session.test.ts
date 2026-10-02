@@ -307,9 +307,9 @@ test("the banner sits two columns clear of the Mascot and is centred on it", () 
 
 test("a handle whose banner fills the space beside the Mascot fits and one column more does not", () => {
   const room = COLS - (MASCOT_COLS + 2);
-  // M is a column wider than A, so swapping letters one at a time reaches every width.
+  // N is a column wider than A, so swapping letters one at a time reaches every width.
   const handleOfWidth = (width: number): string | undefined => Array.from({ length: 20 }, (_, n) => n + 1)
-    .flatMap((n) => Array.from({ length: n + 1 }, (_, k) => "M".repeat(k) + "A".repeat(n - k)))
+    .flatMap((n) => Array.from({ length: n + 1 }, (_, k) => "N".repeat(k) + "A".repeat(n - k)))
     .find((h) => bannerWidthCols(h) === width);
   const exact = handleOfWidth(room);
   const over = handleOfWidth(room + 1);
@@ -319,6 +319,21 @@ test("a handle whose banner fills the space beside the Mascot fits and one colum
   assert.doesNotThrow(() => composeSession(c, activity));
   c.handle = over;
   assert.throws(() => composeSession(c, activity), /banner/);
+});
+
+test("a handle far too wide to draw is refused by name, with the width it would need", () => {
+  const c = loadContent();
+  c.handle = "MAXIMUMOVERDRIVE";
+  const needed = MASCOT_COLS + 2 + bannerWidthCols(c.handle);
+  assert.ok(needed > COLS, "the probe handle has to be one that cannot fit");
+  assert.throws(
+    () => composeSession(c, activity),
+    (err) => err instanceof Error
+      && err.message.includes("MAXIMUMOVERDRIVE")
+      && err.message.includes(String(needed))
+      && err.message.includes(String(COLS)),
+    "the message must name the handle, the columns it needs and the columns there are",
+  );
 });
 
 // ---- the commands ----
@@ -831,15 +846,15 @@ test("a forbidden name spelled by the Banner is caught by the scan of the transc
   // stand-in below is an invented word: the real name is never written down anywhere (ADR 0001).
   const key = "PROFILE_FORBIDDEN_NAMES";
   const saved = process.env[key];
-  process.env[key] = "Nobody";
+  process.env[key] = "Noone";
   try {
     // A query on the specifier gets a fresh module, so it reads the variable set just above.
     const fresh: typeof import("../src/content.ts") = await import(`../src/content.ts?banner-gate=${key}`);
-    assert.ok(fresh.FORBIDDEN_NAMES.includes("Nobody"), "the stand-in did not reach the list");
+    assert.ok(fresh.FORBIDDEN_NAMES.includes("Noone"), "the stand-in did not reach the list");
     const c = loadContent();
-    c.handle = "Nobody";
+    c.handle = "Noone";
     const text = rowsToText(composeSession(c, activity).rows);
-    assert.ok(text.includes("Nobody"), "the Banner's word never reached the transcript");
+    assert.ok(text.includes("Noone"), "the Banner's word never reached the transcript");
     assert.throws(() => fresh.assertNoForbiddenNames(text, "the transcript"), /forbidden name/);
     // and a clean Banner still passes, so the gate is not simply always throwing
     const ok = loadContent();
