@@ -1432,5 +1432,23 @@
   ],
   "find": "      - run: npm test\n",
   "replace": ""
+ },
+ {
+  "id": "G41 gates: the README dropped from the glyph gate, so a blank box ships in the transcript",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "        ...(there(GENERATED.readme) ? findAbsentGlyphs(read(GENERATED.readme)).map((m) => `${GENERATED.readme} ${m}`) : []),\n",
+  "replace": ""
+ },
+ {
+  "id": "G42 gates: the glyph gate removed from a built tree's run",
+  "file": "scripts/gates.ts",
+  "tests": [
+   "test/gates.test.ts"
+  ],
+  "find": "    results.push(verdict(\n      \"glyphs\",\n",
+  "replace": "    if (false) results.push(verdict(\n      \"glyphs\",\n"
  }
 ]
