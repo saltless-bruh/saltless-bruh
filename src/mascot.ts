@@ -1,7 +1,7 @@
 import { CELL_H, CELL_W, PAD, colX } from "./grid.ts";
 import { inkLeft, loadGlyphs, loadGrid, parseGrid, runsOf, runsToPath, sharedInkLeft } from "./pixelart.ts";
 import type { Box, Grid, Run } from "./pixelart.ts";
-import { MASCOT_TIMELINE, MASTER_SECONDS } from "./timeline.ts";
+import { DREAMING, MASCOT_TIMELINE, MASTER_SECONDS } from "./timeline.ts";
 import type { PoseName } from "./timeline.ts";
 import { PALETTES } from "./tokens.ts";
 import type { Palette, ThemeName } from "./tokens.ts";
@@ -125,11 +125,16 @@ const RACK_ROWS: Box = { x0: 0, x1: GRID_W, y0: RACK_FROM, y1: GRID_H };
  * This slab is painted twice on purpose. The static pass keeps it and the `.ear` group draws it again, so what the
  * flick shows is the union of a slab at rest and the same slab a unit higher: the ear **stretches**, its tip
  * extending and straightening while its base stays welded to the head. It is not a displacement, and the second
- * copy is load-bearing, not waste. Four of the five poses carry head ink directly under the slab (`sleep`,
- * `stretch` and `settle` at both columns, `startle` at column 29 beside the open eye), so cutting the slab from
- * the static pass would lift the whole thing and open a strip of window the height of the lift underneath it.
- * Only `yawn` has a silhouette break of its own there. A test pins both halves of this, so the tempting
- * "do not paint it twice" cleanup fails loudly rather than quietly unsticking the ear.
+ * copy is load-bearing, not waste. `sleep`, `stretch`, `settle`, `glare` and `butt-down` carry head ink directly
+ * under the slab, so cutting the slab from the static pass would lift the whole thing and open a strip of window
+ * the height of the lift underneath it. In the rest, what sits under the slab is the eye hole itself (`yawn`
+ * squeezes it up a row; the waking poses open it into a two-row hole), which is a silhouette break the artwork
+ * chose. A test pins both halves of this, so the tempting "do not paint it twice" cleanup fails loudly rather
+ * than quietly unsticking the ear.
+ *
+ * EAR_X is fixed, so the head must stay in these columns in every pose. That is why the headbutt is drawn as a
+ * downward drive rather than a lunge to the left: a head that left columns 29 and 30 would leave this overlay
+ * flicking a pixel of the cat's back and calling it an ear.
  */
 const EAR_X: [number, number] = [29, 31];
 const EAR_DEPTH = 2;
@@ -156,6 +161,15 @@ function earBox(grid: Grid): Box {
 
 /** One lit-LED group per rack unit; a unit lies between two of the rack's dark dividing lines. */
 const LED_PERIODS = [7, 11, 13];
+/**
+ * The fault bank: the same lit pixels as the three healthy units, drawn once, in `error`.
+ *
+ * It is one path and one group deliberately. The healthy units are three paths on three clocks because they are
+ * three services keeping their own time; the fault is ONE machine in trouble, so its pixels cannot be given
+ * separate clocks even by accident. The steady bank is the same pixels in `accent` at full opacity, for the beat
+ * after the headbutt when the machine is fixed but not yet back to work.
+ */
+const FAULT_TOKEN: keyof Palette = "error";
 const DIVIDERS = POSES[REST].rows.map((_, y) => y).filter((y) => y >= RACK_FROM && /^ *3+ *$/.test(POSES[REST].rows[y]));
 const UNITS: Box[] = DIVIDERS.slice(1).map((y, k) => ({ x0: 0, x1: GRID_W, y0: DIVIDERS[k] + 1, y1: y }));
 if (UNITS.length !== LED_PERIODS.length) throw new Error(`the rack has ${UNITS.length} units but ${LED_PERIODS.length} LED periods`);
@@ -223,8 +237,13 @@ ${foot(rows)}${paints(cutOut(rows, TAIL), CAT, CAT_ROWS)}
   const rackRows = POSES[REST].rows;
   const leds = UNITS.map((u, k) => path(`led led-${k}`, runsOf(rackRows, LIT, u), RECOLOUR[LIT])).join("\n");
   const bubbles = [...BUBBLE.map((s, k) => path(`bubble bubble-${k}`, stampRuns(s), RECOLOUR["1"])), path("bubble burst", stampRuns(BURST), RECOLOUR["1"])].join("\n");
+  // Every lit pixel of all three units at once, which is what both state banks repaint.
+  const allLit = runsOf(rackRows, LIT, RACK_ROWS);
 
   // The cat and its bubble breathe together; the rack is still and is painted last, over the continued feet.
+  // The two state banks come after the rack so the panel is already underneath them, and they sit OUTSIDE it
+  // because they are not part of the drawing the recolour table describes: they are states the loop drives to,
+  // hidden in the still frame, exactly as the bubble is.
   return `<g class="mascot">
 <g class="breath">
 ${(Object.keys(POSES) as PoseName[]).map(pose).join("\n")}
@@ -232,8 +251,12 @@ ${bubbles}
 </g>
 <g class="rack">
 ${paints(rackRows, RACK, RACK_ROWS)}
+<g class="leds-live">
 ${leds}
 </g>
+</g>
+<g class="leds-hold">${path("led-steady", allLit, RECOLOUR[LIT])}</g>
+<g class="leds-fault">${path("led-fault", allLit, FAULT_TOKEN)}</g>
 </g>`;
 }
 
@@ -331,34 +354,119 @@ function showDuring(name: string, spans: Span[]): string {
   return `@keyframes ${name} { ${body} }`;
 }
 
+/** Keyframes that hide a layer during the spans and show it for the rest of the loop: the inverse of showDuring. */
+function showExcept(name: string, spans: Span[]): string {
+  const stops = new Map<number, number>([[0, 1]]);
+  for (const [from, to] of spans) {
+    stops.set(from, 0);
+    stops.set(to, 1);
+  }
+  const body = [...stops].sort((a, b) => a[0] - b[0]).map(([t, shown]) => `${pct(t)} { opacity: ${shown} }`).join(" ");
+  return `@keyframes ${name} { ${body} }`;
+}
+
 /** The windows a state occupies, so a layer's keyframes cannot drift from the timeline. */
 const spansOf = (state: PoseName): Span[] =>
   MASCOT_TIMELINE.filter((w) => w.state === state).map((w): Span => [w.from, w.to]);
 
 /**
- * The burst is an impact, so it is the fastest thing in the loop and owns its length outright. A share of the startle
- * window would make the pop as slow as whatever that window happens to be: at 800ms it was a 400ms flash, twice the
- * length of the hit it depicts, and retiming the window would have changed it again.
+ * The burst is an impact, so it is the fastest thing in the loop and owns its length outright. A share of the window
+ * it pops in would make the pop as slow as whatever that window happens to be: at 800ms it was a 400ms flash, twice
+ * the length of the hit it depicts, and retiming the window would have changed it again.
  */
 const BURST_MS = 200;
 
+/** The state the alarm begins on, and the state it is over on. Both are read from the timeline, never written twice. */
+const ALARM: PoseName = "alert";
+const FIXED: PoseName = "recover";
+
+/** The first window a state occupies, which for the alarm states is their only one. */
+function windowOf(state: PoseName): { state: PoseName; from: number; to: number } {
+  const w = MASCOT_TIMELINE.find((x) => x.state === state);
+  if (!w) throw new Error(`the timeline has no ${state} window, so the alarm has no beginning or no end`);
+  return w;
+}
+
 /**
- * The bubble inflates in equal steps across the window before startle and bursts at the very
- * instant startle begins. That instant is the point of the gesture; the burst's own length is BURST_MS.
+ * The nap the bubble inflates in: the run of sleeping windows that reaches the pop, walked back over DREAMING.
+ *
+ * It is no longer one window. `peek` sits inside the nap, so taking "the window before the pop" would start the
+ * inflation at 26s and compress four steps into two seconds. Walking back instead means the bubble spans whatever
+ * the nap turns out to be, and a `peek` moved elsewhere in the nap does not retime it.
+ */
+function napBefore(i: number): { from: number; to: number } {
+  let j = i;
+  while (j > 0 && DREAMING.includes(MASCOT_TIMELINE[j - 1].state)) j--;
+  if (j === i) throw new Error(`the nose bubble needs a sleeping window before ${MASCOT_TIMELINE[i].state} to inflate in`);
+  return { from: MASCOT_TIMELINE[j].from, to: MASCOT_TIMELINE[i].from };
+}
+
+/**
+ * The bubble inflates in equal steps across that nap and bursts at the very instant the alarm begins. That instant
+ * is the point of the gesture: the pop and the jolt are one event rather than two. The burst's own length is BURST_MS.
  */
 function bubbleSpans(): { steps: Span[]; burst: Span } {
-  const i = MASCOT_TIMELINE.findIndex((w) => w.state === "startle");
-  if (i < 1) throw new Error("the nose bubble needs a window before the startle window to inflate in");
-  const grow = MASCOT_TIMELINE[i - 1];
+  const i = MASCOT_TIMELINE.findIndex((w) => w.state === ALARM);
+  if (i < 1) throw new Error(`the nose bubble pops on ${ALARM}, which the timeline does not reach`);
+  const grow = napBefore(i);
   const pop = MASCOT_TIMELINE[i];
   const edges = BUBBLE.map((_, k) => grow.from + ((grow.to - grow.from) * k) / BUBBLE.length);
-  edges.push(pop.from);   // the last step ends exactly where startle begins, not where float sums land
+  edges.push(pop.from);   // the last step ends exactly where the alarm begins, not where float sums land
   const burstFor = BURST_MS / 1000;
-  if (burstFor >= pop.to - pop.from) throw new Error(`a ${BURST_MS}ms burst outlasts the ${((pop.to - pop.from) * 1000).toFixed(0)}ms startle window it pops in`);
+  if (burstFor >= pop.to - pop.from) throw new Error(`a ${BURST_MS}ms burst outlasts the ${((pop.to - pop.from) * 1000).toFixed(0)}ms ${ALARM} window it pops in`);
   return {
     steps: BUBBLE.map((_, k): Span => [edges[k], edges[k + 1]]),
     burst: [pop.from, pop.from + burstFor],
   };
+}
+
+/**
+ * The rack's two alarm windows, both read off the timeline.
+ *
+ * `fault` runs from the jolt to the moment the headbutt lands, which is where `recover` begins: the LEDs are the
+ * only thing that says the hit worked, so they must turn at the same instant the pose does. `hold` is the recover
+ * window itself, the beat where the machine is green and steady before the three units go back to their own clocks.
+ */
+function alarmSpans(): { fault: Span; hold: Span } {
+  const fault = windowOf(ALARM);
+  const hold = windowOf(FIXED);
+  if (hold.from <= fault.from) throw new Error(`${FIXED} begins at ${hold.from}s, which is not after ${ALARM} at ${fault.from}s`);
+  return { fault: [fault.from, hold.from], hold: [hold.from, hold.to] };
+}
+
+/**
+ * The fault flash. Healthy, the three units flash in `accent` on co-prime clocks and are never lit together
+ * (see LED_FLASH): three independent services, each on its own schedule. During the fault they go `error` and
+ * flash IN UNISON, fast.
+ *
+ * That inversion is the whole signal. Unison is what reads as a fault precisely because the healthy state is
+ * defined by never agreeing, so three lights that suddenly agree say "one machine, one problem" without a word
+ * of copy. A later tidy-up that staggered the fault bank "for consistency" with the healthy one would delete the
+ * meaning while making the code look neater, which is why the bank is a single path and a test pins the unison.
+ *
+ * `onMs` is wall-clock, like LED_FLASH.forMs, so the rate does not drift when the window is retimed. 200ms on and
+ * 200ms off is 2.5 flashes a second, under the three-a-second ceiling in docs/spec.md section 7.
+ *
+ * `dim` is deliberately twice the healthy LED_FLASH.dim, and that was measured rather than chosen. Everforest's
+ * `error` and `accent` sit at the same lightness (1.26:1 apart in dark, 1.00:1 in light), so the fault's colour is
+ * a pure hue change and a washed-out red is indistinguishable from a washed-out green. Rendered at 0.25 the dim
+ * half of every flash read as grey on both themes and at both widths, which left the rack looking merely busy for
+ * half of the fault. At 0.5 the hue is present throughout and the flash is still a clean doubling. A faulting
+ * light idling twice as bright as a healthy one is also the honest reading.
+ */
+const FAULT_FLASH = { onMs: 200, dim: 0.5 };
+
+/** Alternating lit and dim stops across `span`, on the master clock, hidden either side of it. */
+function faultFlash(name: string, span: Span): string {
+  const [from, to] = span;
+  const step = FAULT_FLASH.onMs / 1000;
+  if (to - from < 2 * step) throw new Error(`a ${((to - from) * 1000).toFixed(0)}ms fault cannot hold two ${FAULT_FLASH.onMs}ms flashes`);
+  const stops = [`0% { opacity: 0 }`];
+  for (let k = 0; from + k * step < to - 1e-9; k++) {
+    stops.push(`${pct(from + k * step)} { opacity: ${k % 2 === 0 ? 1 : FAULT_FLASH.dim} }`);
+  }
+  stops.push(`${pct(to)} { opacity: 0 }`);
+  return `@keyframes ${name} { ${stops.join(" ")} }`;
 }
 
 /**
@@ -369,14 +477,19 @@ function bubbleSpans(): { steps: Span[]; burst: Span } {
 export function mascotCss(): string {
   const poses = [...new Set(MASCOT_TIMELINE.map((w) => w.state))];
   const { steps, burst } = bubbleSpans();
+  const { fault, hold } = alarmSpans();
   const onClock = (cls: string, name: string): string => `.${cls} { animation: ${name} ${MASTER_SECONDS}s step-end infinite }`;
   return `
 .pose { opacity: 0 }
 .pose-${MASCOT_TIMELINE[0].state} { opacity: 1 }
 .bubble { opacity: 0 }
+.leds-fault, .leds-hold { opacity: 0 }
 ${poses.map((s) => onClock(`pose-${s}`, `m-${s}`)).join("\n")}
 ${steps.map((_, k) => onClock(`bubble-${k}`, `bubble-${k}`)).join("\n")}
 ${onClock("burst", "burst")}
+${onClock("leds-live", "leds-live")}
+${onClock("leds-fault", "leds-fault")}
+${onClock("leds-hold", "leds-hold")}
 .breath { animation: breathe ${BREATH_SECONDS}s step-end infinite }
 .ear { animation: ear ${EAR_SECONDS}s step-end infinite }
 .tail { animation: tail ${TAIL_SECONDS}s step-end infinite }
@@ -384,6 +497,13 @@ ${LED_PERIODS.map((s, i) => `.led-${i} { animation: ${ledName(i)} ${s}s step-end
 ${poses.map((s) => showDuring(`m-${s}`, spansOf(s))).join("\n")}
 ${steps.map((span, k) => showDuring(`bubble-${k}`, [span])).join("\n")}
 ${showDuring("burst", [burst])}
+${/* The healthy bank is hidden for the whole incident, fault and hold together, so red and green can never be
+     on screen at once. Its three inner flickers are not paused, only covered: when the group comes back at the
+     end of the hold the units resume wherever their own 7s, 11s and 13s clocks have actually got to, which is
+     what makes the machine look like it was working the whole time rather than restarting. */""}
+${showExcept("leds-live", [[fault[0], hold[1]]])}
+${faultFlash("leds-fault", fault)}
+${showDuring("leds-hold", [hold])}
 ${move("breathe", "Y", shape(BREATH_MOVE))}
 ${move("ear", "Y", flick(EAR_MOVE, EAR_SECONDS))}
 ${move("tail", "X", flick(TAIL_MOVE, TAIL_SECONDS))}
