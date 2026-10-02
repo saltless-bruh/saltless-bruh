@@ -129,14 +129,14 @@ test("the figures it reports cover the 365 day window, not the whole 53 weeks", 
   // 371 days arrive; the six oldest fall outside the window the activity line claims.
   const days = daysEnding(today, 371, (i) => (i < 6 ? 5 : i % 2));
   const inWindow = days.slice(6);
-  const a = await fetchActivity({ handle: "x", transport: transportOf([{ days, repos: [] }]).transport });
+  const a = await fetchActivity({ login: "x", transport: transportOf([{ days, repos: [] }]).transport });
   assert.equal(a.calendar.length, WINDOW_DAYS);
   assert.equal(a.totalContributions, inWindow.reduce((s, d) => s + d.count, 0));
   assert.equal(a.activeDays, inWindow.filter((d) => d.count > 0).length);
 });
 
 test("language bytes are summed across every repository and ordered largest first", async () => {
-  const a = await fetchActivity({ handle: "x", transport: onePage([
+  const a = await fetchActivity({ login: "x", transport: onePage([
     { name: "one", languages: [{ name: "Python", size: 100 }, { name: "Rust", size: 400 }] },
     { name: "two", languages: [{ name: "Python", size: 350 }] },
   ]) });
@@ -144,7 +144,7 @@ test("language bytes are summed across every repository and ordered largest firs
 });
 
 test("only the repositories the content names are counted, when it names any", async () => {
-  const a = await fetchActivity({ handle: "x", repoNames: ["KEPT"], transport: onePage([
+  const a = await fetchActivity({ login: "x", repoNames: ["KEPT"], transport: onePage([
     { name: "kept", languages: [{ name: "Python", size: 10 }] },
     { name: "skipped", languages: [{ name: "Rust", size: 999 }] },
   ]) });
@@ -152,7 +152,7 @@ test("only the repositories the content names are counted, when it names any", a
 });
 
 test("with no repository names given every repository counts", async () => {
-  const a = await fetchActivity({ handle: "x", transport: onePage([
+  const a = await fetchActivity({ login: "x", transport: onePage([
     { name: "kept", languages: [{ name: "Python", size: 10 }] },
     { name: "other", languages: [{ name: "Rust", size: 999 }] },
   ]) });
@@ -161,7 +161,7 @@ test("with no repository names given every repository counts", async () => {
 
 test("it keeps only as many languages as the stack rows print", async () => {
   const languages = Array.from({ length: MAX_LANGUAGES + 3 }, (_, i) => ({ name: `L${i}`, size: 100 - i }));
-  const a = await fetchActivity({ handle: "x", transport: onePage([{ name: "one", languages }]) });
+  const a = await fetchActivity({ login: "x", transport: onePage([{ name: "one", languages }]) });
   assert.equal(a.languages.length, MAX_LANGUAGES);
   assert.equal(a.languages[0].name, "L0");
 });
@@ -171,7 +171,7 @@ test("it follows the repository cursor until the pages run out", async () => {
     { days: daysEnding(today, 7), repos: [{ name: "a", languages: [{ name: "Python", size: 1 }] }], hasNextPage: true, endCursor: "c1" },
     { repos: [{ name: "b", languages: [{ name: "Python", size: 2 }] }] },
   ]);
-  const a = await fetchActivity({ handle: "x", transport });
+  const a = await fetchActivity({ login: "x", transport });
   assert.equal(sent.length, 2);
   assert.equal(sent[1].variables.cursor, "c1");
   assert.deepEqual(a.languages, [{ name: "Python", bytes: 3 }]);
@@ -182,27 +182,27 @@ test("the calendar is asked for once however many repository pages there are", a
     { days: daysEnding(today, 7), repos: [], hasNextPage: true, endCursor: "c1" },
     { repos: [] },
   ]);
-  await fetchActivity({ handle: "x", transport });
+  await fetchActivity({ login: "x", transport });
   assert.equal(sent.filter((s) => s.variables.withCalendar === true).length, 1);
 });
 
 test("a calendar that does not add up to its own total is refused", async () => {
   const transport = transportOf([{ days: daysEnding(today, 7, () => 1), total: 99, repos: [] }]).transport;
-  await assert.rejects(() => fetchActivity({ handle: "x", transport }), /adds up to 7 but reports 99/);
+  await assert.rejects(() => fetchActivity({ login: "x", transport }), /adds up to 7 but reports 99/);
 });
 
 test("a GraphQL errors array fails the fetch instead of being parsed around", async () => {
   const transport: Transport = async () => JSON.stringify({ errors: [{ message: "Bad credentials" }] });
-  await assert.rejects(() => fetchActivity({ handle: "x", transport }), /Bad credentials/);
+  await assert.rejects(() => fetchActivity({ login: "x", transport }), /Bad credentials/);
 });
 
-test("an unknown handle fails rather than reporting an empty year", async () => {
+test("an unknown login fails rather than reporting an empty year", async () => {
   const transport: Transport = async () => JSON.stringify({ data: { user: null } });
-  await assert.rejects(() => fetchActivity({ handle: "x", transport }), /no user/i);
+  await assert.rejects(() => fetchActivity({ login: "x", transport }), /no user/i);
 });
 
 test("the language list it produces is the shape languageShares consumes", async () => {
-  const a = await fetchActivity({ handle: "x", transport: onePage([
+  const a = await fetchActivity({ login: "x", transport: onePage([
     { name: "one", languages: [{ name: "Python", size: 300 }, { name: "Rust", size: 200 }, { name: "Nix", size: 100 }] },
   ]) });
   const shares = languageShares(a.languages);
@@ -223,13 +223,13 @@ test("a forbidden name arriving in a fetched repository description fails the fe
   const transport = onePage([
     { name: "one", description: `built by ${forbidden} in 2026`, languages: [{ name: "Python", size: 1 }] },
   ]);
-  await assert.rejects(() => fetchActivity({ handle: "x", transport }), /forbidden name/i);
+  await assert.rejects(() => fetchActivity({ login: "x", transport }), /forbidden name/i);
 });
 
 test("the forbidden-name failure does not repeat the name it is protecting", async () => {
   const transport = onePage([{ name: "one", description: forbidden, languages: [{ name: "Python", size: 1 }] }]);
   await assert.rejects(
-    () => fetchActivity({ handle: "x", transport }),
+    () => fetchActivity({ login: "x", transport }),
     (e: Error) => {
       assert.ok(!everythingIn(e).toLowerCase().includes(forbidden.toLowerCase()), "the error echoes the name it is protecting");
       return true;
@@ -241,7 +241,7 @@ test("the gate runs before the parser, so a broken body is never quoted back", a
   // A JSON syntax error quotes the source text near the fault, so the name has to be ruled
   // out before the parser is allowed to speak.
   const transport: Transport = async () => `{ "data": broken ${forbidden}`;
-  await assert.rejects(() => fetchActivity({ handle: "x", transport }), /forbidden name/i);
+  await assert.rejects(() => fetchActivity({ login: "x", transport }), /forbidden name/i);
 });
 
 // ---------------------------------------------------------------------------
@@ -307,7 +307,7 @@ test("an empty variable counts as unset rather than as a token worth sending", a
 });
 
 test("the transport posts the query to the GitHub GraphQL endpoint", async () => {
-  const { calls } = await withStubbedFetch(okReply, () => withToken(FAKE_TOKEN, () => githubTransport({ query: ACTIVITY_QUERY, variables: { handle: "x" } })));
+  const { calls } = await withStubbedFetch(okReply, () => withToken(FAKE_TOKEN, () => githubTransport({ query: ACTIVITY_QUERY, variables: { login: "x" } })));
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "https://api.github.com/graphql");
   assert.equal(calls[0].init.method, "POST");
@@ -315,7 +315,7 @@ test("the transport posts the query to the GitHub GraphQL endpoint", async () =>
 });
 
 test("the token rides in the Authorization header and nowhere else", async () => {
-  const { outcome, calls } = await withStubbedFetch(okReply, () => withToken(FAKE_TOKEN, () => githubTransport({ query: ACTIVITY_QUERY, variables: { handle: "x" } })));
+  const { outcome, calls } = await withStubbedFetch(okReply, () => withToken(FAKE_TOKEN, () => githubTransport({ query: ACTIVITY_QUERY, variables: { login: "x" } })));
   const headers = calls[0].init.headers as Record<string, string>;
   assert.ok(String(headers.authorization).includes(FAKE_TOKEN), "the token was never sent, so the fetch is unauthenticated");
   assert.ok(!calls[0].url.includes(FAKE_TOKEN), "the token is in the URL");
@@ -326,9 +326,9 @@ test("the token rides in the Authorization header and nowhere else", async () =>
 test("no failure path lets the token escape into an error", async () => {
   const leaky = `Bad credentials: ${FAKE_TOKEN}`;
   const paths: { what: string; run: () => Promise<unknown> }[] = [
-    { what: "a transport that throws", run: () => fetchActivity({ handle: "x", transport: async () => { throw new Error(`socket hang up while sending ${FAKE_TOKEN}`); } }) },
-    { what: "a GraphQL error echoing the credential", run: () => fetchActivity({ handle: "x", transport: async () => JSON.stringify({ errors: [{ message: leaky }] }) }) },
-    { what: "a body that is not JSON", run: () => fetchActivity({ handle: "x", transport: async () => `not json at all ${FAKE_TOKEN}` }) },
+    { what: "a transport that throws", run: () => fetchActivity({ login: "x", transport: async () => { throw new Error(`socket hang up while sending ${FAKE_TOKEN}`); } }) },
+    { what: "a GraphQL error echoing the credential", run: () => fetchActivity({ login: "x", transport: async () => JSON.stringify({ errors: [{ message: leaky }] }) }) },
+    { what: "a body that is not JSON", run: () => fetchActivity({ login: "x", transport: async () => `not json at all ${FAKE_TOKEN}` }) },
     {
       what: "an HTTP failure from the real transport",
       run: async () => {
@@ -361,7 +361,7 @@ test("no failure path lets the token escape into an error", async () => {
 
 test("a credential echoed back inside a response never survives into the parsed data", async () => {
   const transport = onePage([{ name: "one", languages: [{ name: `Python ${FAKE_TOKEN}`, size: 5 }] }]);
-  const a = await withToken(FAKE_TOKEN, () => fetchActivity({ handle: "x", transport }));
+  const a = await withToken(FAKE_TOKEN, () => fetchActivity({ login: "x", transport }));
   assert.ok(!JSON.stringify(a).includes(FAKE_TOKEN), "the token survived into the parsed activity");
 });
 
@@ -408,7 +408,7 @@ test("the cache lives at cache/activity.json so a fresh checkout can build offli
 
 test("a successful fetch writes the cache and reports the data as fresh", async () => {
   const cachePath = tmpCache();
-  const loaded = await loadActivity({ handle: "x", cachePath, transport: onePage([{ name: "one", languages: [{ name: "Python", size: 5 }] }]) });
+  const loaded = await loadActivity({ login: "x", cachePath, transport: onePage([{ name: "one", languages: [{ name: "Python", size: 5 }] }]) });
   assert.equal(loaded.source, "network");
   assert.equal(loaded.staleNote, null);
   assert.equal(loaded.ageSeconds, null);
@@ -418,7 +418,7 @@ test("a successful fetch writes the cache and reports the data as fresh", async 
 test("the cache holds parsed data only, never the raw response and never a credential", async () => {
   const cachePath = tmpCache();
   await withToken(FAKE_TOKEN, () => loadActivity({
-    handle: "x",
+    login: "x",
     cachePath,
     transport: onePage([{ name: "one", description: `echoed ${FAKE_TOKEN}`, languages: [{ name: `Python ${FAKE_TOKEN}`, size: 5 }] }]),
   }));
@@ -431,7 +431,7 @@ test("the cache holds parsed data only, never the raw response and never a crede
 test("a failed fetch falls back to the cache and says how stale the figures are", async () => {
   const cachePath = tmpCache();
   writeCacheFixture(cachePath, SAMPLE, agoIso(3 * 86_400));
-  const loaded = await loadActivity({ handle: "x", cachePath, transport: offline });
+  const loaded = await loadActivity({ login: "x", cachePath, transport: offline });
   assert.equal(loaded.source, "cache");
   assert.deepEqual(loaded.activity, SAMPLE);
   assert.ok(loaded.ageSeconds !== null && loaded.ageSeconds >= 3 * 86_400, `age was ${loaded.ageSeconds}`);
@@ -443,7 +443,7 @@ test("a failed fetch falls back to the cache and says how stale the figures are"
 test("with no token but a valid cache the build still gets real figures", async () => {
   const cachePath = tmpCache();
   writeCacheFixture(cachePath, SAMPLE, agoIso(5 * 3600));
-  const loaded = await withToken(undefined, () => loadActivity({ handle: "x", cachePath }));
+  const loaded = await withToken(undefined, () => loadActivity({ login: "x", cachePath }));
   assert.equal(loaded.source, "cache");
   assert.equal(loaded.activity.totalContributions, 12);
   assert.match(String(loaded.staleNote), /5 hours/);
@@ -453,7 +453,7 @@ test("with no token but a valid cache the build still gets real figures", async 
 test("with neither a fetch nor a cache it fails loudly instead of emitting zeros", async () => {
   const cachePath = tmpCache();
   await assert.rejects(
-    () => withToken(undefined, () => loadActivity({ handle: "x", cachePath })),
+    () => withToken(undefined, () => loadActivity({ login: "x", cachePath })),
     (e: Error) => {
       assert.match(e.message, /PROFILE_GH_TOKEN/);
       assert.match(e.message, /cache/i);
@@ -466,7 +466,7 @@ test("with neither a fetch nor a cache it fails loudly instead of emitting zeros
 test("a cache missing required fields is rejected rather than half used", async () => {
   const cachePath = tmpCache();
   writeCacheFixture(cachePath, { totalContributions: 5 });
-  await assert.rejects(() => withToken(undefined, () => loadActivity({ handle: "x", cachePath })), /cache/i);
+  await assert.rejects(() => withToken(undefined, () => loadActivity({ login: "x", cachePath })), /cache/i);
 });
 
 test("a cache whose counts are not whole numbers is rejected", async () => {
@@ -475,7 +475,7 @@ test("a cache whose counts are not whole numbers is rejected", async () => {
     const cachePath = tmpCache();
     writeCacheFixture(cachePath, { ...SAMPLE, totalContributions: bad });
     await assert.rejects(
-      () => withToken(undefined, () => loadActivity({ handle: "x", cachePath })),
+      () => withToken(undefined, () => loadActivity({ login: "x", cachePath })),
       /cache/i,
       `accepted ${JSON.stringify(bad)} as a contribution total`,
     );
@@ -485,20 +485,20 @@ test("a cache whose counts are not whole numbers is rejected", async () => {
 test("a cache whose calendar entries are malformed is rejected", async () => {
   const cachePath = tmpCache();
   writeCacheFixture(cachePath, { ...SAMPLE, calendar: [{ date: "not-a-day", count: 1 }] });
-  await assert.rejects(() => withToken(undefined, () => loadActivity({ handle: "x", cachePath })), /cache/i);
+  await assert.rejects(() => withToken(undefined, () => loadActivity({ login: "x", cachePath })), /cache/i);
 });
 
 test("a cache carrying a forbidden name is refused", async () => {
   const cachePath = tmpCache();
   writeCacheFixture(cachePath, { ...SAMPLE, languages: [{ name: forbidden, bytes: 1 }] });
-  await assert.rejects(() => withToken(undefined, () => loadActivity({ handle: "x", cachePath })), /forbidden name/i);
+  await assert.rejects(() => withToken(undefined, () => loadActivity({ login: "x", cachePath })), /forbidden name/i);
 });
 
 test("a forbidden name in fetched data is not papered over by a healthy cache", async () => {
   const cachePath = tmpCache();
   writeCacheFixture(cachePath, SAMPLE);
   const transport = onePage([{ name: "one", description: forbidden, languages: [{ name: "Python", size: 1 }] }]);
-  await assert.rejects(() => loadActivity({ handle: "x", cachePath, transport }), /forbidden name/i);
+  await assert.rejects(() => loadActivity({ login: "x", cachePath, transport }), /forbidden name/i);
   // And the clean cache is left exactly as it was, not overwritten with the rejected data.
   assert.deepEqual(JSON.parse(readFileSync(cachePath, "utf8")).activity, SAMPLE);
 });

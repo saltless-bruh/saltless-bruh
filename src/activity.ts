@@ -89,8 +89,8 @@ export const API_URL = "https://api.github.com/graphql";
  * every cursor. Languages are ordered by size so that the per-repository cap keeps the biggest
  * ones rather than an arbitrary twelve.
  */
-export const ACTIVITY_QUERY = `query ProfileActivity($handle: String!, $cursor: String, $withCalendar: Boolean!) {
-  user(login: $handle) {
+export const ACTIVITY_QUERY = `query ProfileActivity($login: String!, $cursor: String, $withCalendar: Boolean!) {
+  user(login: $login) {
     contributionsCollection @include(if: $withCalendar) {
       contributionCalendar {
         totalContributions
@@ -187,7 +187,7 @@ function parsePage(raw: string): Page {
     fail(`the GitHub API rejected the query: ${said}`);
   }
   const user = envelope?.data?.user ?? null;
-  if (user === null) fail("the GitHub API returned no user for that handle, so there is nothing to report");
+  if (user === null) fail("the GitHub API returned no user for that login, so there is nothing to report");
   const info = user.repositories?.pageInfo;
   if (!info) fail("the GitHub API response carries no repository page");
   return {
@@ -229,10 +229,11 @@ export class ForbiddenNameError extends Error {}
  * The owner's real activity: the contribution calendar trimmed to the window the Session
  * claims, and language byte totals across the repositories it is told to count.
  *
- * `repoNames` narrows the language totals to the repos `content.json` features; an empty list
- * counts every repository the owner owns.
+ * `login` is the GitHub account name the API is queried by (`content.json`'s `login`), which is a
+ * different value from the drawn handle. `repoNames` narrows the language totals to the repos
+ * `content.json` features; an empty list counts every repository the owner owns.
  */
-export async function fetchActivity(o: { handle: string; repoNames?: string[]; transport: Transport }): Promise<Activity> {
+export async function fetchActivity(o: { login: string; repoNames?: string[]; transport: Transport }): Promise<Activity> {
   const wanted = new Set((o.repoNames ?? []).map((n) => n.toLowerCase()));
   const bytes = new Map<string, number>();
   let calendar: Day[] | null = null;
@@ -241,7 +242,7 @@ export async function fetchActivity(o: { handle: string; repoNames?: string[]; t
 
   for (;;) {
     const withCalendar = pages === 0;
-    const raw = redact(await o.transport({ query: ACTIVITY_QUERY, variables: { handle: o.handle, cursor, withCalendar } })
+    const raw = redact(await o.transport({ query: ACTIVITY_QUERY, variables: { login: o.login, cursor, withCalendar } })
       .catch((e: Error) => fail(`the activity fetch failed (${e.message})`)));
     // Fetched data is untrusted. ADR 0001 says the real name must never reach a rendered asset,
     // and the cheapest way to keep that promise is to refuse the data on arrival rather than
@@ -410,7 +411,7 @@ function describeAge(seconds: number): string {
  * the alternative is a calendar of zeros, and a calendar of zeros is a number nobody measured.
  */
 export async function loadActivity(o: {
-  handle: string;
+  login: string;
   repoNames?: string[];
   cachePath?: URL;
   transport?: Transport;
@@ -419,7 +420,7 @@ export async function loadActivity(o: {
   let failure: string;
   try {
     const activity = await fetchActivity({
-      handle: o.handle,
+      login: o.login,
       repoNames: o.repoNames,
       transport: o.transport ?? githubTransport,
     });
