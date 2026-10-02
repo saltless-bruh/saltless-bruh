@@ -124,6 +124,23 @@ const cycleSeconds = (css: string, cls: string): number => {
   return anim.seconds;
 };
 
+/** Milliseconds per cycle that `test` holds true, with step-end: a stop's value lasts until the next one. */
+function heldMs(css: string, cls: string, holds: (decls: Record<string, string>) => boolean): number {
+  const stops = stopsOf(css, cls);
+  const period = cycleSeconds(css, cls);
+  let total = 0;
+  stops.forEach((stop, i) => {
+    if (holds(stop.decls)) total += (i + 1 < stops.length ? stops[i + 1].seconds : period) - stop.seconds;
+  });
+  return total * 1000;
+}
+
+/** Milliseconds a layer is fully opaque per cycle. */
+const litMs = (css: string, cls: string): number => heldMs(css, cls, (d) => Number(d.opacity) === 1);
+/** Milliseconds a layer spends away from rest per cycle. */
+const awayMs = (css: string, cls: string): number =>
+  heldMs(css, cls, (d) => [...(d.transform ?? "").matchAll(/translate[XY]\((-?[\d.]+)(?:px)?\)/g)].some((m) => Number(m[1]) !== 0));
+
 /** How far a layer translates along `axis`, in SVG units, at the furthest stop. */
 function translateOf(css: string, cls: string, axis: "X" | "Y"): number {
   let furthest = 0;
@@ -703,20 +720,10 @@ type Window = { state: PoseName; from: number; to: number };
 
 /** Opacity of a master-clock layer (a pose, a bubble step, the burst) at time t, read from its keyframes with step-end semantics. */
 function opacityAt(css: string, cls: string, t: number): number {
-  const anim = animationsOf(css).find((a) => a.cls === cls);
-  assert.ok(anim, `no animation rule for .${cls}`);
-  assert.equal(anim.timing, "step-end", "the sampler below assumes frames cut, not blend");
-  assert.equal(anim.seconds, MASTER_SECONDS, `.${cls} must run on the master clock`);
-  const kf = keyframesOf(css).find((k) => k.name === anim.name);
-  assert.ok(kf, `no @keyframes ${anim.name}`);
-  const stops = kf.stops.map((s) => {
-    const m = s.at.match(/^([\d.]+)%$/);
-    assert.ok(m, `keyframe stop ${s.at}`);
-    return { seconds: (Number(m[1]) / 100) * MASTER_SECONDS, opacity: Number(s.decls.opacity) };
-  });
+  assert.equal(cycleSeconds(css, cls), MASTER_SECONDS, `.${cls} must run on the master clock`);
   let value: number | undefined;
-  for (const stop of stops) if (stop.seconds <= t) value = stop.opacity;   // step-end: hold until the next stop
-  assert.ok(value !== undefined, `${anim.name} has no stop at or before ${t}s`);
+  for (const stop of stopsOf(css, cls)) if (stop.seconds <= t) value = Number(stop.decls.opacity);   // step-end: hold until the next stop
+  assert.ok(value !== undefined, `.${cls} has no stop at or before ${t}s`);
   return value;
 }
 
@@ -790,6 +797,12 @@ test("the keyframes follow the timeline when it changes, so they are derived and
 const bubbleSteps = (root: Node): string[] => walk(root).flatMap(classesOf).filter((c) => /^bubble-\d+$/.test(c)).sort();
 
 /**
+ * How long the burst ring stays on screen, in milliseconds. Declared here rather than read from the module, so a burst
+ * that goes back to being a share of the startle window, or is simply retimed, fails rather than agreeing with itself.
+ */
+const BURST_MS = 200;
+
+/**
  * The bubble inflates in equal steps across the window before startle, bursts at the very instant
  * startle begins, and is gone for the rest of the loop. Everything is read from the real keyframes.
  */
@@ -813,7 +826,12 @@ function assertBubbleFollowsTimeline(timeline: Window[]): void {
   // The pop: the last step is on screen a millisecond before startle, and only the burst a millisecond after.
   assert.deepEqual(visible(pop.from - 0.001), [steps[steps.length - 1]]);
   assert.deepEqual(visible(pop.from + 0.001), ["burst"]);
-  assert.deepEqual(visible(pop.from + (pop.to - pop.from) / 4), ["burst"], "the burst is still up a quarter of the way into the startle");
+  // The burst is an impact and owns its length: BURST_MS from the pop, whatever the startle window happens to last.
+  // Written as a share of that window it was 400ms here and 1000ms under the alternative timeline below, so a burst
+  // re-coupled to the window fails on one side or the other of these two instants.
+  assert.deepEqual(visible(pop.from + BURST_MS / 2000), ["burst"], "the burst is up through its own first half");
+  assert.deepEqual(visible(pop.from + BURST_MS / 1000 + 0.002), [], `the burst is gone ${BURST_MS}ms after the pop`);
+  assert.ok(Math.abs(litMs(css, "burst") - BURST_MS) <= 1, `the burst is lit for ${litMs(css, "burst").toFixed(1)}ms, not ${BURST_MS}ms`);
   assert.deepEqual(visible(pop.to - 0.001), [], "a burst ring, then nothing");
 
   for (let k = 0; k < MASTER_SECONDS * 10; k++) {
@@ -996,6 +1014,57 @@ test("the LEDs flicker between a dim level and fully lit, and never go dark", ()
     assert.ok(kf);
     const levels = [...new Set(kf.stops.map((s) => Number(s.decls.opacity)))].sort((a, b) => a - b);
     assert.deepEqual(levels, [0.25, 1], `${cls}: dim and lit, and nothing else`);
+  }
+});
+
+/** Targets in milliseconds, declared here and not read from the module, for the three events of a fixed length. */
+const LED_FLASH_MS = 200;
+const EAR_FLICK_MS = 119;
+const TAIL_FLICK_MS = 345;
+
+test("the three LEDs flash for the same length of time, on their different clocks", () => {
+  // The defect this pins: one shared `@keyframes led` with stops at 3% and 8%, run at 7s, 11s and 13s, made the same
+  // status flash last 350ms, 550ms and 650ms. Three lights that should differ only in interval differed in behaviour,
+  // the longest by 1.86x. Durations are measured in milliseconds off the real keyframes against a target declared
+  // above, so expressing the flash as a share of a cycle fails as soon as two cycles differ in length.
+  const css = mascotCss();
+  const leds = animationsOf(css).filter((a) => /^led-\d+$/.test(a.cls));
+  assert.ok(leds.length >= 3, `three rack units, each on its own clock, found ${leds.length}`);
+  // Every LED the generated css carries is checked, whatever its period, so adding a fourth unit or retuning an
+  // existing one is covered without editing this test.
+  for (const a of leds) {
+    const ms = litMs(css, a.cls);
+    assert.ok(Math.abs(ms - LED_FLASH_MS) <= 1, `.${a.cls} on its ${a.seconds}s clock is lit for ${ms.toFixed(1)}ms, not ${LED_FLASH_MS}ms`);
+  }
+  assert.equal(new Set(leds.map((a) => a.seconds)).size, leds.length, "the interval is the only thing the LEDs may differ in, so no two share a clock");
+  assert.equal(new Set(leds.map((a) => litMs(css, a.cls).toFixed(0))).size, 1, "every LED flashes for the same number of milliseconds");
+});
+
+test("the ear flick and the tail flick last their own milliseconds, not a share of the cycle carrying them", () => {
+  // A flick is an event with a length; 17s and 23s are intervals. While the stops were percentages of those cycles, a
+  // retuned cycle silently changed how fast the flick moved, which is the mistake BREATH_SECONDS already records.
+  // Measured in milliseconds, so a percentage-based stop reads back wrong the moment a period is retuned.
+  const css = mascotCss();
+  for (const [cls, target] of [["ear", EAR_FLICK_MS], ["tail", TAIL_FLICK_MS]] as [string, number][]) {
+    const ms = awayMs(css, cls);
+    assert.ok(Math.abs(ms - target) <= 1, `the ${cls} is away from rest for ${ms.toFixed(1)}ms on its ${cycleSeconds(css, cls)}s cycle, not ${target}ms`);
+    assert.ok(ms < cycleSeconds(css, cls) * 1000 / 10, `the ${cls} flick fills ${((ms / 10) / cycleSeconds(css, cls)).toFixed(1)}% of its cycle: an idle flick must be brief`);
+  }
+  // The breath is the one gesture that is genuinely a share of its cycle: it rises for the middle of a breath, whatever
+  // a breath lasts. It is here so the distinction is pinned rather than assumed.
+  const breath = awayMs(css, "breath") / (cycleSeconds(css, "breath") * 1000);
+  assert.ok(breath > 0.3 && breath < 0.7, `the breath is lifted for ${(breath * 100).toFixed(1)}% of a breath, which is not the middle of one`);
+});
+
+test("the burst is the briefest thing on the storyline, because it is an impact", () => {
+  // It must outlast nothing it lands inside, and no pose window may be shorter than it: a pop as long as the pose it
+  // interrupts reads as a shape, not a hit.
+  const css = mascotCss();
+  const shortestWindow = Math.min(...MASCOT_TIMELINE.map((w) => (w.to - w.from) * 1000));
+  const burst = litMs(css, "burst");
+  assert.ok(burst < shortestWindow, `the burst lasts ${burst.toFixed(0)}ms and the shortest pose window ${shortestWindow.toFixed(0)}ms`);
+  for (const c of bubbleSteps(parseXml(mascotDefs(0, 0, "dark")))) {
+    assert.ok(burst < litMs(css, c), `the burst must be quicker than the inflation step ${c} it replaces`);
   }
 });
 

@@ -228,18 +228,57 @@ const EAR_SECONDS = 17;
 const TAIL_SECONDS = 23;
 
 /**
- * The shape of one gesture inside its own cycle, as percentages of that cycle. These describe a gesture, not a moment in
- * the story, so they have no counterpart in MASCOT_TIMELINE and stay literal. Every move is under one art pixel (a test holds
- * it there): the cat's feet are continued only that far behind the frame.
+ * The shape of one gesture inside its own cycle. These describe a gesture, not a moment in the story, so they have no
+ * counterpart in MASCOT_TIMELINE and stay literal. Every move is under one art pixel (a test holds it there): the cat's
+ * feet are continued only that far behind the frame.
+ *
+ * Two kinds, written in two units on purpose. A **breath** is genuinely a fraction of a breath: it rises for the middle
+ * of its cycle whatever that cycle lasts, so percentages are the honest unit. A **flick** is an event with a length of
+ * its own, and a percentage of a 17s or 23s cycle is not: retune the cycle and the flick silently changes speed. So a
+ * flick states its milliseconds and they are converted against whatever cycle carries it. This is the lesson
+ * BREATH_SECONDS already carries at the top of this block, applied to the gestures that sit under it.
  */
-const BREATH_MOVE = { awayAt: 46.7, backAt: 93.3, by: -1 };   // rises for the middle of the breath, then eases back down
-const EAR_MOVE = { awayAt: 0.5, backAt: 1.2, by: -1 };        // a quick flick near the start of its cycle
-const TAIL_MOVE = { awayAt: 1, backAt: 2.5, by: 1 };          // a quick flick near the start of its cycle
-const LED_FLASH = { litAt: 3, dimAt: 8, dim: 0.25 };          // dim for most of the cycle, lit briefly, never dark
+const BREATH_MOVE = { awayAt: 46.7, backAt: 93.3, by: -1 };     // rises for the middle of the breath, then steps back down
+const EAR_MOVE = { afterMs: 85, forMs: 119, by: -1 };           // a quick flick near the start of its cycle: the tip lifts
+const TAIL_MOVE = { afterMs: 230, forMs: 345, by: 1 };          // a quick flick near the start of its cycle: the tip slides
+/**
+ * The LEDs are a status flash: `forMs` is how long one stays lit and `atMs` how far into its own cycle it lights, both
+ * wall-clock, so the three differ only in how often they flash and never in how long. Written as a share of the cycle
+ * instead, one shared keyframe made the same flash 350ms, 550ms and 650ms on the 7s, 11s and 13s units. `dim` is the
+ * level between flashes: low, but never dark, because the machine is never off.
+ */
+const LED_FLASH = { atMs: 210, forMs: 200, dim: 0.25 };
+
+/** A stop in a cycle, as a percentage to four places, which is under a millisecond for every cycle here. */
+const ofCycle = (fraction: number): string => `${Number((fraction * 100).toFixed(4))}%`;
+
+/** A gesture's two stops, already percentages of the cycle it runs on. */
+type Stops = { awayAt: string; backAt: string; by: number };
+
+/** A gesture that is a fraction of its cycle, which is what a breath is. */
+const shape = (g: { awayAt: number; backAt: number; by: number }): Stops =>
+  ({ awayAt: `${g.awayAt}%`, backAt: `${g.backAt}%`, by: g.by });
+
+/** A gesture of a fixed length, placed in a cycle of `seconds`. A cycle too short to hold it is a mistake, not a clamp. */
+function flick(g: { afterMs: number; forMs: number; by: number }, seconds: number): Stops {
+  const ms = seconds * 1000;
+  if (g.afterMs + g.forMs >= ms) throw new Error(`a ${seconds}s cycle cannot hold a ${g.forMs}ms flick starting at ${g.afterMs}ms`);
+  return { awayAt: ofCycle(g.afterMs / ms), backAt: ofCycle((g.afterMs + g.forMs) / ms), by: g.by };
+}
 
 /** One gesture: rest, away by `by` units along an axis, and back to rest. */
-const move = (name: string, axis: "X" | "Y", g: { awayAt: number; backAt: number; by: number }): string =>
-  `@keyframes ${name} { 0% { transform: translate${axis}(0) } ${g.awayAt}% { transform: translate${axis}(${g.by}px) } ${g.backAt}% { transform: translate${axis}(0) } }`;
+const move = (name: string, axis: "X" | "Y", g: Stops): string =>
+  `@keyframes ${name} { 0% { transform: translate${axis}(0) } ${g.awayAt} { transform: translate${axis}(${g.by}px) } ${g.backAt} { transform: translate${axis}(0) } }`;
+
+/** `@keyframes` name for an LED cycle: one per distinct period, so two units on the same clock share a flash. */
+const ledName = (seconds: number): string => `led-${String(seconds).replace(".", "-")}s`;
+
+/** The flash as a share of one cycle of `seconds`, so every LED is lit for LED_FLASH.forMs however often it fires. */
+function ledFlash(seconds: number): string {
+  const ms = seconds * 1000;
+  if (LED_FLASH.atMs + LED_FLASH.forMs >= ms) throw new Error(`a ${seconds}s LED cycle cannot hold a ${LED_FLASH.forMs}ms flash at ${LED_FLASH.atMs}ms`);
+  return `@keyframes ${ledName(seconds)} { 0% { opacity: ${LED_FLASH.dim} } ${ofCycle(LED_FLASH.atMs / ms)} { opacity: 1 } ${ofCycle((LED_FLASH.atMs + LED_FLASH.forMs) / ms)} { opacity: ${LED_FLASH.dim} } }`;
+}
 
 type Span = [number, number];
 
@@ -259,8 +298,15 @@ const spansOf = (state: PoseName): Span[] =>
   MASCOT_TIMELINE.filter((w) => w.state === state).map((w): Span => [w.from, w.to]);
 
 /**
+ * The burst is an impact, so it is the fastest thing in the loop and owns its length outright. A share of the startle
+ * window would make the pop as slow as whatever that window happens to be: at 800ms it was a 400ms flash, twice the
+ * length of the hit it depicts, and retiming the window would have changed it again.
+ */
+const BURST_MS = 200;
+
+/**
  * The bubble inflates in equal steps across the window before startle and bursts at the very
- * instant startle begins. The burst is on screen for the first half of the startle window, then gone.
+ * instant startle begins. That instant is the point of the gesture; the burst's own length is BURST_MS.
  */
 function bubbleSpans(): { steps: Span[]; burst: Span } {
   const i = MASCOT_TIMELINE.findIndex((w) => w.state === "startle");
@@ -269,9 +315,11 @@ function bubbleSpans(): { steps: Span[]; burst: Span } {
   const pop = MASCOT_TIMELINE[i];
   const edges = BUBBLE.map((_, k) => grow.from + ((grow.to - grow.from) * k) / BUBBLE.length);
   edges.push(pop.from);   // the last step ends exactly where startle begins, not where float sums land
+  const burstFor = BURST_MS / 1000;
+  if (burstFor >= pop.to - pop.from) throw new Error(`a ${BURST_MS}ms burst outlasts the ${((pop.to - pop.from) * 1000).toFixed(0)}ms startle window it pops in`);
   return {
     steps: BUBBLE.map((_, k): Span => [edges[k], edges[k + 1]]),
-    burst: [pop.from, pop.from + (pop.to - pop.from) / 2],
+    burst: [pop.from, pop.from + burstFor],
   };
 }
 
@@ -294,13 +342,13 @@ ${onClock("burst", "burst")}
 .breath { animation: breathe ${BREATH_SECONDS}s step-end infinite }
 .ear { animation: ear ${EAR_SECONDS}s step-end infinite }
 .tail { animation: tail ${TAIL_SECONDS}s step-end infinite }
-${LED_PERIODS.map((s, i) => `.led-${i} { animation: led ${s}s step-end infinite }`).join("\n")}
+${LED_PERIODS.map((s, i) => `.led-${i} { animation: ${ledName(s)} ${s}s step-end infinite }`).join("\n")}
 ${poses.map((s) => showDuring(`m-${s}`, spansOf(s))).join("\n")}
 ${steps.map((span, k) => showDuring(`bubble-${k}`, [span])).join("\n")}
 ${showDuring("burst", [burst])}
-${move("breathe", "Y", BREATH_MOVE)}
-${move("ear", "Y", EAR_MOVE)}
-${move("tail", "X", TAIL_MOVE)}
-@keyframes led { 0% { opacity: ${LED_FLASH.dim} } ${LED_FLASH.litAt}% { opacity: 1 } ${LED_FLASH.dimAt}% { opacity: ${LED_FLASH.dim} } }
+${move("breathe", "Y", shape(BREATH_MOVE))}
+${move("ear", "Y", flick(EAR_MOVE, EAR_SECONDS))}
+${move("tail", "X", flick(TAIL_MOVE, TAIL_SECONDS))}
+${[...new Set(LED_PERIODS)].map(ledFlash).join("\n")}
 `;
 }
