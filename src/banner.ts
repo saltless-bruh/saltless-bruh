@@ -41,6 +41,25 @@ const CLEAR = ".";
  * bevelled on the right, and 0 is square on all four corners. 5 keeps a square top bar where S
  * bevels, 6 and 9 trade a bowl for a 45-degree diagonal where G keeps a crossbar, and 1 grows a
  * flag where I and T carry a full-width bar.
+ *
+ * TWO WEAK PAIRS, KNOWINGLY SHIPPED. Both were read in a real 308px render and both are real;
+ * neither letter appears in the handle this project draws, so no asset it ships contains one.
+ * They are recorded here with their remedies so that fixing them is a short job rather than a
+ * rediscovery, and so that nobody "improves" the alphabet by reaching for an option already ruled
+ * out below.
+ *
+ * - 0 AGAINST O is the weakest pair. The corner treatment separates them at 846px and at 308px,
+ *   but it is the only signal doing it. The fix is to widen the LETTER O to seven columns: width
+ *   varies here already, for exactly this kind of reason (M and W at 9, Q at 8, N and 4 at 7),
+ *   and only the digits need to align with each other, so widening O costs nothing and gives the
+ *   pair two signals instead of one. Widening the DIGIT instead is the move to avoid, because
+ *   that is the one that breaks digit alignment.
+ *   Already ruled out, and not worth re-deriving: a slashed zero, because a two-pixel counter has
+ *   no room for a slash at stem weight; and a dotted zero, because a dot inside a two-pixel
+ *   counter touches both stems and turns the zero into a theta.
+ * - U AGAINST V. V's taper begins late, so at 308px it reads nearer to U than it should. The fix
+ *   is a deeper taper, and there is room for one precisely because V has no counter to pinch:
+ *   start the arms moving inward higher up the glyph rather than in the last four pixel rows.
  */
 export const LETTER_PIXELS: Record<string, string[]> = {
   A: [
