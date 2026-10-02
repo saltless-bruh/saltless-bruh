@@ -1536,48 +1536,33 @@ git commit -m "feat: compose the session rows from content and activity"
 ### Task 8: Activity data, cache and the Scan Sweep
 
 **Files:**
-- Create: `src/github.ts`, `src/scan.ts`
-- Test: `test/github.test.ts`, `test/scan.test.ts`
+- Create: `src/activity.ts` (done), `src/scan.ts`
+- Test: `test/activity.test.ts` (done), `test/scan.test.ts`
 
 **Interfaces:**
 - Consumes: `src/session.ts` (`Activity`), `src/grid.ts`, `src/tokens.ts`.
-- Produces: `fetchActivity(opts: { login: string; token: string; repoNames: string[] }): Promise<Activity>`; `loadActivity(opts: { login: string; token?: string; repoNames: string[]; cachePath: URL }): Promise<Activity>`; `scanDefs(a: Activity, col: number, row: number, theme: ThemeName): string`; `sweepDistance(a: Activity): number`; `scanCss(distance: number): string`; `PLAYBACK_SWEEP_START: number`.
+- Produces, data half, as built in `src/activity.ts`:
+  `fetchActivity(o: { login: string; repoNames?: string[]; transport: Transport }): Promise<Activity>`;
+  `loadActivity(o: { login: string; repoNames?: string[]; cachePath?: URL; transport?: Transport }): Promise<LoadedActivity>`,
+  where `LoadedActivity = { activity: Activity; source: "network" | "cache"; ageSeconds: number | null; staleNote: string | null }`;
+  `trimToWindow(days, endIso): Day[]`; `githubTransport: Transport`; `ForbiddenNameError`;
+  `TOKEN_ENV`, `API_URL`, `ACTIVITY_QUERY`, `CACHE_PATH`, `WINDOW_DAYS`, `MAX_LANGUAGES`.
+- **The token is never a parameter.** It is read from `PROFILE_GH_TOKEN` inside `githubTransport`
+  and nowhere else, so no caller can hold one (see `.env.example`, and Task 11's secret gate).
+  `Transport` is the seam the tests drive instead, which is why no test needs a network or a
+  credential. The scope must be `read:user`; the workflow's built-in `GITHUB_TOKEN` will not do.
+- **`login` is `content.json`'s `login`, not its `handle`.** The handle is the drawn nickname
+  (`LAZIE`); the login is the account the API is queried by (`saltless-bruh`). Passing the handle
+  returns no user. `content.json` carries both keys and validates both.
+- The cache is `cache/activity.json`, committed, parsed figures only, never a raw response and
+  never a credential. It is created by the first authenticated refresh; until then a build fails
+  loudly, which is the specified behaviour rather than a gap.
+- Produces, Scan Sweep half, still to build: `scanDefs(a: Activity, col: number, row: number, theme: ThemeName): string`; `sweepDistance(a: Activity): number`; `scanCss(distance: number): string`; `PLAYBACK_SWEEP_START: number`.
 
 - [ ] **Step 1: Write the failing tests**
 
-```ts
-// test/github.test.ts
-import test from "node:test";
-import assert from "node:assert/strict";
-import { writeFileSync, rmSync } from "node:fs";
-import { loadActivity } from "../src/github.ts";
-
-const cachePath = new URL("file:///tmp/activity-test.json");
-const sample = {
-  totalContributions: 12, activeDays: 3,
-  calendar: [{ date: "2026-01-01", count: 4 }],
-  languages: [{ name: "Alpha", bytes: 10 }],
-};
-
-test("with no token it falls back to the cache rather than inventing data", async () => {
-  writeFileSync(cachePath, JSON.stringify(sample));
-  const a = await loadActivity({ login: "x", repoNames: [], cachePath });
-  assert.equal(a.totalContributions, 12);
-});
-
-test("with neither token nor cache it fails loudly instead of writing zeros", async () => {
-  rmSync(cachePath, { force: true });
-  await assert.rejects(
-    () => loadActivity({ login: "x", repoNames: [], cachePath }),
-    /no token and no cache/i,
-  );
-});
-
-test("a cache missing required fields is rejected, not half-used", async () => {
-  writeFileSync(cachePath, JSON.stringify({ totalContributions: 5 }));
-  await assert.rejects(() => loadActivity({ login: "x", repoNames: [], cachePath }), /cache/i);
-});
-```
+As built in `test/activity.test.ts`, 37 tests. The sample that stood here handed the token in as an
+argument, which the rules below forbid, so it was removed rather than left to be copied.
 
 ```ts
 // test/scan.test.ts
@@ -1629,88 +1614,16 @@ test("the beam rests between passes instead of free-running", () => {
 
 - [ ] **Step 2: Run them and watch them fail**
 
-Run: `node --test test/github.test.ts test/scan.test.ts`
+Run: `node --test test/activity.test.ts test/scan.test.ts`
 Expected: FAIL, cannot find modules.
 
 - [ ] **Step 3: Implement the data layer**
 
-```ts
-// src/github.ts
-import { readFileSync, writeFileSync } from "node:fs";
-import type { Activity } from "./session.ts";
-import { assertNoForbiddenNames } from "./content.ts";
-
-const QUERY = `query($login:String!){
-  user(login:$login){
-    contributionsCollection{
-      contributionCalendar{ totalContributions weeks{ contributionDays{ date contributionCount } } }
-    }
-    repositories(first:100, ownerAffiliations:OWNER, isFork:false){
-      nodes{ name languages(first:12){ edges{ size node{ name } } } }
-    }
-  }
-}`;
-
-export async function fetchActivity(o: { login: string; token: string; repoNames: string[] }): Promise<Activity> {
-  const res = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    headers: { authorization: `bearer ${o.token}`, "content-type": "application/json", "user-agent": "profile-session" },
-    body: JSON.stringify({ query: QUERY, variables: { login: o.login } }),
-  });
-  if (!res.ok) throw new Error(`GitHub API returned ${res.status}`);
-  const json = await res.json() as any;
-  if (json.errors) throw new Error(`GitHub API: ${json.errors.map((e: any) => e.message).join("; ")}`);
-
-  const cal = json.data.user.contributionsCollection.contributionCalendar;
-  const days = cal.weeks.flatMap((w: any) => w.contributionDays)
-    .map((d: any) => ({ date: d.date as string, count: d.contributionCount as number }));
-
-  const wanted = new Set(o.repoNames.map((n) => n.toLowerCase()));
-  const bytes = new Map<string, number>();
-  for (const repo of json.data.user.repositories.nodes) {
-    if (wanted.size > 0 && !wanted.has(repo.name.toLowerCase())) continue;
-    for (const e of repo.languages.edges) {
-      bytes.set(e.node.name, (bytes.get(e.node.name) ?? 0) + e.size);
-    }
-  }
-
-  return {
-    totalContributions: cal.totalContributions,
-    activeDays: days.filter((d: { count: number }) => d.count > 0).length,
-    calendar: days,
-    languages: [...bytes].map(([name, b]) => ({ name, bytes: b })).sort((x, y) => y.bytes - x.bytes).slice(0, 6),
-  };
-}
-
-function validCache(v: unknown): v is Activity {
-  const a = v as Activity;
-  return !!a && typeof a.totalContributions === "number" && typeof a.activeDays === "number"
-      && Array.isArray(a.calendar) && Array.isArray(a.languages);
-}
-
-/** Fetch when a token is available, otherwise reuse the cache. Never invents data. */
-export async function loadActivity(o: {
-  login: string; token?: string; repoNames: string[]; cachePath: URL;
-}): Promise<Activity> {
-  if (o.token) {
-    const fresh = await fetchActivity({ login: o.login, token: o.token, repoNames: o.repoNames });
-    // Fetched data is untrusted: a repo name or language could carry a forbidden name.
-    assertNoForbiddenNames(JSON.stringify(fresh), "data fetched from the GitHub API");
-    writeFileSync(o.cachePath, `${JSON.stringify(fresh, null, 2)}\n`);
-    return fresh;
-  }
-  let raw: string;
-  try {
-    raw = readFileSync(o.cachePath, "utf8");
-  } catch {
-    throw new Error("no token and no cache: set GITHUB_TOKEN, or commit assets/activity.json");
-  }
-  const parsed = JSON.parse(raw);
-  if (!validCache(parsed)) throw new Error("activity cache is missing required fields; delete it and rebuild with a token");
-  assertNoForbiddenNames(raw, "the activity cache");
-  return parsed;
-}
-```
+As built in `src/activity.ts`. The sample that stood here read the token from `GITHUB_TOKEN`, took
+it as a function argument and cached to `assets/activity.json`, all three of which are wrong, so it
+was removed rather than left to be copied. Read the file, not a sketch of it. The decisions it
+settles are recorded in `docs/spec.md` 5.1 to 5.4: the window and the calendar total, the gate over
+the whole response body, pagination to the end, and where the credential is read from.
 
 - [ ] **Step 4: Implement the Scan Sweep**
 
@@ -1774,14 +1687,15 @@ export const PLAYBACK_SWEEP_START = 3.2;
 
 - [ ] **Step 5: Run the tests and watch them pass**
 
-Run: `node --test test/github.test.ts test/scan.test.ts`
-Expected: PASS, 7 tests.
+Run: `node --test test/activity.test.ts test/scan.test.ts`
+Expected: PASS. The data half is 37 tests and already green, so add the scan tests alongside them.
+Also run `npm run typecheck`, which is the project's strict check and part of Task 11's gate.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/github.ts src/scan.ts test/github.test.ts test/scan.test.ts
-git commit -m "feat: activity fetch with cache fallback and scan sweep"
+git add src/scan.ts test/scan.test.ts
+git commit -m "feat: draw the contribution calendar as a swept scan"
 ```
 
 ---
@@ -1979,7 +1893,6 @@ import { playbackCss, spinnerCss, verbSchedule } from "./playback.ts";
 import { colX, rowBaselineY } from "./grid.ts";
 import { PALETTES, type ThemeName } from "./tokens.ts";
 
-const LOGIN = "saltless-bruh";
 
 export async function build(opts?: { outDir?: URL }): Promise<{ dark: string; light: string; transcript: string }> {
   const outDir = opts?.outDir ?? new URL("../assets/", import.meta.url);
@@ -1987,12 +1900,13 @@ export async function build(opts?: { outDir?: URL }): Promise<{ dark: string; li
 
   const content = loadContent();
   const repoNames = content.lanes.flatMap((l) => l.repos.map((r) => r.name));
-  const activity = await loadActivity({
-    login: LOGIN,
-    token: process.env.GITHUB_TOKEN,
-    repoNames,
-    cachePath: new URL("activity.json", outDir),
-  });
+  // content.login is the account the API is queried by. content.handle is the drawn nickname and
+  // would return no user. No token is passed: loadActivity reads PROFILE_GH_TOKEN itself, and the
+  // cache defaults to cache/activity.json.
+  const loaded = await loadActivity({ login: content.login, repoNames });
+  // Stale figures are used but never passed off as fresh.
+  if (loaded.staleNote !== null) console.warn(`warning: ${loaded.staleNote}`);
+  const activity = loaded.activity;
 
   const { rows, scanRow, verbRow } = composeSession(content, activity);
   assertFits(rows);
@@ -2329,17 +2243,17 @@ jobs:
 
       - name: Build the session
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROFILE_GH_TOKEN: ${{ secrets.PROFILE_GH_TOKEN }}
         run: npm run build
 
       - run: npm run gates
 
       - name: Commit if anything changed
         run: |
-          if [ -n "$(git status --porcelain assets README.md)" ]; then
+          if [ -n "$(git status --porcelain assets cache README.md)" ]; then
             git config user.name "saltless-bruh"
             git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
-            git add assets README.md
+            git add assets cache README.md
             git commit -m "chore: refresh profile session"
             git push
           else
@@ -2449,6 +2363,6 @@ These need a browser and the owner's account, so they are not automated:
 
 **Spec coverage.** Every section maps to a task: §2 pipeline → Tasks 9 and 11; §3.1 platform → Tasks 3 and 11; §3.2 grid → Task 1; §3.3 glyphs → Tasks 2 and 5; §3.4 palette → Task 1; §3.5 motion → Tasks 6, 8 and 9; §3.6 identity → Tasks 4 and 11; §4 content → Task 4; §5 data → Task 8; §6 gates → Tasks 11 and 12.
 
-**Review Focus coverage.** (1) uncovered codepoint → `test/font.test.ts` and `test/content.test.ts`; (2) over-wide row → `test/rows.test.ts` and `test/session.test.ts`; (3) no token or cache → `test/github.test.ts`; (4) empty or all-zero calendar → `test/scan.test.ts`; (5) forbidden name in fetched data → `loadActivity` plus `test/gates.test.ts`.
+**Review Focus coverage.** (1) uncovered codepoint → `test/font.test.ts` and `test/content.test.ts`; (2) over-wide row → `test/rows.test.ts` and `test/session.test.ts`; (3) no token or cache → `test/activity.test.ts`; (4) empty or all-zero calendar → `test/scan.test.ts`; (5) forbidden name in fetched data → `loadActivity` plus `test/gates.test.ts`.
 
 **Known rough edges for the implementer.** The Mascot art in Task 6 and the letterforms in Task 5 are starting silhouettes, not finished drawings; both tasks end with an eyeball step precisely because they need tuning against a real render. `BASELINE_IN_ROW` is a measured estimate to be confirmed in Task 3 Step 6. The Scan Sweep beam translation distance is hardcoded at 640px and should be derived from the calendar width once the real data lands.

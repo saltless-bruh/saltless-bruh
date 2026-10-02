@@ -44,7 +44,7 @@ github.com/saltless-bruh
 ```
 content.json  (the only file the user edits)
      +
-GitHub GraphQL  ->  assets/activity.json (cache)        .github/workflows/refresh.yml
+GitHub GraphQL  ->  cache/activity.json (cache)         .github/workflows/refresh.yml
      +                                                   daily cron + push + manual
 design tokens                                            commits only when output changed
      |
@@ -191,6 +191,7 @@ is the same for every value it decorates belongs to the generator (the spinner's
 | Key | Meaning |
 |---|---|
 | `handle`, `cwd` | Identity line |
+| `login` | The GitHub account name the API is queried by, e.g. `saltless-bruh`. Nothing draws it, and it is a different value from `handle`, which is the nickname (CONTEXT.md: the Handle is both). It is validated like every other string here, so a wrong one fails the build instead of returning no user from the API |
 | `role` | The one-line role under the Banner |
 | `whoami` | Up to 3 lines of copy |
 | `lanes[]` | Each has a `label` and `repos[]`, each repo a `name` and a one-line `blurb` |
@@ -210,12 +211,83 @@ Validation rules, all enforced at build time:
 
 ## 5. Data
 
-One GraphQL query, authenticated with the workflow's `GITHUB_TOKEN`:
+### 5.1 The query
 
-- `contributionsCollection.contributionCalendar`: `totalContributions` and per-day counts, which drive the Scan Sweep and the "N/365 days up" line.
-- `repositories(ownerAffiliations: OWNER, isFork: false)` with per-language byte sizes, filtered to the repos named in `content.json`, which drives the `/stack` language rows.
+One GraphQL query document against `https://api.github.com/graphql`, sent once per page of
+repositories:
 
-The result is cached to `assets/activity.json`. A build with no token or no network reuses the cache, so builds are reproducible offline and the test suite needs no network. A build that has neither token nor cache fails loudly rather than emitting zeros.
+- `user(login: $login).contributionsCollection.contributionCalendar`: `totalContributions` and
+  per-day `date` and `contributionCount`, which drive the Scan Sweep and the "N/365 days up" line.
+  `$login` comes from `content.json`'s `login`, not from `handle`.
+- `repositories(first: 100, after: $cursor, ownerAffiliations: OWNER, isFork: false)` with
+  per-language byte sizes, ordered by size, filtered to the repos named in `content.json`, which
+  drives the `/stack` language rows. An empty list of names counts every repository the owner owns.
+
+`contributionsCollection` is wrapped in `@include(if: $withCalendar)` and asked for on the first
+page only, so the follow-up pages do not re-send a year of days with every cursor.
+
+**Repositories are paginated to the end rather than capped at one page.** A truncated page would
+produce a byte total that is wrong and looks exactly like a right one. The ceiling is 20 pages,
+and reaching it fails the build instead of reporting a partial total.
+
+### 5.2 Auth
+
+Read from `PROFILE_GH_TOKEN` in the environment, never from an argument, a CLI flag, or a file in
+the tree. Locally it comes from `.env` (gitignored, see `.env.example`); in CI from a repository
+secret of the same name.
+
+**It needs the `read:user` scope, and the workflow's built-in `GITHUB_TOKEN` will not do.** The
+contribution calendar sits behind `contributionsCollection`, which the built-in token cannot
+reliably read, and private contributions are only counted for the token's own owner.
+
+The token must never appear in an error message, a thrown value, the cache, a log line, or a
+generated asset. Two rules keep that true rather than hoping for it: the response body is scrubbed
+of the token where it arrives, so everything derived from it is already clean, and every failure
+message is scrubbed on the way out, which covers text the generator did not write (a socket error
+naming its request, a GraphQL error echoing its input). A failure quotes an HTTP status and never
+a response body, because at that point the body has not yet cleared the forbidden-name gate.
+
+### 5.3 The cache
+
+The parsed result is cached to `cache/activity.json`, which is committed, so a clone with no
+network and no token still builds and the test suite needs no network. The file holds parsed
+figures only: never the raw response, never the query, never a credential. It carries its own
+`fetchedAt` timestamp rather than relying on the filesystem, because a checkout resets every mtime
+and the age of the figures would then read as zero.
+
+- Fetch succeeds: the cache is rewritten and the fresh data is used.
+- Fetch fails with a cache behind it: the cached figures are used, and the caller is handed their
+  age and the reason the refresh failed, so nothing downstream can present last week's numbers as
+  today's.
+- Fetch fails with no cache: the build fails. Emitting zeros is the easy alternative and it is
+  ruled out, because a calendar of zeros is an invented number wearing the shape of data (3.6).
+- The cache is rebuilt field by field on read, so a half-written file is refused rather than
+  half-used, and a count arriving as a string, a null or a fraction is corruption rather than a
+  figure to print.
+
+The file is created by the first authenticated refresh. Until one has run, a build fails loudly,
+which is the behaviour above and not a gap.
+
+### 5.4 Two decisions worth not re-deriving
+
+**The printed total is the sum over the window, not the API's `totalContributions`.** The calendar
+arrives as 53 whole weeks, which is up to 371 days, and it is trimmed to the last 365 days ending
+today: days older than the window at one end, and days in the current week that have not happened
+yet at the other. The API's own total covers the whole calendar, so printing it beside
+"N/365 days up" would put two different year-lengths in one sentence. Both figures are individually
+real, which is exactly why this is the class of error 3.6 exists to prevent. The API's total is
+still asked for and put to better use: the sum of the calendar's days must equal it, and a
+disagreement means the response was incomplete and fails the build, which catches a wrong headline
+figure that nothing downstream could question.
+
+**The forbidden-name gate reads the whole response body, not the fields that are kept.** It runs on
+arrival, before the parser, because a JSON syntax error quotes the text around the fault. Scanning
+only the fields the generator keeps would be a gate that the next added field walks straight around;
+a repository description the query does not even request is still a name that arrived. A name in
+fetched data is also the one failure the cache does not cover: it is not an availability problem,
+and serving yesterday's figures over the top of it would turn a privacy breach into a quiet one.
+
+Implementation: `src/activity.ts` (`fetchActivity`, `loadActivity`), tests in `test/activity.test.ts`.
 
 ## 6. Acceptance gates
 
