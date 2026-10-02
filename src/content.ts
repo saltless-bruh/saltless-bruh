@@ -23,7 +23,7 @@ export type ActivityLine = { label: string; daysUp: string; contributions: strin
 /** Spinner words grouped by Mascot state, so the label names the pose on screen. */
 export type Verbs = Record<PoseName, string[]>;
 export type Content = {
-  handle: string; cwd: string; role: string; whoami: string[];
+  handle: string; login: string; cwd: string; role: string; whoami: string[];
   lanes: Lane[]; stackRows: StackRow[]; verbs: Verbs;
   activityLine: ActivityLine; statusline: Statusline;
 };
@@ -80,10 +80,28 @@ function text(v: unknown, field: string, allowBlank = false): void {
   if (!allowBlank && v.trim() === "") fail(`${field} must not be blank`);
 }
 
+/**
+ * An account name the GitHub API is queried by. Not drawn anywhere, so it has no width to check,
+ * but it is refused in the two shapes a person actually pastes by mistake: "@name", which is how
+ * prose writes it, and "owner/repo", which is how a URL does. GitHub does not publish its own
+ * character rule in its documentation, so this refuses only what certainly cannot be an account
+ * name rather than guessing at the whole rule and rejecting a valid one.
+ */
+function accountName(v: unknown, field: string): void {
+  text(v, field);
+  if (typeof v === "string" && !/^[^\s@/]+$/.test(v)) {
+    fail(`${field} must be a GitHub account name, with no spaces, "@" or "/" (the API is queried by it; it is not the drawn handle)`);
+  }
+}
+
 /** Checks the shape the rest of the generator relies on, so `as Content` is honest. */
 function assertShape(c: unknown): asserts c is Content {
   if (!isObj(c)) fail("the top level must be an object");
   text(c.handle, "handle");
+  // The Handle is two values, not one: the nickname that is drawn, and the account the GitHub API
+  // is queried by (CONTEXT.md). Nothing renders the login, but it is validated here like every
+  // other string so a wrong one fails the build instead of returning no user from the API.
+  accountName(c.login, "login");
   text(c.cwd, "cwd");
   text(c.role, "role");
 

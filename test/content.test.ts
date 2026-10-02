@@ -13,6 +13,9 @@ import { MASCOT_TIMELINE } from "../src/timeline.ts";
 // of the owner's content.json, which the owner is free to edit.
 const VALID: Content = {
   handle: "TESTER",
+  // Deliberately unlike the handle: the two are different values and the fixture must not
+  // let a generator confuse them.
+  login: "tester-account",
   cwd: "~/tester",
   role: "Fixture role · with a middle dot",
   whoami: ["line one", "line two", "line three"],
@@ -152,7 +155,7 @@ test("Vietnamese and the middle dot are drawable, so content may use them", () =
 
 test("the smallest valid document loads: one of everything", () => {
   const smallest: Content = {
-    handle: "H", cwd: "c", role: "r", whoami: ["w"],
+    handle: "H", login: "l", cwd: "c", role: "r", whoami: ["w"],
     lanes: [{ label: "l/", repos: [{ name: "n", blurb: "b" }] }],
     stackRows: [{ label: "", items: ["i"] }],
     verbs: { sleep: ["a"], yawn: ["b"], stretch: ["c"], settle: ["d"], startle: ["e"] },
@@ -220,7 +223,7 @@ const STRUCTURE: [string, unknown, RegExp][] = [
   ["stackRows[0].items[1]", 5, /stackRows\[0\]\.items\[1\] must be a string/],
 
   // identity lines
-  ...["handle", "cwd", "role"].flatMap((f): [string, unknown, RegExp][] => [
+  ...["handle", "login", "cwd", "role"].flatMap((f): [string, unknown, RegExp][] => [
     [f, undefined, new RegExp(`${f} must be a string`)],
     [f, "   ", new RegExp(`${f} must not be blank`)],
     [f, 9, new RegExp(`${f} must be a string`)],
@@ -307,10 +310,12 @@ test("a file that is not JSON is rejected, and the message says so", () => {
 
 // ---- content: every string must be drawable and must carry no forbidden name --------
 
-const EDITABLE = leaves(VALID).filter((p) => p !== "statusline.effortSelected");
+// effortSelected must match a label and login must be an account name, so neither can hold the
+// arbitrary text these sweeps push through every other field. Both keep their own tests below.
+const EDITABLE = leaves(VALID).filter((p) => p !== "statusline.effortSelected" && p !== "login");
 
 test("the sweep covers every string in the document, so it cannot pass vacuously", () => {
-  assert.equal(leaves(VALID).length, 38);
+  assert.equal(leaves(VALID).length, 39);
   for (const expected of [
     "handle", "whoami[2]", "lanes[1].repos[0].blurb", "stackRows[1].items[0]", "verbs.sleep[1]",
     "statusline.note", "statusline.toggle.word", "statusline.toggle.state", "statusline.effortWord",
@@ -554,4 +559,45 @@ test("an empty entry in the list is ignored, not treated as matching everything"
   mod.FORBIDDEN_NAMES.push("");
   assert.deepEqual(mod.loadContent(write(JSON.stringify(VALID))), VALID);
   assert.throws(() => mod.assertNoForbiddenNames("Firstname Lastname", "x"), /forbidden name/);
+});
+
+// ---- login: the account the API is queried by, which is not the drawn handle ---------
+
+test("the login and the drawn handle are separate fields, so neither stands in for the other", () => {
+  const c = load(VALID);
+  assert.equal(c.login, "tester-account");
+  assert.equal(c.handle, "TESTER");
+  assert.notEqual(c.login, c.handle);
+});
+
+test("a login shaped like something a person pastes by mistake is refused", () => {
+  // "@name" is how prose writes it and "owner/repo" is how a URL does. Either one returns no
+  // user from the API, which is a confusing way to learn about a typo in content.json.
+  for (const bad of ["@tester-account", "tester/account", "tester account", " tester", "tester "]) {
+    assert.match(
+      rejection(edited("login", bad), `login = ${JSON.stringify(bad)}`),
+      /login must be a GitHub account name/,
+      `accepted ${JSON.stringify(bad)}`,
+    );
+  }
+});
+
+test("an ordinary login is accepted, hyphens and digits included", () => {
+  for (const good of ["saltless-bruh", "a", "User123", "a-b-c-9"]) {
+    assert.doesNotThrow(() => load({ ...VALID, login: good }), `rejected ${good}`);
+  }
+});
+
+test("a name in the login is reported as a name, not as a badly shaped account", () => {
+  // The value breaks the account-name rule as well, so this pins the order: names are ruled out
+  // before any message that could quote the field is allowed to be built.
+  const msg = rejection(edited("login", "x fIrStNaMe LaStNaMe x"), "name in login");
+  assert.match(msg, /forbidden name appears/);
+  assert.ok(!/firstname|lastname/i.test(msg), `message echoes the name: ${msg}`);
+});
+
+test("the shipped content.json carries a login the API could be queried by", () => {
+  const shipped = JSON.parse(readFileSync(SHIPPED, "utf8"));
+  assert.equal(typeof shipped.login, "string");
+  assert.match(shipped.login, /^[^\s@/]+$/);
 });
