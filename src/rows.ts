@@ -1,8 +1,15 @@
 import { COLS, colX, rowBaselineY } from "./grid.ts";
 
 export type Style = "text" | "muted" | "accent" | "warning" | "error" | "bold";
-/** `cls` attaches an animation hook to a single run, e.g. the spinner glyph. */
-export type Run = { col: number; text: string; style?: Style; cls?: string };
+/**
+ * `cls` attaches an animation hook to a single run, e.g. the spinner glyph.
+ *
+ * `textOnly` marks words the Session shows some other way than as glyphs on this row: the
+ * Banner's letters are geometry, and the spinner's verbs are drawn by the motion layer. The
+ * run is read by `rowsToText`, so the transcript and the forbidden-name scan see the words,
+ * and it is skipped by `renderRows`, so nothing is drawn on top of the art.
+ */
+export type Run = { col: number; text: string; style?: Style; cls?: string; textOnly?: true };
 export type Row = { runs: Run[]; cls?: string };
 
 /** Escapes text for use as XML element content or as a double-quoted attribute value. */
@@ -43,18 +50,28 @@ export function rowsToText(rows: Row[]): string {
   }).join("\n");
 }
 
+/**
+ * The rows as `<text>` elements. A `textOnly` run draws nothing, so a row that holds only
+ * those, or no runs at all, emits no element unless it carries a row hook of its own to keep.
+ */
 export function renderRows(rows: Row[]): string {
   return rows.map((row, i) => {
-    const spans = [...row.runs]
+    const drawn = row.runs.filter((r) => !r.textOnly);
+    if (drawn.length === 0 && !row.cls) return "";
+    const spans = [...drawn]
       .sort(byColumn)
       .map((r) => `<tspan x="${colX(r.col)}" class="${[r.style ?? "text", r.cls].filter(Boolean).join(" ")}">${esc(r.text)}</tspan>`)
       .join("");
     const cls = row.cls ? ` class="${row.cls}"` : "";
     return `<text${cls} y="${rowBaselineY(i)}" xml:space="preserve">${spans}</text>`;
-  }).join("\n");
+  }).filter((el) => el !== "").join("\n");
 }
 
-/** Every character the rows will draw, for subsetting and coverage checks. */
+/**
+ * Every character the rows carry, for subsetting and coverage checks. A `textOnly` run counts
+ * too: this row does not draw its words, but the Session may draw them elsewhere (the motion
+ * layer's spinner verbs), so the subset has to cover them whichever layer puts them on screen.
+ */
 export function charsUsed(rows: Row[]): string {
   return [...new Set(rows.flatMap((r) => r.runs.flatMap((run) => [...run.text])))].join("");
 }

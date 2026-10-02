@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { colX, rowBaselineY } from "../src/grid.ts";
 import { rowWidth, assertFits, rowsToText, renderRows, charsUsed, esc } from "../src/rows.ts";
 import type { Row, Run } from "../src/rows.ts";
+import { assertNoForbiddenNames } from "../src/content.ts";
 
 // U+1D11E lies outside the BMP: one cell on the grid, two UTF-16 code units in a JS string.
 const CLEF = "\u{1D11E}";
@@ -102,6 +103,68 @@ test("runs that cover the same cells are written once, as when a copy is laid ov
 test("an overlapping run writes onto cells, so it is counted in columns and the rest of the row stays put", () => {
   const text = rowsToText([{ runs: [{ col: 1, text: `a${CLEF}b` }, { col: 2, text: CLEF }, { col: 5, text: "z" }] }]);
   assert.deepEqual([...text], [" ", "a", CLEF, "b", " ", "z"]);
+});
+
+test("a run laid part-way over another covers the cells it reaches, and nothing beyond them", () => {
+  // Painting cell by cell is what makes a partial overlap read as the eye sees it. Appending
+  // run text instead put the second run after the first, so "abcdef" plus "XY" at column 3
+  // came out as "abcdefXY": a word the picture never shows, in the transcript the
+  // forbidden-name scan reads.
+  //
+  // One index per cell is consistent with the rest of the row model because `cells` in
+  // src/rows.ts counts code points too ([...s].length), which is what rowWidth and assertFits
+  // measure with. This is a COLUMN model, not a display-width one, and must stay that way: in
+  // the picture every cell is exactly CELL_W wide whatever glyph sits in it, so retrofitting
+  // wcwidth here would move the text out of step with the art.
+  assert.equal(rowsToText([{ runs: [{ col: 0, text: "abcdef" }, { col: 3, text: "XY" }] }]), "abcXYf");
+  // the runs are sorted first, so the result does not depend on the order they were given in
+  assert.equal(rowsToText([{ runs: [{ col: 3, text: "XY" }, { col: 0, text: "abcdef" }] }]), "abcXYf");
+  // an overlap that reaches past the first run extends the row rather than being clipped
+  assert.equal(rowsToText([{ runs: [{ col: 0, text: "abcdef" }, { col: 4, text: "XYZ" }] }]), "abcdXYZ");
+  // one code point per cell: a character outside the BMP is one cell, overwritten whole
+  assert.equal(rowWidth({ runs: [{ col: 0, text: `ab${CLEF}de` }] }), 5, "cells counts code points, not UTF-16 units");
+  assert.equal(rowsToText([{ runs: [{ col: 0, text: `ab${CLEF}de` }, { col: 2, text: "X" }] }]), "abXde");
+  assert.equal(rowsToText([{ runs: [{ col: 0, text: "abcde" }, { col: 2, text: CLEF }] }]), `ab${CLEF}de`);
+});
+
+// ---- text-only runs ----
+
+test("a text-only run is read by the transcript and drawn by nothing", () => {
+  const rows: Row[] = [{ runs: [{ col: 2, text: "ART", textOnly: true }, { col: 8, text: "ink" }] }];
+  assert.equal(rowsToText(rows), "  ART   ink");
+  const svg = renderRows(rows);
+  assert.ok(svg.includes(">ink</tspan>"), "the drawn run is missing");
+  assert.ok(!svg.includes("ART"), "the text-only run reached the picture");
+  assert.equal([...svg.matchAll(/<tspan/g)].length, 1, "one tspan, for the drawn run only");
+  assert.equal(charsUsed(rows), "ARTink", "the subset still covers words another layer may draw");
+});
+
+test("a row of nothing but text-only runs emits no element, unless it carries a row hook", () => {
+  assert.equal(renderRows([{ runs: [{ col: 0, text: "ART", textOnly: true }] }]), "");
+  assert.equal(
+    renderRows([{ cls: "scan", runs: [{ col: 0, text: "ART", textOnly: true }] }]),
+    `<text class="scan" y="${rowBaselineY(0)}" xml:space="preserve"></text>`,
+    "a row the motion layer drives keeps its element even with nothing to draw",
+  );
+});
+
+test("an empty row draws nothing, and the rows after it keep their own baselines", () => {
+  assert.equal(renderRows([{ runs: [] }]), "");
+  assert.equal(
+    renderRows([{ runs: [] }, { runs: [{ col: 0, text: "a" }] }]),
+    `<text y="${rowBaselineY(1)}" xml:space="preserve"><tspan x="${colX(0)}" class="text">a</tspan></text>`,
+  );
+});
+
+test("a forbidden name carried by a text-only run is caught by the scan of the transcript", () => {
+  // This is the point of the flag. Text the Session draws as art was invisible to rowsToText,
+  // so the ADR 0001 gate could not see what the art spelled. "Firstname Lastname" is the
+  // committed placeholder from src/content.ts, which is public on purpose.
+  const rows: Row[] = [{ runs: [{ col: 0, text: "Firstname Lastname", textOnly: true }] }];
+  assert.equal(rowsToText(rows), "Firstname Lastname");
+  assert.equal(renderRows(rows), "", "the name was drawn into the picture");
+  assert.throws(() => assertNoForbiddenNames(rowsToText(rows), "the transcript"), /forbidden name/);
+  assert.doesNotThrow(() => assertNoForbiddenNames(rowsToText([{ runs: [{ col: 0, text: "Firstname", textOnly: true }] }]), "the transcript"));
 });
 
 // ---- esc and renderRows ----
