@@ -617,12 +617,34 @@ const README_FORBIDDEN: [RegExp, string][] = [
   [/<svg/i, "an inline <svg>"],
 ];
 
-/** Rows the transcript must carry before it is a transcript rather than a stub. */
-export const MIN_TRANSCRIPT_ROWS = 20;
+/**
+ * The transcript block, which this gate used to REQUIRE and now refuses.
+ *
+ * Until 2026-10-03 the README carried the Session as plain text inside a `<details>` block and
+ * this gate failed if it was missing, collapsed, unlabelled, outside a fence, or shorter than
+ * twenty rows. The owner deleted the block: nobody opened it, and a disclosure triangle under a
+ * full-width picture reads as clutter (ADR 0004, third amendment).
+ *
+ * **The assertion is inverted rather than deleted.** A gate that stopped checking anything about
+ * the transcript would be silent on the one thing that could now go wrong, which is the block
+ * coming back: a reverted generator, a merge that resurrects `renderReadme`'s old body, or an
+ * obliging hand edit of the README. Each of those is caught here, in words that name the decision
+ * instead of the markup, because somebody who reintroduces it will not have read this file.
+ *
+ * The fence is refused as well as the block. The generator has exactly one reason to emit a fenced
+ * code block into a README it writes itself, and that reason was the transcript, so a fence outside
+ * a `<details>` is the same regression with the triangle filed off.
+ */
+const README_RETIRED: [RegExp, string][] = [
+  [/<details/i, "a <details> block"],
+  [/<summary/i, "a <summary> label"],
+  [/(?:^|\n)`{3,}/, "a fenced code block"],
+];
 
 /**
  * The README's integrity: that it really points at both Theme Variants, that the files it points
- * at are there, and that it carries the Session as text.
+ * at are there, that the picture has an accessible name, and that the retired transcript block has
+ * not come back.
  *
  * `exists` is injected rather than read here so the same function can be driven over a README
  * that has not been written next to its assets yet. The two image paths are read OUT of the
@@ -675,20 +697,12 @@ export function findReadmeFaults(readme: string, exists: (src: string) => boolea
     }
   }
 
-  const details = /<details>([\s\S]*?)<\/details>/.exec(readme);
-  if (details === null) {
-    out.push("no <details> transcript block, so the Session's words reach no screen reader, search engine or copy-paste (ADR 0004)");
-    return out;
-  }
-  const summary = /<summary>([\s\S]*?)<\/summary>/.exec(details[1]);
-  if (summary === null || summary[1].trim() === "") out.push("the transcript block has no <summary> label");
-  const fenced = /(?:^|\n)(`{3,})[^\n]*\n([\s\S]*?)\n\1(?=\n|$)/.exec(details[1]);
-  if (fenced === null) {
-    out.push("the transcript is not inside a fenced code block, so its column grid collapses into prose");
-  } else {
-    const rows = fenced[2].split("\n");
-    if (rows.length < MIN_TRANSCRIPT_ROWS) {
-      out.push(`the transcript is ${rows.length} rows, too few to be the Session (at least ${MIN_TRANSCRIPT_ROWS} expected)`);
+  // The inverted half. This gate REQUIRED all three of these until 2026-10-03; it refuses them
+  // now, for the reasons on README_RETIRED. Reported one at a time so a partial revival, a fence
+  // with no block around it, says what it is rather than being lumped in with the whole thing.
+  for (const [pattern, what] of README_RETIRED) {
+    if (pattern.test(readme)) {
+      out.push(`carries ${what}: the transcript was deleted on the owner's decision and the alt text is the accessible path now, so this is either a revert or a hand edit (ADR 0004, third amendment)`);
     }
   }
   return out;

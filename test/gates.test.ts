@@ -11,7 +11,7 @@ import { TOKEN_ENV } from "../src/activity.ts";
 import { COMMITTED_FORBIDDEN_NAMES, FORBIDDEN_NAMES, FORBIDDEN_NAMES_ENV, loadContent } from "../src/content.ts";
 import { FORBIDDEN_GLYPHS } from "../src/font.ts";
 import {
-  GENERATED, MIN_TRANSCRIPT_ROWS, SIZE_BUDGET_BYTES, SVG_CHECK_SCRIPT,
+  GENERATED, SIZE_BUDGET_BYTES, SVG_CHECK_SCRIPT,
   checkSvgStructure, countNamesIn, exitCodeFor, externalSvgCheck, findAbsentGlyphs,
   findControlCharacters, findDashes, findReadmeFaults, findReducedMotionFaults,
   envFileVerdict, findSecretShapes, findSizeFaults, forbiddenNeedles, listFiles, report, runGates,
@@ -556,7 +556,6 @@ test("an asset over the budget is caught, and the budget is bytes rather than ch
 // Gate: the README
 // ---------------------------------------------------------------------------------------------
 
-const TRANSCRIPT = Array.from({ length: MIN_TRANSCRIPT_ROWS + 4 }, (_, i) => `row ${i}`).join("\n");
 const OK_README = [
   "<picture>",
   '  <source media="(prefers-color-scheme: dark)" srcset="assets/session-dark.svg">',
@@ -564,11 +563,15 @@ const OK_README = [
   '  <img src="assets/session-dark.svg" alt="a terminal session" width="100%">',
   "</picture>",
   "",
+].join("\n");
+
+/** The retired block, in the shape the generator used to emit it, for the inverted assertions. */
+const TRANSCRIPT_BLOCK = [
   "<details>",
   "<summary>Session transcript</summary>",
   "",
   "```",
-  TRANSCRIPT,
+  Array.from({ length: 24 }, (_, i) => `row ${i}`).join("\n"),
   "```",
   "",
   "</details>",
@@ -619,19 +622,48 @@ test("an asset the README names and nothing writes is caught from the filesystem
   assert.match(found[0], /session-light\.svg, which is not there/);
 });
 
-test("a missing or collapsed transcript block is caught", () => {
+// This gate REQUIRED the transcript block until 2026-10-03, and the five cases here used to be the
+// ways it could be missing or collapsed. The owner deleted the block (ADR 0004, third amendment), so
+// the assertion is inverted rather than dropped: the only thing that can go wrong now is the block
+// coming back, and if this gate stopped looking it would be the one place nothing was watching.
+test("the retired transcript block is refused, whole or in pieces", () => {
   const faults: [string, string, RegExp][] = [
-    ["no details block", OK_README.replace(/<details>[\s\S]*<\/details>/, ""), /no <details> transcript block/],
-    ["no summary", OK_README.replace("<summary>Session transcript</summary>", ""), /no <summary> label/],
-    ["a blank summary", OK_README.replace(">Session transcript<", "> <"), /no <summary> label/],
-    ["no fence", OK_README.replace(/```\n/g, ""), /not inside a fenced code block/],
-    ["a stub instead of the Session", OK_README.replace(TRANSCRIPT, "row 0\nrow 1"), /too few to be the Session/],
+    ["the whole block back", `${OK_README}${TRANSCRIPT_BLOCK}`, /carries a <details> block/],
+    ["a details with no summary", `${OK_README}<details>\nwords\n</details>\n`, /carries a <details> block/],
+    ["a summary with no details", `${OK_README}<summary>Session transcript</summary>\n`, /carries a <summary> label/],
+    ["a bare fence, the triangle filed off", `${OK_README}\n\`\`\`\nrow 0\nrow 1\n\`\`\`\n`, /carries a fenced code block/],
+    ["a longer fence, as the generator used to pick", `${OK_README}\n\`\`\`\`\nrow 0\n\`\`\`\`\n`, /carries a fenced code block/],
   ];
   for (const [what, broken, expected] of faults) {
     const found = findReadmeFaults(broken, bothThere);
     assert.ok(found.length > 0, `${what} was not caught`);
     assert.match(found.join("\n"), expected, `${what}: ${found.join("; ")}`);
+    // The message has to name the decision, not just the markup: whoever reintroduces this will be
+    // reading the gate's output and not the ADR.
+    assert.match(found.join("\n"), /ADR 0004/, `${what} was caught without saying why it is refused`);
   }
+});
+
+test("each piece of the block is reported on its own, so a partial revival is not lumped in", () => {
+  // The whole block trips all three patterns, and that is the point of reporting them separately:
+  // a fence with no block is a different edit from a block with no fence, and a gate that collapsed
+  // them into one line would send the next reader looking for the wrong thing.
+  const found = findReadmeFaults(`${OK_README}${TRANSCRIPT_BLOCK}`, bothThere);
+  assert.equal(found.length, 3, `expected one finding per piece, got: ${found.join("; ")}`);
+});
+
+test("the picture's accessible name is still required, and it matters more now", () => {
+  // With the transcript gone this is the whole of what a screen reader is given, so an <img> that
+  // lost its alt is no longer a degraded page, it is a profile with no accessible content at all.
+  for (const broken of ['alt=""', 'alt="   "']) {
+    const found = findReadmeFaults(OK_README.replace('alt="a terminal session"', broken), bothThere);
+    assert.match(found.join("\n"), /no alt text/, `${broken} was not caught`);
+  }
+  assert.match(
+    findReadmeFaults(OK_README.replace(' alt="a terminal session"', ""), bothThere).join("\n"),
+    /no alt text/,
+    "an <img> with no alt attribute at all was not caught",
+  );
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -876,11 +908,14 @@ test("a built tree runs every gate there is, by name", async () => {
 });
 
 test("a glyph the font cannot draw is caught in the README as well as in the assets", async () => {
-  // The transcript is drawn from the same rows as the picture, so the same blank box lands in both.
+  // It used to land in the transcript, which was drawn from the same rows as the picture. With the
+  // transcript deleted the README's one string is the alt text, which is exactly where a blank box
+  // costs the most: it is the only thing a screen reader is given, and a glyph the font lacks is
+  // announced as nothing at all.
   const dir = await builtTree();
   const clean = readFileSync(join(dir, GENERATED.readme), "utf8");
   try {
-    writeFileSync(join(dir, GENERATED.readme), clean.replace("<details>", `<details>${FORBIDDEN_GLYPHS[0]}`));
+    writeFileSync(join(dir, GENERATED.readme), clean.replace(/(alt="[^"]*)/, `$1${FORBIDDEN_GLYPHS[0]}`));
     const gate = gateNamed(runGates(url(dir), { typecheck: false }), "glyphs");
     assert.equal(gate.status, "fail");
     assert.match(gate.problems.join("\n"), new RegExp(GENERATED.readme));
