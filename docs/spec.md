@@ -15,7 +15,7 @@ github.com/saltless-bruh
 ┌─ Profile README ────────────────────────────────── ~846px desktop, ~308px phone ─┐
 │ <picture>  dark themes  -> assets/session-dark.svg                                │
 │            light themes -> assets/session-light.svg                               │
-│            <img> fallback = session-dark.svg,  alt = one-line description         │
+│            <img> fallback = session-dark.svg,  alt = THE ONLY TEXT THERE IS       │
 │                                                                                   │
 │  ┌─ the Session, 84 cols ───────────────────────────────────────────────────────┐ │
 │  │ ┌─(HANDLE@host)-[~/login]                                                    │ │
@@ -41,12 +41,21 @@ github.com/saltless-bruh
 │  │   <-/-> to adjust - Enter to confirm - Esc to cancel                         │ │
 │  └──────────────────────────────────────────────────────────────────────────────┘ │
 │                                                                                   │
-│ <details> Session transcript </details>   <- real selectable text, same content   │
-│ real Markdown links                                                               │
+│ nothing else. No transcript block (deleted 2026-10-03, ADR 0004)                  │
 └───────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Transcript block.** ADR 0004 accepted that an image exposes text only through `alt`. This spec improves on that: the generator also emits the Session as plain text inside a `<details>` block under the image. Screen readers, search and copy-paste then get real text, and `alt` stays a short description. ADR 0004 is amended to record this.
+**There is no transcript block, and `alt` is the whole accessible surface.** Until 2026-10-03 the
+generator emitted the Session as plain text inside a `<details>` block under the image, so screen
+readers, search and copy-paste got real text and `alt` could stay a short pointer at it. **The owner
+deleted that block**: nobody opened it, and a collapsed disclosure triangle under a full-width picture
+reads as clutter. So this spec is back to what ADR 0004 originally accepted, with one difference it is
+worth being exact about: the `alt` does not carry the Session's text either. It is one sentence naming
+the picture, `readme.imageAlt` in `content.json`, and a reader who wants the detail is sent to the
+repository's `docs/`. What that trades away is written out in full in ADR 0004's third amendment
+(2026-10-03), which also says what the one commit that reverses it would contain. **Nothing published
+carries the Session as text any more**; `BuildResult.transcript` still exists, is still the projection
+the ADR 0001 gate is built on, and is published nowhere.
 
 ### 1.1 The delivery mechanism, measured
 
@@ -76,9 +85,9 @@ renderer, and treat the docs page as a statement of support rather than a specif
 | **Camo, for contrast** | A camo-served SVG whose origin sends `cache-control: no-cache, must-revalidate` returned `age: 13130` (3.6 hours), `x-cache: HIT` |
 | **`<picture>` through the sanitiser** | Both `<source media srcset>` elements survive verbatim, wrapped in `<themed-picture data-catalyst-inline="true">` |
 | **`<img src alt width="100%">`** | Survives. GitHub appends its own `style="max-width: 100%;"` and wraps the image in `<a target="_blank" rel="noopener noreferrer" href="<src>">` |
-| **`<details>` / `<summary>` with a fence inside** | Survive; the fence becomes `<pre><code>` with the column grid and the box-drawing glyphs intact. The blank line after `</summary>` is **required**: without it the fence renders as literal text |
+| **`<details>` / `<summary>` with a fence inside** | Survive; the fence becomes `<pre><code>` with the column grid and the box-drawing glyphs intact. The blank line after `</summary>` is **required**: without it the fence renders as literal text. **The README no longer emits any of this** (2026-10-03); the row stays because it is a measurement, and because it is what a reversal would need |
 | **An HTML comment** | Removed from the output entirely, so a generated-file notice at the top of the README costs a reader nothing |
-| **`<script>` inside the fence** | Returned escaped as `&lt;script&gt;`. Nothing the transcript carries can climb out of the code block and become markup |
+| **`<script>` inside the fence** | Returned escaped as `&lt;script&gt;`. Nothing a transcript carried could climb out of the code block and become markup. Measured while the block existed; kept for the same reason as the row above |
 
 **`style-src 'unsafe-inline'` in that first row is the single fact the animated profile rests on.**
 It is what permits the SVG's own `<style>` block, and therefore its `@keyframes`, to run at all
@@ -263,6 +272,10 @@ Page and carries a note at the top saying so; nothing in the Session calls it.
 A consequence worth recording, because it removed a special case rather than adding one: the Handle
 used to need a `textOnly` run shimmed onto the Banner's row to reach the transcript at all, since
 block art carries no text. In the prompt it is real text, so one run draws it and transcribes it.
+**Since 2026-10-03 nothing published reads that projection at all** (1, and ADR 0004's third
+amendment), so the flag's remaining jobs are the ADR 0001 gate's `rowsToFullText` and the column the
+spinner's drawn verbs are stacked on. The special case is still gone, which is the point of the
+paragraph; it is no longer gone for the reason it says.
 
 **The `/stack` language rows are drawn as well as printed.** Each row is the language, a bar, and
 the whole percentage right-aligned at the far end of the bar's field. The bar is `BAR_COLS = 34`
@@ -596,7 +609,7 @@ is the same for every value it decorates belongs to the generator (the spinner's
 | `verbs` | Spinner words, grouped by Mascot state. Every state in `MASCOT_TIMELINE` needs at least one: `sleep`, `yawn`, `stretch`, `settle`, `peek`, and the alarm's `alert`, `swat-up`, `swat-down`, `glare`, `butt-up`, `butt-down`, `recover`. A state with several words rotates through them while that state is on screen. Giving the two halves of a blow the same word is deliberate: the spinner then holds one phrase across the whole gesture instead of flickering between two |
 | `activityLine` | The words of the `/activity` result line, as labelled fragments: `label` (`scan complete:`), `daysUp` (`days up`) and `contributions`. The generator supplies the order, the numbers and the `·` |
 | `statusline` | The effort panel's copy. `effortWord` is the heading, and the panel's track is indented by its length plus two, so a longer word still pushes the whole block along; what it no longer changes is the track's WIDTH, which is a fixed 44 columns (3.3). `effortEnds` is `start` and `end`, the two words above the ends of the track (`Faster` / `Smarter`). `effortLabels` are the levels, left to right, and the LAST of them is the scale's top tier, which is drawn as a rainbow. `effortSelected` names one of them. `toggle` is the shimmering word and the state it reads (`Ultrachill` / `on`), drawn level with the TRACK, and `toggleHint` the line under it, level with the levels; `toggleNote` is the one-line gloss under the scale, with a row of air above it. Neither the toggle nor the hint sizes anything any more: both have to fit the pane the fixed track leaves, and a build fails naming the numbers if one does not. `help` is the key hints as labelled fragments, which the generator joins with its own `·`, and it is the **last row of the Session**. **There is no `modeBadge` and no `note`**: they shared one row under `help`, and both are gone (ADR 0002's second amendment). The badge went because the grammar this borrows replaces the statusline when the effort picker opens, so the two are never on screen together; the note went because it was the only occurrence of the word "Anthropic" in the whole published profile |
-| `readme` | The two visible strings the README carries outside the Session: `imageAlt`, the picture's accessible name, and `transcriptSummary`, the word on the `<details>` toggle. `imageAlt` says what the picture **is**, not what it contains: the contents are the transcript directly below it, and a reader who hears the Session out of the alt text and then again out of the transcript hears it twice |
+| `readme` | One visible string, `imageAlt`, the picture's accessible name, and since 2026-10-03 **the only text the README carries at all**. It says what the picture **is**: 67 rows do not fit in an attribute, and the transcript they used to be read out of is deleted (ADR 0004's third amendment, which records what that costs). **There is no `transcriptSummary`**: it was the word on the `<details>` toggle, and it went with the block rather than staying as a validated key nothing renders. A revised `imageAlt` is a one-line content change and moves nothing else |
 
 Validation rules, all enforced at build time:
 
@@ -730,7 +743,10 @@ The work is done when all of these pass:
 2. With reduced motion forced, the render equals the final still frame.
 3. A 390px-wide render is legible.
 4. Each SVG is <= 250 KB.
-5. The transcript block reproduces the Session as text.
+5. ~~The transcript block reproduces the Session as text.~~ **Retired 2026-10-03 with the block** (ADR
+   0004's third amendment). What replaces it is the opposite assertion, that the block has not come
+   back, because the alt text no longer describes the content and nothing else in the suite would
+   notice if a revert put 67 rows of selectable text back under the picture.
 6. A scan of every committed file finds zero occurrences of the forbidden names.
 7. No row exceeds 84 columns, and every codepoint is in the font subset.
 8. Both variants are valid, parseable XML.
@@ -743,8 +759,9 @@ failure would be invisible rather than because the list above asked for them: no
 visible copy, no control character in generated output, none of the ten absent glyphs (3.3), the
 reduced-motion rule present and actually zeroing animation, SVG structural integrity (duplicate ids,
 references with no target, a missing `viewBox`, a box the art is letterboxed in), the README referencing
-both assets and the transcript block and carrying none of the HTML GitHub strips, no token-shaped string
-anywhere in the tree, and `npm run typecheck` at exit 0.
+both assets, carrying a non-blank accessible name, carrying none of the HTML GitHub strips and carrying
+none of the retired transcript block either, no token-shaped string anywhere in the tree, and
+`npm run typecheck` at exit 0.
 
 **It reports three states, not two.** A gate passes, fails, or is `absent` because the thing it reads is not
 there, and the run exits 0, 1 and 3 for the three. Until the first authenticated refresh there is no cache
@@ -777,21 +794,27 @@ a published surface.
 
 ## 7. Accessibility
 
-Targets WCAG 2.1 AA, with two documented exceptions: 2.2.2, which is structural and accepted, and
-1.4.11 at phone width, which was found by measuring rendered pixels in Task 12 and has a one-attribute
-fix waiting on the owner (3.4).
+Targets WCAG 2.1 AA, with **three** documented exceptions: 1.1.1, which became one on 2026-10-03 when
+the owner deleted the transcript block; 2.2.2, which is structural and accepted; and 1.4.11 at phone
+width, which was found by measuring rendered pixels in Task 12 and has a one-attribute fix waiting on
+the owner (3.4).
+
+**1.1.1 was met and is not any more, and it is the owner's decision rather than a defect.** Every claim
+in the table below that rested on the transcript has been corrected rather than reworded, because a
+compliance table carrying a mitigation that no longer exists is worse than one admitting a gap. What was
+traded, why, and the one commit that reverses it are in ADR 0004's third amendment.
 
 | Criterion | Status |
 |---|---|
-| 1.1.1 Non-text content | `alt` describes the image; the transcript block carries the full text as real Markdown |
+| **1.1.1 Non-text content** | **Not met in the full sense, by the owner's decision of 2026-10-03.** The image has a non-blank accessible name, which is what the criterion literally asks, and gate 11 keeps it there. What it no longer has is a text alternative serving the equivalent purpose: `alt` is one sentence naming the picture, the `<details>` transcript that carried the Session's 67 rows as real Markdown is deleted, and nothing took it over. A screen reader is told that a terminal session is drawn here and nothing that is in it |
 | 1.4.3 Contrast (text) | Every text role is at least 4.5:1 on both `bg` and `surface` of its own variant |
 | **1.4.11 Non-text contrast** | **Not met at phone width.** The frame's tokens clear 3:1, but the stroke is sub-pixel below about 500px and antialiases away: at 308px it measures 1.43:1 in Chrome and 1.00:1 in Firefox. Measured, with the one-attribute fix, in 3.4. No text is affected |
 | 1.4.4 Resize | The SVG has no fixed pixel width, so it scales with the column and survives 200% zoom |
-| 2.1.1 Keyboard | Nothing inside the image is interactive; the transcript is native Markdown |
+| 2.1.1 Keyboard | Met, and more simply than before: nothing inside the image is interactive, and with the transcript gone the README has no interactive element at all. The `<details>` block was the one thing on the page a reader had to operate |
 | 2.3.1 Flashes | Nothing flashes more than three times a second |
 | **2.2.2 Pause, Stop, Hide** | **Not met in the strict sense.** Motion runs longer than 5s and a README image cannot host a pause control |
 
-The 2.2.2 gap is mitigated, not ignored: `prefers-reduced-motion` removes all motion, every loop is low-amplitude, and the content is fully available as text in the transcript regardless of motion state. Nothing in the Session depends on seeing the animation.
+The 2.2.2 gap is mitigated, and **one of its three mitigations was withdrawn on 2026-10-03**: `prefers-reduced-motion` removes all motion and every loop is low-amplitude, both unchanged, but the content is no longer available as text regardless of motion state, because the transcript that made it available is deleted. What still holds is that nothing in the Session depends on seeing the ANIMATION: the still frame is the correct resting state and carries every figure and every word the loops do (3.5). What no longer holds is that a reader who cannot see the picture at all has somewhere else to read it.
 
 The 1.4.11 gap costs the window's edge and nothing else. Every text role still clears 4.5:1 at every width, and the Session's content, hierarchy and figures are unaffected; what a phone reader loses is the sense of a bounded terminal rather than anything they need to read.
 
@@ -802,14 +825,17 @@ the dark window and 4.77:1 on the light one**, both well clear of 3:1. It is dra
 rather than as a stroke, so unlike the window frame it is a whole glyph at any scale and does not
 antialias away at phone width; it was read at 308px in both variants. `border` was weighed as the
 quieter alternative and refused on this criterion: **2.79:1 and 2.92:1**, which misses 3:1 in both.
-Nothing rests on seeing the divider, because the two panes are also separated by six blank columns and
-the transcript carries each row as text.
+Nothing rests on seeing the divider, because the two panes are also separated by six blank columns, which
+is the whole of the argument now: the transcript used to carry each row as text and it is deleted
+(2026-10-03), so the fallback is the layout rather than a second copy of it.
 
 The `/stack` bars are graphical objects conveying information, so 1.4.11 applies to them and they
 meet it: a bar is the Accent on the window, which measures 6.51:1 in dark and 4.77:1 in light, well
 clear of 3:1. Nothing rests on seeing them, because every bar is paired with the same figure printed
-as text at the end of its own row, and the transcript carries both. The one case where the drawing
-says nothing is a share that rounds away, and that row prints `<1%` rather than relying on a blank.
+as text at the end of its own row. **That pairing is now inside the picture only**: the transcript
+carried both and is deleted (2026-10-03), so a reader who can see the picture still never needs the bar,
+and a reader who cannot gets neither. The one case where the drawing says nothing is a share that rounds
+away, and that row prints `<1%` rather than relying on a blank.
 
 A day with no activity is drawn, not omitted: it sits at 0.45 opacity of the `border` token, which measures 1.60:1 against the window in dark and 1.54:1 in light. It is below 3:1 by design, because a quiet day being quiet is itself the meaning; the figures that matter are printed as text on the result line. Before the beam reaches it the same cell sits at 0.30 of that token (1.35:1 and 1.32:1), so an unprobed cell and a probed silent one are deliberately close: what the sweep reveals about a quiet day is that there was nothing to reveal.
 
