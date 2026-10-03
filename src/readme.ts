@@ -1,15 +1,23 @@
 // src/readme.ts
 //
-// The README that carries the Session: one `<picture>` that swaps on the reader's theme, and the
-// Session's text underneath it in a `<details>` block. `build` writes it; nothing here reads the
-// filesystem or the network.
+// The README that carries the Session: one `<picture>` that swaps on the reader's theme, and
+// nothing else. `build` writes it; nothing here reads the filesystem or the network.
 //
-// THE TRANSCRIPT IS NOT DECORATION. The whole Session is one image (ADR 0004), so the picture
-// exposes no text at all: no selection, no search, no screen reader, nothing for a client that
-// will not render an SVG. The `<details>` block is the only path to the content for all of those,
-// which is why the handle and the spinner's verb were given `textOnly` runs in the first place
-// (src/rows.ts) and why `alt` is a short description rather than the Session retyped: the words
-// are already here, as real text, directly below the picture.
+// THE ALT TEXT IS THE ONLY TEXT A READER GETS, AND THAT IS NEW. Until 2026-10-03 the generator
+// also wrote the Session out as plain text inside a `<details>` block under the picture, so `alt`
+// could be a short pointer at it. The owner deleted that block: nobody opened it, and a collapsed
+// disclosure triangle under a full-width picture reads as clutter (ADR 0004, third amendment). So
+// `readme.imageAlt` is now the WHOLE accessible content of the profile, and it is one sentence.
+// What that sentence says is the owner's, and the trade they made is recorded in ADR 0004 rather
+// than argued here: a reader who wants the detail is sent to the repository's `docs/`.
+//
+// What this file must not do is point at something that is not there. The clause the old string
+// ended with, naming a transcript below the picture, was removed with the block it named.
+//
+// `src/rows.ts` still has `textOnly`, and it is no longer about a reader. The spinner's resting
+// verb carries one because `src/build.ts` reads its COLUMN to place the drawn alternatives on top
+// of it, and because `rowsToFullText` must see every projection for the ADR 0001 name gate. Both
+// of those are unchanged by this; what changed is that nothing downstream publishes the text.
 //
 // WHAT GITHUB ALLOWS, measured rather than remembered. GitHub sanitises README HTML, and the
 // failure mode is invisible: the page still renders, just wrong. Re-verified 2026-10-02 by POSTing
@@ -19,12 +27,12 @@
 //   - `<picture>` with `<source media srcset>` survives intact, wrapped in `<themed-picture>`.
 //   - `<img src alt width>` survives. GitHub injects `style="max-width: 100%"` itself and
 //     auto-wraps the image in a link to its own src.
-//   - `<details>` and `<summary>` survive, and a fenced code block inside them becomes
-//     `<pre><code>`, which is what keeps the transcript's column grid aligned.
 //   - An HTML comment is removed from the output entirely, so the generated-file notice at the
 //     top costs the reader nothing.
-//   - Inside the fence, `<` and `&` are escaped by the renderer, so nothing the transcript
-//     carries can climb out of the code block and become markup.
+//
+// That session also measured `<details>`, `<summary>` and a fence inside them, and all three
+// survive. `docs/spec.md` 1.1 keeps those rows because they are measurements and re-checkable;
+// this file no longer emits any of them, and `scripts/gates.ts` now fails if one comes back.
 //
 // Stripped silently, and therefore never emitted here: `<script>`, `<style>`, `<iframe>`, inline
 // `<svg>`, `class`, and any `style` attribute of our own. Layout is tables, `align` and image
@@ -51,46 +59,22 @@ export const DARK_SRC = "assets/session-dark.svg";
 export const LIGHT_SRC = "assets/session-light.svg";
 
 /**
- * A fence long enough that nothing in `body` can close it early.
+ * The README, as text. The one visible word in it is the owner's and comes from `content.json`
+ * (docs/spec.md 4.1): the picture's accessible name is a sentence a reader hears read aloud, so
+ * it is not typed in here. What this file owns is the structure: which element holds what, in
+ * which order, and at which paths.
  *
- * A blurb holding a backtick run is unlikely rather than impossible, and the failure would be
- * silent in the worst way: the transcript would end mid-Session and the rest of it would render
- * as prose, with the grid gone. CommonMark lets a fence be any run of three or more, and only a
- * run at least as long as the opening one closes it, so one longer than the longest run inside
- * is always safe.
+ * There is deliberately no `transcript` parameter any more. It was the only reason this function
+ * ever took the Session's text, and taking it while emitting nothing from it would leave a seam
+ * that looks like the block is one edit away from coming back.
  */
-function fence(body: string): string {
-  let longest = 0;
-  for (const run of body.matchAll(/`+/g)) longest = Math.max(longest, run[0].length);
-  return "`".repeat(Math.max(3, longest + 1));
-}
-
-/**
- * The README, as text. Every visible word in it is the owner's and comes from `content.json`
- * (docs/spec.md 4.1): the picture's accessible name and the transcript's label are both words a
- * reader hears read aloud, so neither is typed in here. What this file owns is the structure:
- * which element holds what, in which order, and at which paths.
- */
-export function renderReadme(o: { content: Content; transcript: string }): string {
-  const { imageAlt, transcriptSummary } = o.content.readme;
-  const f = fence(o.transcript);
-  // The blank lines inside `<details>` are load-bearing, not formatting: without the one after
-  // `</summary>` GitHub treats the fence as literal text and the transcript renders as a wall of
-  // prose with its columns collapsed.
+export function renderReadme(o: { content: Content }): string {
+  const { imageAlt } = o.content.readme;
   return `<!-- Generated by src/readme.ts. Do not edit by hand: change content.json and run npm run build. -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="${DARK_SRC}">
   <source media="(prefers-color-scheme: light)" srcset="${LIGHT_SRC}">
   <img src="${DARK_SRC}" alt="${esc(imageAlt)}" width="100%">
 </picture>
-
-<details>
-<summary>${esc(transcriptSummary)}</summary>
-
-${f}
-${o.transcript}
-${f}
-
-</details>
 `;
 }

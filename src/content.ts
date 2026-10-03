@@ -44,14 +44,25 @@ export type ActivityLine = { label: string; daysUp: string; contributions: strin
 /** Spinner words grouped by Mascot state, so the label names the pose on screen. */
 export type Verbs = Record<PoseName, string[]>;
 /**
- * The two visible strings the README itself carries, outside the Session.
+ * The one visible string the README itself carries, outside the Session.
  *
- * `imageAlt` names what the picture IS, not what it contains, because what it contains is the
- * transcript directly below it; a screen reader that hears the Session twice is worse served
- * than one that hears a description and then the content. `transcriptSummary` is the word on the
- * `<details>` toggle. Both are read aloud, so both are the owner's (docs/spec.md 4.1).
+ * `imageAlt` is the picture's accessible name, and since 2026-10-03 it is the ONLY text the README
+ * gives a reader: the `<details>` transcript it used to point at was deleted (ADR 0004, third
+ * amendment). Two things follow, and the second is the owner's call rather than this file's.
+ *
+ * It cannot redirect. The sentence that shipped until that date ended "the same words are in the
+ * transcript below it", and with the transcript gone that clause was simply false, which is worse
+ * than saying less. The trailing clause was removed and nothing else about the string was changed.
+ *
+ * It also cannot carry the Session. 67 rows do not fit in an attribute, so whatever this says is
+ * all a screen reader is told; the owner decided what that is, and where a reader who wants the
+ * detail is sent (the repository's own `docs/`). This validation holds it to being present,
+ * non-blank, drawable and free of forbidden names, which is what every other visible string gets.
+ *
+ * There was a `transcriptSummary` beside it, the word on the `<details>` toggle. It went with the
+ * block rather than being left as a validated key nothing renders.
  */
-export type ReadmeCopy = { imageAlt: string; transcriptSummary: string };
+export type ReadmeCopy = { imageAlt: string };
 /**
  * The shell prompt the Header is built from: the host the Handle is logged in to, and the command
  * whose output the Mascot is. Both are read aloud, so both are the owner's (docs/spec.md 4.1); the
@@ -257,12 +268,11 @@ function assertShape(c: unknown): asserts c is Content {
   text(toggle.word, "statusline.toggle.word");
   text(toggle.state, "statusline.toggle.state");
 
-  // The README's own two words. They are validated here like every other visible string, so a
-  // missing one fails the build instead of writing the literal "undefined" into the one element
-  // a screen reader reads first.
+  // The README's own word. It is validated here like every other visible string, so a missing one
+  // fails the build instead of writing the literal "undefined" into the one element a screen
+  // reader reads first, which since the transcript was deleted is also the only one it reads.
   if (!isObj(c.readme)) fail("readme must be an object");
   text(c.readme.imageAlt, "readme.imageAlt");
-  text(c.readme.transcriptSummary, "readme.transcriptSummary");
 }
 
 /**

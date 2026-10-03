@@ -94,7 +94,6 @@
     "help": ["←/→ to adjust", "Enter to confirm", "Esc to cancel"]
   },
   "readme": {
-    "imageAlt": "A terminal session, drawn as one picture. The same words are in the transcript below it.",
-    "transcriptSummary": "Session transcript"
+    "imageAlt": "A terminal session, drawn as one picture."
   }
 }

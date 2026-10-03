@@ -49,8 +49,26 @@ export type BuildOptions = {
 export type BuildResult = {
   dark: string;
   light: string;
+  /**
+   * The Session as text, one line per row: every run but the `drawOnly` ones.
+   *
+   * **Nothing published reads this any more.** It was the README's `<details>` block, and that was
+   * its only consumer anywhere in `src/`; the owner deleted the block on 2026-10-03 (ADR 0004,
+   * third amendment). It is kept rather than dropped, and the reasons are stated here so the field
+   * is not read as a leftover:
+   *
+   * - `rowsToText` is load-bearing regardless. `rowsToFullText`, which the ADR 0001 name gate
+   *   reads, is built on it, so this is one call over rows the build already has in hand.
+   * - It is the build's text output, and a caller is entitled to want it: the Landing Page, and a
+   *   committed `TRANSCRIPT.md` if the owner ever asks for one, both start from exactly this.
+   * - It is what `test/build.test.ts` reads to check that the owner's copy really reached the
+   *   composed Session, and to find the column the spinner's drawn verbs are stacked at.
+   *
+   * What it must NOT be read as is a text alternative for the picture. There is no longer one in
+   * the README; the accessible name is `content.readme.imageAlt` and it is the whole of it.
+   */
   transcript: string;
-  /** The README as written: the `<picture>` that swaps the variants, and the transcript under it. */
+  /** The README as written: the `<picture>` that swaps the variants, and nothing else. */
   readme: string;
   /** Null when the figures came off the network. Otherwise their age and why they are not fresh. */
   staleNote: string | null;
@@ -99,6 +117,8 @@ export async function build(opts?: BuildOptions): Promise<BuildResult> {
   // picture draws but the transcript omits must not be able to hide a name from it.
   assertRowsCarryNoForbiddenNames(rows, "the composed Session");
 
+  // Returned, not published: the README's `<details>` block was its only consumer and it is gone.
+  // `BuildResult.transcript` says why the field stays.
   const transcript = rowsToText(rows);
 
   const regular = readFileSync(FONT_REGULAR);
@@ -158,10 +178,11 @@ export async function build(opts?: BuildOptions): Promise<BuildResult> {
 
   // The README is the one file a reader's screen reader and search engine actually read, so it
   // goes through the ADR 0001 gate on its own rather than being trusted because its parts were
-  // checked: the transcript cleared the gate as rows, and the two README strings cleared it as
-  // content.json fields, but a future addition here would arrive inside neither. Checked before
-  // it is written, so a name never reaches the disk in the first place.
-  const readme = renderReadme({ content, transcript });
+  // checked: `imageAlt` cleared the gate as a content.json field, but a future addition here would
+  // arrive inside neither that nor the rows. Checked before it is written, so a name never reaches
+  // the disk in the first place. The transcript used to be the bulk of what this scanned; it is no
+  // longer in the file, and it still clears the gate upstream as rows.
+  const readme = renderReadme({ content });
   assertNoForbiddenNames(readme, "the generated README");
   writeFileSync(new URL("../README.md", outDir), readme);
 

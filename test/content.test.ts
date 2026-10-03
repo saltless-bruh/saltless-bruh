@@ -48,7 +48,7 @@ const VALID: Content = {
     toggle: { word: "Fixtureword", state: "off" },
     toggleNote: "fixture gloss", toggleHint: "fixture hint", help: ["fixture key", "fixture other key"],
   },
-  readme: { imageAlt: "a fixture picture of a fixture session", transcriptSummary: "Fixture transcript" },
+  readme: { imageAlt: "a fixture picture of a fixture session" },
 };
 
 const STATES = [...new Set(MASCOT_TIMELINE.map((w) => w.state))];
@@ -182,7 +182,7 @@ test("the smallest valid document loads: one of everything", () => {
       toggle: { word: "t", state: "s" },
       toggleNote: "g", toggleHint: "h", help: ["k"],
     },
-    readme: { imageAlt: "a", transcriptSummary: "t" },
+    readme: { imageAlt: "a" },
   };
   assert.deepEqual(load(smallest), smallest);
 });
@@ -284,9 +284,10 @@ const STRUCTURE: [string, unknown, RegExp][] = [
   ["statusline.toggle.state", undefined, /statusline\.toggle\.state must be a string/],
   ["statusline.toggle.state", " ", /statusline\.toggle\.state must not be blank/],
   ["statusline.toggle.state", true, /statusline\.toggle\.state must be a string/],
-  // the README's own two visible strings: the picture's accessible name and the transcript's
-  // label. A blank alt is the one that matters most, because it is not a missing word, it is a
-  // picture a screen reader announces as nothing at all.
+  // the README's own visible string, and since the transcript was deleted (ADR 0004, third
+  // amendment) the only one: the picture's accessible name. A blank alt is not a missing word, it
+  // is a picture a screen reader announces as nothing at all, and now a profile with no accessible
+  // content whatsoever. `readme.transcriptSummary` was validated here too and went with the block.
   ["readme", undefined, /readme must be an object/],
   ["readme", "a terminal session", /readme must be an object/],
   ["readme", [], /readme must be an object/],
@@ -294,9 +295,6 @@ const STRUCTURE: [string, unknown, RegExp][] = [
   ["readme.imageAlt", "", /readme\.imageAlt must not be blank/],
   ["readme.imageAlt", "   ", /readme\.imageAlt must not be blank/],
   ["readme.imageAlt", 7, /readme\.imageAlt must be a string/],
-  ["readme.transcriptSummary", undefined, /readme\.transcriptSummary must be a string/],
-  ["readme.transcriptSummary", " ", /readme\.transcriptSummary must not be blank/],
-  ["readme.transcriptSummary", false, /readme\.transcriptSummary must be a string/],
 ];
 
 test("the structure table covers every mascot state, and the baseline it edits loads", () => {
@@ -343,7 +341,7 @@ test("a file that is not JSON is rejected, and the message says so", () => {
 const EDITABLE = leaves(VALID).filter((p) => p !== "statusline.effortSelected" && p !== "login");
 
 test("the sweep covers every string in the document, so it cannot pass vacuously", () => {
-  assert.equal(leaves(VALID).length, 56);
+  assert.equal(leaves(VALID).length, 55);
   for (const expected of [
     "handle", "prompt.host", "prompt.command", "startup.version", "startup.colourWord", "startup.model", "startup.status", "whoami[2]", "lanes[1].repos[0].blurb", "stackRows[1].items[0]", "verbs.sleep[1]",
     "verbs.swat-down[0]", "verbs.recover[0]",
@@ -351,7 +349,7 @@ test("the sweep covers every string in the document, so it cannot pass vacuously
     "statusline.effortEnds.start", "statusline.effortEnds.end",
     "statusline.toggleNote", "statusline.toggleHint", "statusline.help[1]",
     "activityLine.label", "activityLine.daysUp", "activityLine.contributions",
-    "readme.imageAlt", "readme.transcriptSummary",
+    "readme.imageAlt",
   ]) {
     assert.ok(EDITABLE.includes(expected), `${expected} is not swept`);
   }

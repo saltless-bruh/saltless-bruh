@@ -108,8 +108,10 @@ test("the published profile carries no Anthropic mark at all, name included", as
   // occurrence of "Anthropic" in the whole published profile. It is deleted, so the count is zero,
   // and this is the assertion that keeps it there rather than the sentence that announced it.
   //
-  // Everything published is read, not just the transcript: a run the picture draws and the text
+  // Every projection is read, not just the published ones: a run the picture draws and the text
   // omits, or an attribute like the SVG's accessible name, would otherwise walk straight past this.
+  // The transcript is in the list although nothing publishes it any more (the README's block was
+  // deleted on 2026-10-03, ADR 0004), because it is still the projection a textOnly run lands in.
   const { dark, light, readme, transcript } = await fresh();
   const marks: [string, RegExp][] = [
     ["the Anthropic name", /anthropic/i],
@@ -155,11 +157,14 @@ test("both files are written where the build says they are", async () => {
   assert.equal(readFileSync(new URL("session-light.svg", dirs.outDir), "utf8"), light);
 });
 
-test("the transcript reproduces the Session as text, the Banner's name included", async () => {
+test("the Session's text projection reproduces the Session, the handle included", async () => {
+  // This was the check behind acceptance gate 5, "the transcript block reproduces the Session as
+  // text", while the README carried that block. The block is gone and the projection is not, so
+  // what this now pins is `BuildResult.transcript`: the build's text output, which is what a caller
+  // such as the Landing Page would start from, and what the drawn verbs take their column off.
   const { transcript } = await fresh();
   const content = loadContent();
   for (const cmd of ["/whoami", "/ops", "/stack", "/activity"]) assert.ok(transcript.includes(cmd), `${cmd} is missing`);
-  // The Banner is geometry, so the handle reaches a reader only through the transcript.
   assert.ok(transcript.includes(content.handle), "the handle is nowhere in the transcript");
   assert.ok(transcript.includes(content.statusline.help[0]), "the panel's key hints are missing");
   assert.ok(transcript.includes(content.lanes[0].repos[0].blurb), "a repo blurb is missing");
