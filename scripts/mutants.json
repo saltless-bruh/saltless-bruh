@@ -818,8 +818,8 @@
     "tests": [
       "test/readme.test.ts"
     ],
-    "find": "  const { imageAlt, transcriptSummary } = o.content.readme;",
-    "replace": "  const transcriptSummary = o.content.readme.transcriptSummary;\n  const imageAlt = o.content.whoami[0];"
+    "find": "  const { imageAlt } = o.content.readme;",
+    "replace": "  const imageAlt = o.content.whoami[0];"
   },
   {
     "id": "R5  readme: the alt text emptied, so the picture is nameless",
@@ -840,15 +840,6 @@
     "replace": "alt=\"${imageAlt}\""
   },
   {
-    "id": "R7  readme: the transcript label unescaped, so the owner's words become markup",
-    "file": "src/readme.ts",
-    "tests": [
-      "test/readme.test.ts"
-    ],
-    "find": "<summary>${esc(transcriptSummary)}</summary>",
-    "replace": "<summary>${transcriptSummary}</summary>"
-  },
-  {
     "id": "R8  readme: the image pinned to a pixel width, so the phone render overflows",
     "file": "src/readme.ts",
     "tests": [
@@ -856,33 +847,6 @@
     ],
     "find": "width=\"100%\">\n</picture>",
     "replace": "width=\"846\">\n</picture>"
-  },
-  {
-    "id": "R9  readme: the fence fixed at three, so a backtick run inside closes it early",
-    "file": "src/readme.ts",
-    "tests": [
-      "test/readme.test.ts"
-    ],
-    "find": "return \"`\".repeat(Math.max(3, longest + 1));",
-    "replace": "return \"`\".repeat(3);"
-  },
-  {
-    "id": "R10 readme: the blank line after the summary dropped, so the fence is literal text",
-    "file": "src/readme.ts",
-    "tests": [
-      "test/readme.test.ts"
-    ],
-    "find": "<summary>${esc(transcriptSummary)}</summary>\n\n${f}",
-    "replace": "<summary>${esc(transcriptSummary)}</summary>\n${f}"
-  },
-  {
-    "id": "R11 readme: the transcript emitted with no fence at all, so the grid collapses",
-    "file": "src/readme.ts",
-    "tests": [
-      "test/readme.test.ts"
-    ],
-    "find": "${f}\n${o.transcript}\n${f}",
-    "replace": "${o.transcript}"
   },
   {
     "id": "R12 readme: the dark path renamed, so the README names a file nothing writes",
@@ -930,15 +894,6 @@
     "replace": ""
   },
   {
-    "id": "R17 build: the transcript truncated to its first rows before it reaches the README",
-    "file": "src/build.ts",
-    "tests": [
-      "test/readme.test.ts"
-    ],
-    "find": "  const readme = renderReadme({ content, transcript });",
-    "replace": "  const readme = renderReadme({ content, transcript: transcript.split(\"\\n\").slice(0, 10).join(\"\\n\") });"
-  },
-  {
     "id": "R18 content: the picture's accessible name no longer validated",
     "file": "src/content.ts",
     "tests": [
@@ -955,6 +910,33 @@
     ],
     "find": "  if (!isObj(c.readme)) fail(\"readme must be an object\");\n",
     "replace": ""
+  },
+  {
+    "id": "R20 readme: the transcript block put back under the picture, the clutter the owner deleted",
+    "file": "src/readme.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "</picture>\n",
+    "replace": "</picture>\n\n<details>\n<summary>Session transcript</summary>\n\n\\`\\`\\`\nthe Session\n\\`\\`\\`\n\n</details>\n"
+  },
+  {
+    "id": "R21 readme: the alt text typed by the generator instead of taken from the owner's copy",
+    "file": "src/readme.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": "  const { imageAlt } = o.content.readme;",
+    "replace": "  const imageAlt = \"A terminal session.\";"
+  },
+  {
+    "id": "R22 readme: the alt attribute dropped, so the only accessible text there is goes with it",
+    "file": "src/readme.ts",
+    "tests": [
+      "test/readme.test.ts"
+    ],
+    "find": " alt=\"${esc(imageAlt)}\" width",
+    "replace": " width"
   },
   {
     "id": "G1  gates: the name match made case-sensitive, so a lowercase spelling escapes",
@@ -1153,24 +1135,6 @@
     ],
     "find": "    if (src !== null && !exists(src)) out.push(`references ${src}, which is not there`);",
     "replace": "    if (src !== null && !readme.includes(src)) out.push(`references ${src}, which is not there`);"
-  },
-  {
-    "id": "G29 gates: a README with no transcript block passes",
-    "file": "scripts/gates.ts",
-    "tests": [
-      "test/gates.test.ts"
-    ],
-    "find": "    out.push(\"no <details> transcript block, so the Session's words reach no screen reader, search engine or copy-paste (ADR 0004)\");\n",
-    "replace": ""
-  },
-  {
-    "id": "G30 gates: a transcript outside a fence passes, so the column grid can collapse",
-    "file": "scripts/gates.ts",
-    "tests": [
-      "test/gates.test.ts"
-    ],
-    "find": "    out.push(\"the transcript is not inside a fenced code block, so its column grid collapses into prose\");\n",
-    "replace": ""
   },
   {
     "id": "G31 gates: absent folded into pass, so an unbuilt output reports success",
@@ -1632,6 +1596,51 @@
     "replace": "  const missing = unbuilt.length > 0 ? [] : of(\"missing\");"
   },
   {
+    "id": "G75 gates: the <details> refusal dropped, so the retired transcript block comes back unseen",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  [/<details/i, \"a <details> block\"],\n",
+    "replace": ""
+  },
+  {
+    "id": "G76 gates: the <summary> refusal dropped, so a label with no block around it passes",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  [/<summary/i, \"a <summary> label\"],\n",
+    "replace": ""
+  },
+  {
+    "id": "G77 gates: the fence refusal dropped, so the transcript returns with the triangle filed off",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  [/(?:^|\\n)`{3,}/, \"a fenced code block\"],\n",
+    "replace": ""
+  },
+  {
+    "id": "G78 gates: the inverted half of the README gate removed, so it checks nothing either way",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "  for (const [pattern, what] of README_RETIRED) {\n",
+    "replace": "  for (const [pattern, what] of [] as [RegExp, string][]) {\n"
+  },
+  {
+    "id": "G79 gates: the refusal stops naming the decision, so it reads as the gate being wrong",
+    "file": "scripts/gates.ts",
+    "tests": [
+      "test/gates.test.ts"
+    ],
+    "find": "so this is either a revert or a hand edit (ADR 0004, third amendment)",
+    "replace": "so this is either a revert or a hand edit"
+  },
+  {
     "id": "AC3 activity: the scan over fetched data removed, so a name can arrive and be published",
     "file": "src/activity.ts",
     "tests": [
@@ -1862,8 +1871,8 @@
     "tests": [
       "test/session.test.ts"
     ],
-    "find": "  const track: Run[] = [{ col: markerCol, text: \"\u25b2\", style: \"accent\", piece: PIECE_TRACK }];",
-    "replace": "  const track: Run[] = [{ col: markerCol, text: \"\u25b2\", style: \"muted\", piece: PIECE_TRACK }];"
+    "find": "  const track: Run[] = [{ col: markerCol, text: \"▲\", style: \"accent\", piece: PIECE_TRACK }];",
+    "replace": "  const track: Run[] = [{ col: markerCol, text: \"▲\", style: \"muted\", piece: PIECE_TRACK }];"
   },
   {
     "id": "S9 session: the panel's top border goes back to being an ordinary rule",
@@ -2200,8 +2209,8 @@
     "tests": [
       "test/session.test.ts"
     ],
-    "find": "const EIGHTHS = \"\u258f\u258e\u258d\u258c\u258b\u258a\u2589\u2588\";",
-    "replace": "const EIGHTHS = \"\u258f\u258e\u258d\u258c\u258b\u258a\u2589\";"
+    "find": "const EIGHTHS = \"▏▎▍▌▋▊▉█\";",
+    "replace": "const EIGHTHS = \"▏▎▍▌▋▊▉\";"
   },
   {
     "id": "S34 session: a share that rounds away prints 0%, which reads as a language that failed to measure",
@@ -2328,7 +2337,7 @@
       "test/build.test.ts"
     ],
     "find": "  // A Session that does not fit is not returned: the message names the row and its text.",
-    "replace": "  rows.push({ runs: [\n    { col: 0, text: \"\u25b6\u25b6 autopilot on\", style: \"muted\" },\n    { col: COLS - cells(\"terminal-style design, not affiliated with Anthropic\"), text: \"terminal-style design, not affiliated with Anthropic\", style: \"muted\" },\n  ] });\n\n  // A Session that does not fit is not returned: the message names the row and its text."
+    "replace": "  rows.push({ runs: [\n    { col: 0, text: \"▶▶ autopilot on\", style: \"muted\" },\n    { col: COLS - cells(\"terminal-style design, not affiliated with Anthropic\"), text: \"terminal-style design, not affiliated with Anthropic\", style: \"muted\" },\n  ] });\n\n  // A Session that does not fit is not returned: the message names the row and its text."
   },
   {
     "id": "S48 session: the pane divider's column is written down instead of derived from the toggle",
@@ -2373,7 +2382,7 @@
       "test/session.test.ts"
     ],
     "find": "const PANE_DIVIDER = TREE_CONTINUE;",
-    "replace": "const PANE_DIVIDER = \"\u2503\";"
+    "replace": "const PANE_DIVIDER = \"┃\";"
   },
   {
     "id": "S53 session: the pane divider is drawn in the Accent, so the structure competes with the marker",
