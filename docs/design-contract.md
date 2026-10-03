@@ -151,7 +151,9 @@ From `design-taste-frontend`, the rules that genuinely apply to a terminal rathe
 - **Zero em-dashes** anywhere visible. Enforced by the gates in Task 11.
 - **No invented numbers.** Every figure is fetched or computed. Already a spec rule and a gate.
 - **Copy self-audit before shipping.** Re-read every visible string in `content.json` and the generated transcript for
-  anything grammatically broken or trying too hard. Task 12.
+  anything grammatically broken or trying too hard. Task 12. The transcript is still the readable projection to audit
+  against, and since 2026-10-03 it is no longer PUBLISHED (ADR 0004, third amendment): the README is the picture and its
+  alt text, so `readme.imageAlt` is the one string the audit cannot check by reading the Session.
 
 Most of that skill addresses landing pages and does not apply here; the deliberate departures are already recorded in
 `docs/spec.md` section 8.
